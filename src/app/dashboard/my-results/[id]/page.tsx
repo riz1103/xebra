@@ -1,0 +1,173 @@
+"use client";
+
+import { use } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowLeft, Trophy, Target, CheckCircle, XCircle, Clock } from "lucide-react";
+import Link from "next/link";
+import { formatDate } from "@/lib/utils";
+
+export default function MyResultDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["exam-result", id],
+    queryFn: () => api.getExamResult(id),
+  });
+
+  const result = data?.data;
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
+  }
+
+  if (!result) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <p className="text-lg font-medium">Result not found</p>
+        <Button asChild className="mt-4">
+          <Link href="/dashboard/my-results">Back to Results</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" asChild>
+          <Link href="/dashboard/my-results">
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{result.examTitle || "Exam Result"}</h1>
+          <p className="text-muted-foreground">
+            Submitted {formatDate(result.submittedAt || result.createdAt)}
+          </p>
+        </div>
+      </div>
+
+      {/* Score Card */}
+      <Card className={result.passed ? "border-emerald-200 dark:border-emerald-800" : "border-red-200 dark:border-red-800"}>
+        <CardContent className="py-8">
+          <div className="flex flex-col items-center text-center">
+            <div
+              className={`flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold ${
+                result.passed
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                  : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+              }`}
+            >
+              {result.percentage}%
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              {result.passed ? (
+                <Trophy className="h-5 w-5 text-emerald-500" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-500" />
+              )}
+              <Badge
+                variant={result.passed ? "success" : "destructive"}
+                className="text-sm px-4 py-1"
+              >
+                {result.passed ? "PASSED" : "FAILED"}
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Score: {result.score} out of {result.totalPoints} points
+            </p>
+          </div>
+
+          <div className="mt-6 px-8">
+            <Progress
+              value={result.percentage}
+              className={`h-3 ${result.passed ? "[&>div]:bg-emerald-500" : "[&>div]:bg-red-500"}`}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Details */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Target className="h-4 w-4" /> Result Details
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Exam</span>
+            <span className="font-medium">{result.examTitle || "N/A"}</span>
+          </div>
+          <Separator />
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Score</span>
+            <span className="font-medium">
+              {result.score} / {result.totalPoints} points
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Percentage</span>
+            <span className="font-medium">{result.percentage}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Correct Answers</span>
+            <span className="font-medium flex items-center gap-1">
+              <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+              {result.correctAnswers} / {result.totalQuestions}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Status</span>
+            <Badge variant={result.passed ? "success" : "destructive"}>
+              {result.passed ? "Passed" : "Failed"}
+            </Badge>
+          </div>
+          <Separator />
+          <div className="flex justify-between">
+            <span className="text-muted-foreground flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" /> Submitted
+            </span>
+            <span className="font-medium">
+              {formatDate(result.submittedAt || result.createdAt)}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Feedback */}
+      {result.feedback && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Proctor Feedback</CardTitle>
+            <CardDescription>Review notes from your proctor</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm rounded-lg bg-muted p-4">{result.feedback}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex justify-center">
+        <Button variant="outline" asChild>
+          <Link href="/dashboard/my-results">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to All Results
+          </Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
