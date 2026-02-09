@@ -16,9 +16,11 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageLoader } from "@/components/ui/loading";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Trash2, Save } from "lucide-react";
 import Link from "next/link";
+import { getLayoutConfig } from "@/lib/question-layout";
 import type { CreateExamQuestionPayload } from "@/types";
 
 export default function EditExamPage({ params }: { params: Promise<{ id: string }> }) {
@@ -97,18 +99,47 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const getTypeName = (typeId: string) =>
+    questionTypes.find((qt) => qt.id === typeId)?.name || "";
+
   const addNewQuestion = () => {
+    const defaultTypeId = questionTypes[0]?.id || "";
+    const layout = getLayoutConfig(getTypeName(defaultTypeId));
     setNewQuestions([
       ...newQuestions,
       {
-        questionTypeId: questionTypes[0]?.id || "",
+        questionTypeId: defaultTypeId,
         questionText: "",
-        options: ["", "", "", ""],
-        correctAnswer: "",
+        options: layout.defaultOptions.length > 0 ? [...layout.defaultOptions] : ["", "", "", ""],
+        correctAnswer: layout.correctAnswerIsText ? "" : [],
         points: 1,
         examId: id,
       },
     ]);
+  };
+
+  const handleNewQuestionTypeChange = (qIndex: number, newTypeId: string) => {
+    const updated = [...newQuestions];
+    const oldLayout = getLayoutConfig(getTypeName(updated[qIndex].questionTypeId));
+    const newLayout = getLayoutConfig(getTypeName(newTypeId));
+    updated[qIndex].questionTypeId = newTypeId;
+    if (oldLayout.layout !== newLayout.layout) {
+      updated[qIndex].options = [...newLayout.defaultOptions];
+      updated[qIndex].numberOfChoices = newLayout.defaultOptions.length || undefined;
+      updated[qIndex].correctAnswer = newLayout.correctAnswerIsText ? "" : [];
+    }
+    setNewQuestions(updated);
+  };
+
+  const toggleNewQuestionCorrectAnswer = (qIndex: number, optionIndex: number, checked: boolean) => {
+    const updated = [...newQuestions];
+    const existing = updated[qIndex].correctAnswer;
+    const current = Array.isArray(existing) ? (existing as string[]) : [];
+    const idx = String(optionIndex);
+    updated[qIndex].correctAnswer = checked
+      ? [...current, idx]
+      : current.filter((a) => a !== idx);
+    setNewQuestions(updated);
   };
 
   const saveNewQuestion = (index: number) => {
@@ -117,7 +148,21 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
       toast.error("Please fill in the question text and options");
       return;
     }
-    addQuestionMutation.mutate(q, {
+    // Convert correctAnswer for the API
+    const config = getLayoutConfig(getTypeName(q.questionTypeId));
+    let finalAnswer: string | string[] = q.correctAnswer;
+    if (Array.isArray(q.correctAnswer)) {
+      if (config.correctAnswerIsText) {
+        const filtered = (q.correctAnswer as string[]).filter(Boolean);
+        finalAnswer = filtered.length === 1 ? filtered[0] : filtered;
+      } else {
+        finalAnswer = (q.correctAnswer as string[])
+          .map((idx) => q.options[Number(idx)])
+          .filter(Boolean);
+      }
+    }
+    const payload = { ...q, correctAnswer: finalAnswer };
+    addQuestionMutation.mutate(payload, {
       onSuccess: () => {
         setNewQuestions(newQuestions.filter((_, i) => i !== index));
       },
@@ -258,83 +303,163 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
           ))}
 
           {/* New Question Forms */}
-          {newQuestions.map((q, qi) => (
-            <div key={qi} className="rounded-lg border-2 border-dashed border-primary/30 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-primary">New Question</h4>
-                <div className="flex gap-2">
-                  <Button type="button" size="sm" onClick={() => saveNewQuestion(qi)} disabled={addQuestionMutation.isPending}>
-                    {addQuestionMutation.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                    Save
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setNewQuestions(newQuestions.filter((_, i) => i !== qi))} className="text-destructive">
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-              <Textarea
-                placeholder="Question text..."
-                value={q.questionText}
-                onChange={(e) => {
-                  const updated = [...newQuestions];
-                  updated[qi].questionText = e.target.value;
-                  setNewQuestions(updated);
-                }}
-              />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Select value={q.questionTypeId} onValueChange={(v) => {
-                  const updated = [...newQuestions];
-                  updated[qi].questionTypeId = v;
-                  setNewQuestions(updated);
-                }}>
-                  <SelectTrigger><SelectValue placeholder="Question type" /></SelectTrigger>
-                  <SelectContent>
-                    {questionTypes.map((qt) => (<SelectItem key={qt.id} value={qt.id}>{qt.name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-                <Input type="number" min={1} value={q.points} onChange={(e) => {
-                  const updated = [...newQuestions];
-                  updated[qi].points = parseInt(e.target.value) || 1;
-                  setNewQuestions(updated);
-                }} placeholder="Points" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Options</Label>
-                {q.options.map((opt, oi) => (
-                  <div key={oi} className="flex items-center gap-2">
-                    <span className="text-xs w-5">{String.fromCharCode(65 + oi)}.</span>
-                    <Input value={opt} onChange={(e) => {
-                      const updated = [...newQuestions];
-                      updated[qi].options[oi] = e.target.value;
-                      setNewQuestions(updated);
-                    }} placeholder={`Option ${String.fromCharCode(65 + oi)}`} className="flex-1" />
+          {newQuestions.map((q, qi) => {
+            const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
+            return (
+              <div key={qi} className="rounded-lg border-2 border-dashed border-primary/30 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-primary">New Question</h4>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" onClick={() => saveNewQuestion(qi)} disabled={addQuestionMutation.isPending}>
+                      {addQuestionMutation.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                      Save
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setNewQuestions(newQuestions.filter((_, i) => i !== qi))} className="text-destructive">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
-                ))}
-                <Button type="button" variant="ghost" size="sm" onClick={() => {
-                  const updated = [...newQuestions];
-                  updated[qi].options.push("");
-                  setNewQuestions(updated);
-                }}>
-                  <Plus className="mr-1 h-3 w-3" /> Add Option
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Correct Answer</Label>
-                <Select value={typeof q.correctAnswer === "string" ? q.correctAnswer : ""} onValueChange={(v) => {
-                  const updated = [...newQuestions];
-                  updated[qi].correctAnswer = v;
-                  setNewQuestions(updated);
-                }}>
-                  <SelectTrigger><SelectValue placeholder="Select correct answer" /></SelectTrigger>
-                  <SelectContent>
-                    {q.options.filter(Boolean).map((opt, oi) => (
-                      <SelectItem key={oi} value={opt}>{String.fromCharCode(65 + oi)}. {opt}</SelectItem>
+                </div>
+                <Textarea
+                  placeholder="Question text..."
+                  value={q.questionText}
+                  onChange={(e) => {
+                    const updated = [...newQuestions];
+                    updated[qi].questionText = e.target.value;
+                    setNewQuestions(updated);
+                  }}
+                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Select value={q.questionTypeId} onValueChange={(v) => handleNewQuestionTypeChange(qi, v)}>
+                    <SelectTrigger><SelectValue placeholder="Question type" /></SelectTrigger>
+                    <SelectContent>
+                      {questionTypes.map((qt) => (<SelectItem key={qt.id} value={qt.id}>{qt.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                  <Input type="number" min={1} value={q.points} onChange={(e) => {
+                    const updated = [...newQuestions];
+                    updated[qi].points = parseInt(e.target.value) || 1;
+                    setNewQuestions(updated);
+                  }} placeholder="Points" />
+                </div>
+
+                {/* Options - shown for MC, T/F, Multiple Answer */}
+                {layoutConfig.showOptions && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Options</Label>
+                    {q.options.map((opt, oi) => (
+                      <div key={oi} className="flex items-center gap-2">
+                        <span className="text-xs w-5">{String.fromCharCode(65 + oi)}.</span>
+                        {layoutConfig.editableOptions ? (
+                          <Input value={opt} onChange={(e) => {
+                            const updated = [...newQuestions];
+                            updated[qi].options[oi] = e.target.value;
+                            setNewQuestions(updated);
+                          }} placeholder={`Option ${String.fromCharCode(65 + oi)}`} className="flex-1" />
+                        ) : (
+                          <span className="text-sm flex-1">{opt}</span>
+                        )}
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                    {layoutConfig.editableOptions && (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => {
+                        const updated = [...newQuestions];
+                        updated[qi].options.push("");
+                        setNewQuestions(updated);
+                      }}>
+                        <Plus className="mr-1 h-3 w-3" /> Add Option
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Correct Answer */}
+                {layoutConfig.showCorrectAnswer && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">{layoutConfig.correctAnswerLabel}</Label>
+
+                    {layoutConfig.correctAnswerIsText ? (() => {
+                      const answers = Array.isArray(q.correctAnswer)
+                        ? (q.correctAnswer as string[])
+                        : typeof q.correctAnswer === "string" && q.correctAnswer
+                          ? [q.correctAnswer]
+                          : [""];
+                      return (
+                        <div className="space-y-2">
+                          {answers.map((ans, ai) => (
+                            <div key={ai} className="flex items-center gap-2">
+                              <Input
+                                value={ans}
+                                onChange={(e) => {
+                                  const updated = [...newQuestions];
+                                  const arr = Array.isArray(updated[qi].correctAnswer)
+                                    ? [...(updated[qi].correctAnswer as string[])]
+                                    : [String(updated[qi].correctAnswer || "")];
+                                  arr[ai] = e.target.value;
+                                  updated[qi].correctAnswer = arr;
+                                  setNewQuestions(updated);
+                                }}
+                                placeholder={answers.length > 1 ? `Accepted answer ${ai + 1}` : layoutConfig.correctAnswerPlaceholder}
+                                className="flex-1"
+                              />
+                              {answers.length > 1 && (
+                                <Button type="button" variant="ghost" size="icon" onClick={() => {
+                                  const updated = [...newQuestions];
+                                  const arr = Array.isArray(updated[qi].correctAnswer)
+                                    ? [...(updated[qi].correctAnswer as string[])]
+                                    : [String(updated[qi].correctAnswer || "")];
+                                  arr.splice(ai, 1);
+                                  updated[qi].correctAnswer = arr;
+                                  setNewQuestions(updated);
+                                }} className="shrink-0">
+                                  <Trash2 className="h-3 w-3 text-destructive" />
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                          <Button type="button" variant="ghost" size="sm" onClick={() => {
+                            const updated = [...newQuestions];
+                            const arr = Array.isArray(updated[qi].correctAnswer)
+                              ? [...(updated[qi].correctAnswer as string[])]
+                              : [String(updated[qi].correctAnswer || "")];
+                            arr.push("");
+                            updated[qi].correctAnswer = arr;
+                            setNewQuestions(updated);
+                          }}>
+                            <Plus className="mr-1 h-3 w-3" /> Add Accepted Answer
+                          </Button>
+                        </div>
+                      );
+                    })() : (
+                      <div className="space-y-2">
+                        {q.options.filter(Boolean).map((opt, oi) => {
+                          const selectedIndices = Array.isArray(q.correctAnswer)
+                            ? (q.correctAnswer as string[])
+                            : [];
+                          return (
+                            <label key={oi} className="flex items-center gap-2 cursor-pointer">
+                              <Checkbox
+                                checked={selectedIndices.includes(String(oi))}
+                                onCheckedChange={(checked) => toggleNewQuestionCorrectAnswer(qi, oi, !!checked)}
+                              />
+                              <span className="text-xs text-muted-foreground">{String.fromCharCode(65 + oi)}.</span>
+                              <span className="text-sm">{opt}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Info for essay type */}
+                {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && (
+                  <p className="text-xs text-muted-foreground italic">
+                    This question type will be graded manually. No options or correct answer needed.
+                  </p>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
     </div>
