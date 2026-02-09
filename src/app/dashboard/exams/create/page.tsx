@@ -342,18 +342,21 @@ export default function CreateExamPage() {
 
     // Handle passing condition based on type
     let finalPassingCondition = values.passingCondition;
-    let finalParts = parts.length > 0 ? parts : null;
+    // Normalize parts to ensure all optional fields are null instead of undefined
+    let finalParts: ExamPart[] | null = parts.length > 0
+      ? parts.map((part): ExamPart => ({
+          id: part.id,
+          name: part.name,
+          description: part.description,
+          numberOfItems: part.numberOfItems ?? null,
+          timeLimit: part.timeLimit ?? null,
+          passingCondition: part.passingCondition ?? null,
+        }))
+      : null;
     
     if (passingConditionType === "per_part") {
       // Clear exam-level passing condition when using per-part
       finalPassingCondition = { type: "percentage" as const, value: 0 };
-      // Ensure parts have passing conditions if per_part is selected
-      if (finalParts) {
-        finalParts = finalParts.map(part => ({
-          ...part,
-          // Keep existing passingCondition or leave as null
-        }));
-      }
     } else {
       // Clear part-level passing conditions when using whole exam
       if (finalParts) {

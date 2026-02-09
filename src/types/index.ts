@@ -92,7 +92,7 @@ export interface ExamPart {
   name: string;
   description: string;
   numberOfItems: number | null;
-  timeLimit?: number | null; // Only when exam timeType is 'per_part'
+  timeLimit: number | null; // Only when exam timeType is 'per_part'
   passingCondition: {
     type: "percentage" | "points" | "items";
     value: number;

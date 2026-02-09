@@ -42,12 +42,12 @@ const examPartSchema = z.object({
   id: z.string().min(1, "Part ID is required"), // Auto-generated GUID, no regex validation needed
   name: z.string().min(1, "Part name is required").max(200, "Part name too long"),
   description: z.string().max(500, "Description too long").default(""),
-  numberOfItems: z.coerce.number().min(1).nullable().optional(),
-  timeLimit: z.coerce.number().min(1).nullable().optional(),
+  numberOfItems: z.coerce.number().min(1).nullish().transform(val => val ?? null),
+  timeLimit: z.coerce.number().min(1).nullish().transform(val => val ?? null),
   passingCondition: z.object({
     type: z.enum(["percentage", "points", "items"]),
     value: z.coerce.number().min(0, "Value must be positive"),
-  }).nullable().optional(),
+  }).nullish().transform(val => val ?? null),
 });
 
 export const examSchema = z.object({
