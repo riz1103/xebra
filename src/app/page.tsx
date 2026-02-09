@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -59,12 +60,17 @@ export default function LandingPage() {
       {/* Navigation */}
       <nav className="fixed top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-              X
-            </div>
+          <Link href="/" className="flex items-center gap-2">
+            <Image
+              src="/xevra-logo.png"
+              alt="Xevra"
+              width={36}
+              height={36}
+              className="rounded-lg"
+              priority
+            />
             <span className="text-xl font-bold tracking-tight">XEVRA</span>
-          </div>
+          </Link>
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -186,9 +192,13 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-xs">
-                X
-              </div>
+              <Image
+                src="/xevra-logo.png"
+                alt="Xevra"
+                width={28}
+                height={28}
+                className="rounded-md"
+              />
               <span className="text-sm font-semibold">XEVRA</span>
             </div>
             <p className="text-sm text-muted-foreground">

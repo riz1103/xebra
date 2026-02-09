@@ -16,6 +16,12 @@ export const metadata: Metadata = {
   description:
     "Professional examination management system for proctors and examinees. Create, manage, and take exams with ease.",
   keywords: ["examination", "exam", "proctor", "evaluation", "results"],
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/xevra-logo.png", sizes: "192x192", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({

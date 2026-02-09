@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 export function LoadingSpinner({ className }: { className?: string }) {
@@ -12,9 +13,14 @@ export function PageLoader() {
   return (
     <div className="flex h-screen w-full items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-xl">
-          X
-        </div>
+        <Image
+          src="/xevra-logo.png"
+          alt="Xevra"
+          width={48}
+          height={48}
+          className="rounded-xl"
+          priority
+        />
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         <p className="text-sm text-muted-foreground">Loading...</p>
       </div>

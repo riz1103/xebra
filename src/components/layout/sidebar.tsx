@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -64,9 +65,14 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="flex h-16 items-center gap-2 border-b px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-          X
-        </div>
+        <Image
+          src="/xevra-logo.png"
+          alt="Xevra"
+          width={32}
+          height={32}
+          className="rounded-lg shrink-0"
+          priority
+        />
         {!collapsed && (
           <div className="flex flex-col">
             <span className="text-sm font-bold tracking-tight">XEVRA</span>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { use, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -196,7 +197,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">X</div>
+            <Image src="/xevra-logo.png" alt="Xevra" width={32} height={32} className="rounded-lg" />
             <span className="text-sm font-semibold hidden sm:inline">{session.exam?.title || "Exam"}</span>
           </div>
           <div className={cn("flex items-center gap-2 font-mono text-lg font-bold", timerColor)}>

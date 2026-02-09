@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Loader2, Moon, Sun } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useTheme } from "next-themes";
 
 function LoginContent() {
@@ -120,10 +121,15 @@ function LoginContent() {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold text-xl">
-              X
-            </div>
+          <Link href="/" className="inline-block">
+            <Image
+              src="/xevra-logo-with-name.png"
+              alt="Xevra"
+              width={180}
+              height={180}
+              className="mx-auto"
+              priority
+            />
           </Link>
           <h1 className="mt-4 text-2xl font-bold">Welcome to Xevra</h1>
           <p className="mt-1 text-sm text-muted-foreground">
