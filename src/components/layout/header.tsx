@@ -3,6 +3,7 @@
 import { useAuthStore } from "@/stores/auth-store";
 import { signOut } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,11 +22,14 @@ import { getInitials } from "@/lib/utils";
 export function Header() {
   const { user, logout } = useAuthStore();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
 
   const handleLogout = async () => {
     try {
       await signOut();
+      // Clear all React Query cache to prevent showing previous user's data
+      queryClient.clear();
       logout();
       router.push("/login");
     } catch (error) {
