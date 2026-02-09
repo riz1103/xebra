@@ -85,10 +85,6 @@ export default function SettingsPage() {
             <span className="text-muted-foreground">Version</span>
             <span className="font-medium">1.0.0</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">API</span>
-            <span className="font-mono text-xs text-muted-foreground">{process.env.NEXT_PUBLIC_API_BASE_URL}</span>
-          </div>
         </CardContent>
       </Card>
     </div>

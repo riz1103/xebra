@@ -15,7 +15,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Bearer token is auto-attached by axios interceptor, just call /me
           const response = await api.getMe();
           if (response.data) {
-            setUser(response.data);
+            // Merge Firebase photoURL if the backend doesn't provide an image
+            const userData = response.data;
+            if (!userData.picture && !userData.photoURL && firebaseUser.photoURL) {
+              userData.photoURL = firebaseUser.photoURL;
+            }
+            setUser(userData);
           } else {
             setUser(null);
           }
@@ -26,7 +31,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const idToken = await firebaseUser.getIdToken();
             await api.login(idToken);
             const meResponse = await api.getMe();
-            setUser(meResponse.data || null);
+            if (meResponse.data) {
+              const userData = meResponse.data;
+              if (!userData.picture && !userData.photoURL && firebaseUser.photoURL) {
+                userData.photoURL = firebaseUser.photoURL;
+              }
+              setUser(userData);
+            } else {
+              setUser(null);
+            }
           } catch {
             setUser(null);
           }

@@ -39,24 +39,32 @@ function LoginContent() {
   });
 
   // Helper: after Firebase auth succeeds, fetch or register backend user
-  const syncBackendUser = async (idToken: string) => {
+  const syncBackendUser = async (idToken: string, firebasePhotoURL?: string | null) => {
+    let userData = null;
     try {
       // Try /me first — works for returning users (Bearer token auto-attached)
       const meResponse = await api.getMe();
-      if (meResponse.data) return meResponse.data;
+      if (meResponse.data) userData = meResponse.data;
     } catch {
       // User not registered in backend yet — call /login to create them
     }
-    await api.login(idToken);
-    const meResponse = await api.getMe();
-    return meResponse.data || null;
+    if (!userData) {
+      await api.login(idToken);
+      const meResponse = await api.getMe();
+      userData = meResponse.data || null;
+    }
+    // Merge Firebase photoURL if the backend doesn't provide a profile image
+    if (userData && !userData.picture && !userData.photoURL && firebasePhotoURL) {
+      userData.photoURL = firebasePhotoURL;
+    }
+    return userData;
   };
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     try {
-      const { idToken } = await signInWithGoogle();
-      const user = await syncBackendUser(idToken);
+      const { user: firebaseUser, idToken } = await signInWithGoogle();
+      const user = await syncBackendUser(idToken, firebaseUser.photoURL);
       if (user) {
         setUser(user);
         toast.success("Welcome to Xevra!");
@@ -72,8 +80,8 @@ function LoginContent() {
 
   const handleEmailLogin = async (values: LoginFormValues) => {
     try {
-      const { idToken } = await signInWithEmail(values.email, values.password);
-      const user = await syncBackendUser(idToken);
+      const { user: firebaseUser, idToken } = await signInWithEmail(values.email, values.password);
+      const user = await syncBackendUser(idToken, firebaseUser.photoURL);
       if (user) {
         setUser(user);
         toast.success("Welcome back!");
@@ -87,12 +95,16 @@ function LoginContent() {
 
   const handleEmailRegister = async (values: RegisterFormValues) => {
     try {
-      const { idToken } = await signUpWithEmail(values.email, values.password, values.name);
+      const { user: firebaseUser, idToken } = await signUpWithEmail(values.email, values.password, values.name);
       // New user — /login is required to register in backend
       await api.login(idToken);
       const meResponse = await api.getMe();
       if (meResponse.data) {
-        setUser(meResponse.data);
+        const userData = meResponse.data;
+        if (!userData.picture && !userData.photoURL && firebaseUser.photoURL) {
+          userData.photoURL = firebaseUser.photoURL;
+        }
+        setUser(userData);
         toast.success("Account created successfully!");
         router.push("/dashboard");
       }
