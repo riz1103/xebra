@@ -11,7 +11,7 @@ import {
   type ExamInvitationFormValues, type GroupInvitationFormValues,
   type BundleInvitationFormValues,
 } from "@/lib/validations";
-import type { BundleGroupInvitationPayload } from "@/types";
+import type { CreateBundleGroupInvitationPayload } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -89,7 +89,7 @@ export default function InvitationsPage() {
   });
 
   const bundleGroupMutation = useMutation({
-    mutationFn: (v: BundleGroupInvitationPayload) => api.createBundleGroupInvitation(v),
+    mutationFn: (v: CreateBundleGroupInvitationPayload) => api.createBundleGroupInvitation(v),
     onSuccess: () => { onMutationSuccess("Bundle group invitations sent"); },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -378,7 +378,7 @@ export default function InvitationsPage() {
                 </TabsContent>
 
                 <TabsContent value="group">
-                  <form onSubmit={bundleGroupForm.handleSubmit((v) => bundleGroupMutation.mutate(v as BundleGroupInvitationPayload))} className="space-y-4">
+                  <form onSubmit={bundleGroupForm.handleSubmit((v) => bundleGroupMutation.mutate(v as CreateBundleGroupInvitationPayload))} className="space-y-4">
                     <div className="space-y-2">
                       <Label>Exam Bundle *</Label>
                       <Select value={bundleGroupForm.watch("bundleId")} onValueChange={(v) => bundleGroupForm.setValue("bundleId", v)}>
