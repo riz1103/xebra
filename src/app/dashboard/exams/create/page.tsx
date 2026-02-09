@@ -40,12 +40,14 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import type { CreateExamQuestionPayload } from "@/types";
+import type { CreateExamQuestionPayload, ExamPart } from "@/types";
 
 export default function CreateExamPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [questions, setQuestions] = useState<CreateExamQuestionPayload[]>([]);
+  const [parts, setParts] = useState<ExamPart[]>([]);
+  const [passingConditionType, setPassingConditionType] = useState<"whole_exam" | "per_part">("whole_exam");
 
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +68,8 @@ export default function CreateExamPage() {
     defaultValues: {
       title: "",
       description: "",
+      instruction: null,
+      parts: null,
       questionOrder: "fixed",
       timeType: "per_exam",
       timeLimit: 60,
@@ -271,6 +275,37 @@ export default function CreateExamPage() {
     setScanProgress(0);
   };
 
+  const generatePartId = () => {
+    // Generate a GUID-like unique ID
+    return `part_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  };
+
+  const addPart = () => {
+    const newPart: ExamPart = {
+      id: generatePartId(),
+      name: "",
+      description: "",
+      numberOfItems: null,
+      timeLimit: null,
+      passingCondition: null,
+    };
+    setParts([...parts, newPart]);
+  };
+
+  const updatePart = (index: number, updatedPart: ExamPart) => {
+    const updated = [...parts];
+    updated[index] = updatedPart;
+    setParts(updated);
+  };
+
+  const deletePart = (index: number) => {
+    setParts(parts.filter((_, i) => i !== index));
+  };
+
+  const getQuestionCountForPart = (partId: string) => {
+    return questions.filter((q) => q.partId === partId).length;
+  };
+
   const onSubmit = (values: ExamFormValues) => {
     const layoutMap = new Map(
       questionTypes.map((qt) => [qt.id, getLayoutConfig(qt.name)])
@@ -298,7 +333,45 @@ export default function CreateExamPage() {
       }
       return q;
     });
-    createMutation.mutate({ ...values, questions: payload });
+
+    // Calculate total time limit if timeType is 'per_part'
+    let finalTimeLimit = values.timeLimit;
+    if (values.timeType === "per_part" && parts.length > 0) {
+      finalTimeLimit = parts.reduce((sum, part) => sum + (part.timeLimit || 0), 0);
+    }
+
+    // Handle passing condition based on type
+    let finalPassingCondition = values.passingCondition;
+    let finalParts = parts.length > 0 ? parts : null;
+    
+    if (passingConditionType === "per_part") {
+      // Clear exam-level passing condition when using per-part
+      finalPassingCondition = { type: "percentage" as const, value: 0 };
+      // Ensure parts have passing conditions if per_part is selected
+      if (finalParts) {
+        finalParts = finalParts.map(part => ({
+          ...part,
+          // Keep existing passingCondition or leave as null
+        }));
+      }
+    } else {
+      // Clear part-level passing conditions when using whole exam
+      if (finalParts) {
+        finalParts = finalParts.map(part => ({
+          ...part,
+          passingCondition: null,
+        }));
+      }
+    }
+
+    createMutation.mutate({
+      ...values,
+      instruction: values.instruction || null,
+      parts: finalParts,
+      passingCondition: finalPassingCondition,
+      timeLimit: finalTimeLimit,
+      questions: payload,
+    });
   };
 
   return (
@@ -332,6 +405,18 @@ export default function CreateExamPage() {
               <Label htmlFor="description">Description</Label>
               <Textarea id="description" placeholder="Brief description of the exam..." {...form.register("description")} />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="instruction">Exam Instructions</Label>
+              <Textarea
+                id="instruction"
+                placeholder="Enter instructions for examinees (e.g., 'Please read all instructions carefully. You have 60 minutes to complete all parts.')"
+                rows={4}
+                {...form.register("instruction")}
+              />
+              <p className="text-xs text-muted-foreground">
+                These instructions will be shown to examinees before they start the exam
+              </p>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Question Order</Label>
@@ -345,11 +430,12 @@ export default function CreateExamPage() {
               </div>
               <div className="space-y-2">
                 <Label>Time Type</Label>
-                <Select value={form.watch("timeType")} onValueChange={(v) => form.setValue("timeType", v as "per_exam" | "per_question")}>
+                <Select value={form.watch("timeType")} onValueChange={(v) => form.setValue("timeType", v as "per_exam" | "per_question" | "per_part")}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="per_exam">Per Exam (Total)</SelectItem>
                     <SelectItem value="per_question">Per Question</SelectItem>
+                    <SelectItem value="per_part">Per Part</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -357,7 +443,18 @@ export default function CreateExamPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="timeLimit">Time Limit (minutes) *</Label>
-                <Input id="timeLimit" type="number" min={1} {...form.register("timeLimit")} />
+                <Input
+                  id="timeLimit"
+                  type="number"
+                  min={1}
+                  {...form.register("timeLimit")}
+                  disabled={form.watch("timeType") === "per_part"}
+                />
+                {form.watch("timeType") === "per_part" && (
+                  <p className="text-xs text-muted-foreground">
+                    Time limit will be calculated from part time limits
+                  </p>
+                )}
                 {form.formState.errors.timeLimit && (
                   <p className="text-xs text-destructive">{form.formState.errors.timeLimit.message}</p>
                 )}
@@ -377,26 +474,51 @@ export default function CreateExamPage() {
             <CardDescription>Define what it takes to pass this exam.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Condition Type</Label>
-                <Select
-                  value={form.watch("passingCondition.type")}
-                  onValueChange={(v) => form.setValue("passingCondition.type", v as "percentage" | "points" | "items")}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percentage">Percentage (%)</SelectItem>
-                    <SelectItem value="points">Minimum Points</SelectItem>
-                    <SelectItem value="items">Minimum Correct Items</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="passingValue">Value *</Label>
-                <Input id="passingValue" type="number" min={0} {...form.register("passingCondition.value")} />
-              </div>
+            <div className="space-y-2">
+              <Label>Passing Condition Scope</Label>
+              <Select
+                value={passingConditionType}
+                onValueChange={(v) => setPassingConditionType(v as "whole_exam" | "per_part")}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="whole_exam">Whole Exam</SelectItem>
+                  <SelectItem value="per_part">Per Part</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {passingConditionType === "whole_exam"
+                  ? "Set a single passing condition for the entire exam"
+                  : "Set individual passing conditions for each part"}
+              </p>
             </div>
+            {passingConditionType === "whole_exam" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Condition Type</Label>
+                  <Select
+                    value={form.watch("passingCondition.type")}
+                    onValueChange={(v) => form.setValue("passingCondition.type", v as "percentage" | "points" | "items")}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">Percentage (%)</SelectItem>
+                      <SelectItem value="points">Minimum Points</SelectItem>
+                      <SelectItem value="items">Minimum Correct Items</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="passingValue">Value *</Label>
+                  <Input id="passingValue" type="number" min={0} {...form.register("passingCondition.value")} />
+                </div>
+              </div>
+            )}
+            {passingConditionType === "per_part" && parts.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Add parts below to set per-part passing conditions. Each part can have its own passing requirement.
+              </p>
+            )}
             <div className="flex items-center gap-3">
               <Switch
                 checked={form.watch("isPublic")}
@@ -404,6 +526,160 @@ export default function CreateExamPage() {
               />
               <Label>Make this exam public (accessible without invitation)</Label>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Exam Parts */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Exam Parts</CardTitle>
+              <CardDescription>
+                Organize your exam into multiple parts (optional). Leave empty for a single-part exam.
+              </CardDescription>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={addPart}>
+              <Plus className="mr-1 h-3 w-3" /> Add Part
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {parts.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No parts defined. This will be a single-part exam.
+              </p>
+            ) : (
+              parts.map((part, index) => {
+                const questionCount = getQuestionCountForPart(part.id);
+                return (
+                  <div key={index} className="rounded-lg border p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm">Part {index + 1}</h4>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deletePart(index)}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Part Name *</Label>
+                      <Input
+                        value={part.name}
+                        onChange={(e) => updatePart(index, { ...part, name: e.target.value })}
+                        placeholder="e.g., Mathematics"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Description</Label>
+                      <Textarea
+                        value={part.description}
+                        onChange={(e) => updatePart(index, { ...part, description: e.target.value })}
+                        placeholder="Optional description for this part"
+                        rows={2}
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Number of Items</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={part.numberOfItems ?? ""}
+                          onChange={(e) =>
+                            updatePart(index, {
+                              ...part,
+                              numberOfItems: e.target.value ? parseInt(e.target.value) : null,
+                            })
+                          }
+                          placeholder="All"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Leave empty for all questions. Available: {questionCount} questions
+                        </p>
+                      </div>
+                      {form.watch("timeType") === "per_part" && (
+                        <div className="space-y-2">
+                          <Label>Time Limit (minutes) *</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={part.timeLimit ?? ""}
+                            onChange={(e) =>
+                              updatePart(index, {
+                                ...part,
+                                timeLimit: e.target.value ? parseInt(e.target.value) : null,
+                              })
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {passingConditionType === "per_part" && (
+                      <div className="space-y-2">
+                        <Label>Passing Condition</Label>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <Select
+                            value={part.passingCondition?.type || "none"}
+                            onValueChange={(v) =>
+                              updatePart(index, {
+                                ...part,
+                                passingCondition: v && v !== "none"
+                                  ? {
+                                      type: v as "percentage" | "points" | "items",
+                                      value: part.passingCondition?.value || 0,
+                                    }
+                                  : null,
+                              })
+                            }
+                          >
+                            <SelectTrigger><SelectValue placeholder="No Passing Condition" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No Passing Condition</SelectItem>
+                              <SelectItem value="percentage">Percentage</SelectItem>
+                              <SelectItem value="points">Points</SelectItem>
+                              <SelectItem value="items">Items (Correct Answers)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {part.passingCondition && (
+                            <Input
+                              type="number"
+                              min={0}
+                              max={part.passingCondition.type === "percentage" ? 100 : undefined}
+                              value={part.passingCondition.value}
+                              onChange={(e) =>
+                                updatePart(index, {
+                                  ...part,
+                                  passingCondition: {
+                                    ...part.passingCondition!,
+                                    value: parseFloat(e.target.value) || 0,
+                                  },
+                                })
+                              }
+                              placeholder={
+                                part.passingCondition.type === "percentage"
+                                  ? "Percentage (0-100)"
+                                  : part.passingCondition.type === "points"
+                                  ? "Minimum points"
+                                  : "Minimum correct answers"
+                              }
+                            />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          If this part doesn't meet its passing requirement, the entire exam will fail.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+            {form.formState.errors.parts && (
+              <p className="text-xs text-destructive">{form.formState.errors.parts.message}</p>
+            )}
           </CardContent>
         </Card>
 
@@ -642,6 +918,28 @@ export default function CreateExamPage() {
                           onChange={(e) => updateQuestion(qi, "points", parseInt(e.target.value) || 1)}
                         />
                       </div>
+                      {parts.length > 0 && (
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label>Exam Part (Optional)</Label>
+                          <Select
+                            value={q.partId || "none"}
+                            onValueChange={(v) => updateQuestion(qi, "partId", v && v !== "none" ? v : null)}
+                          >
+                            <SelectTrigger><SelectValue placeholder="No Part" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No Part</SelectItem>
+                              {parts.map((part) => (
+                                <SelectItem key={part.id} value={part.id}>
+                                  {part.name} ({getQuestionCountForPart(part.id)} questions)
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Select which part this question belongs to
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Options section - shown for MC, T/F, Multiple Answer */}

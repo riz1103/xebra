@@ -53,6 +53,7 @@ export interface ExamQuestion {
   points: number;
   numberOfChoices?: number;
   examId: string;
+  partId?: string | null; // New: ID of the exam part this question belongs to
   timeLimit?: number;
   createdAt: string;
   updatedAt: string;
@@ -66,6 +67,7 @@ export interface CreateExamQuestionPayload {
   points: number;
   numberOfChoices?: number;
   examId: string;
+  partId?: string | null; // New: ID of the exam part this question belongs to
   timeLimit?: number;
 }
 
@@ -75,6 +77,7 @@ export interface UpdateExamQuestionPayload {
   correctAnswer?: string | string[];
   points?: number;
   numberOfChoices?: number;
+  partId?: string | null; // New: ID of the exam part this question belongs to
   timeLimit?: number;
 }
 
@@ -84,12 +87,26 @@ export interface PassingCondition {
   value: number;
 }
 
+export interface ExamPart {
+  id: string;
+  name: string;
+  description: string;
+  numberOfItems: number | null;
+  timeLimit?: number | null; // Only when exam timeType is 'per_part'
+  passingCondition: {
+    type: "percentage" | "points" | "items";
+    value: number;
+  } | null;
+}
+
 export interface Exam {
   id: string;
   title: string;
   description?: string;
+  instruction?: string | null; // New: Exam instructions displayed to examinees
+  parts?: ExamPart[] | null; // New: Array of exam parts for multi-part exams
   questionOrder: "random" | "fixed";
-  timeType: "per_exam" | "per_question";
+  timeType: "per_exam" | "per_question" | "per_part"; // Updated: Added 'per_part'
   timeLimit: number;
   numberOfItems?: number;
   passingCondition: PassingCondition;
@@ -108,8 +125,10 @@ export interface Exam {
 export interface CreateExamPayload {
   title: string;
   description?: string;
+  instruction?: string | null; // New: Exam instructions
+  parts?: ExamPart[] | null; // New: Array of exam parts
   questionOrder: "random" | "fixed";
-  timeType: "per_exam" | "per_question";
+  timeType: "per_exam" | "per_question" | "per_part"; // Updated: Added 'per_part'
   timeLimit: number;
   numberOfItems?: number;
   passingCondition: PassingCondition;
@@ -120,8 +139,10 @@ export interface CreateExamPayload {
 export interface UpdateExamPayload {
   title?: string;
   description?: string;
+  instruction?: string | null; // New: Exam instructions
+  parts?: ExamPart[] | null; // New: Array of exam parts
   questionOrder?: "random" | "fixed";
-  timeType?: "per_exam" | "per_question";
+  timeType?: "per_exam" | "per_question" | "per_part"; // Updated: Added 'per_part'
   timeLimit?: number;
   numberOfItems?: number;
   passingCondition?: PassingCondition;
@@ -158,6 +179,26 @@ export interface ExamSession {
   answers: Record<string, string | string[] | null>;
   timeRemainingSeconds: number;
   questions?: ExamQuestion[];
+  questionsByPart?: {
+    // New: Grouped by part (null if no parts)
+    [partId: string]: {
+      part: {
+        id: string;
+        name: string;
+        description: string;
+        timeLimit?: number | null; // Only when exam timeType is 'per_part'
+      };
+      questions: ExamQuestion[];
+    };
+  } | null;
+  partTimeLimits?: {
+    // New: Per-part time limits (null if exam timeType is not 'per_part')
+    [partId: string]: {
+      timeType: "per_exam"; // Always 'per_exam' for per-part time limits
+      timeLimitMinutes: number;
+      timeLimitSeconds: number;
+    };
+  } | null;
   exam?: Exam;
   startedAt: string;
   completedAt?: string;
@@ -195,6 +236,25 @@ export interface ExamResult {
   passed: boolean;
   correctAnswers: number;
   totalQuestions: number;
+  partResults?: {
+    // New: Per-part results
+    [partId: string]: {
+      partId: string;
+      partName: string;
+      score: number;
+      totalPoints: number;
+      percentage: number;
+      passed: boolean;
+      correctCount: number;
+      incorrectCount: number;
+      unansweredCount: number;
+      totalQuestions: number;
+      passingCondition: {
+        type: "percentage" | "points" | "items";
+        value: number;
+      } | null;
+    };
+  } | null;
   answers?: Record<string, unknown>;
   feedback?: string;
   submittedAt: string;

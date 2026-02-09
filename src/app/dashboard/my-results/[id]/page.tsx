@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Trophy, Target, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ArrowLeft, Trophy, Target, CheckCircle, XCircle, Clock, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 
@@ -147,6 +148,94 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
           </div>
         </CardContent>
       </Card>
+
+      {/* Part Results */}
+      {result.partResults && Object.keys(result.partResults).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Target className="h-4 w-4" /> Part Results
+            </CardTitle>
+            <CardDescription>Detailed results for each exam part</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {Object.values(result.partResults).map((partResult) => (
+              <div
+                key={partResult.partId}
+                className={`rounded-lg border p-4 space-y-3 ${
+                  partResult.passed
+                    ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20"
+                    : "border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold">{partResult.partName}</h4>
+                  <Badge variant={partResult.passed ? "success" : "destructive"}>
+                    {partResult.passed ? "Passed" : "Failed"}
+                  </Badge>
+                </div>
+                <div className="grid gap-2 text-sm sm:grid-cols-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Score</span>
+                    <span className="font-medium">
+                      {partResult.score} / {partResult.totalPoints} points
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Percentage</span>
+                    <span className="font-medium">{partResult.percentage}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Correct Answers</span>
+                    <span className="font-medium flex items-center gap-1">
+                      <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+                      {partResult.correctCount} / {partResult.totalQuestions}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Questions</span>
+                    <span className="font-medium">{partResult.totalQuestions}</span>
+                  </div>
+                </div>
+                {partResult.passingCondition && (
+                  <div className="pt-2 border-t">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Passing Requirement</span>
+                      <span className="font-medium">
+                        {partResult.passingCondition.type === "percentage"
+                          ? `${partResult.passingCondition.value}%`
+                          : partResult.passingCondition.type === "points"
+                          ? `${partResult.passingCondition.value} points`
+                          : `${partResult.passingCondition.value} correct answers`}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {!partResult.passed && (
+                  <Alert variant="destructive" className="mt-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      This part did not meet the passing requirement.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <Progress
+                  value={partResult.percentage}
+                  className={`h-2 ${partResult.passed ? "[&>div]:bg-emerald-500" : "[&>div]:bg-red-500"}`}
+                />
+              </div>
+            ))}
+            {!result.passed && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Exam failed because one or more parts did not meet their passing requirements.
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Feedback */}
       {result.feedback && (

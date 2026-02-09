@@ -16,11 +16,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageLoader } from "@/components/ui/loading";
 import { toast } from "sonner";
 import {
   Clock, ChevronLeft, ChevronRight, Flag, CheckCircle,
-  AlertTriangle, Send, Loader2,
+  AlertTriangle, Send, Loader2, Info,
 } from "lucide-react";
 import { cn, formatDuration } from "@/lib/utils";
 
@@ -30,9 +34,12 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const queryClient = useQueryClient();
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentPart, setCurrentPart] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string | string[] | null>>({});
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
+  const [partTimeRemaining, setPartTimeRemaining] = useState<Record<string, number>>({});
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(true);
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -43,7 +50,20 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   const session = data?.data;
   const questions = session?.questions || [];
-  const currentQuestion = questions[currentIndex];
+  const questionsByPart = session?.questionsByPart || null;
+  const partTimeLimits = session?.partTimeLimits || null;
+  const hasParts = questionsByPart !== null && Object.keys(questionsByPart).length > 0;
+  
+  // Get questions for current part or all questions
+  const getCurrentQuestions = () => {
+    if (hasParts && currentPart && questionsByPart) {
+      return questionsByPart[currentPart]?.questions || [];
+    }
+    return questions;
+  };
+  
+  const currentQuestions = getCurrentQuestions();
+  const currentQuestion = currentQuestions[currentIndex];
 
   // Initialize state from session
   useEffect(() => {
@@ -51,29 +71,59 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       setCurrentIndex(session.currentQuestionIndex || 0);
       setAnswers(session.answers || {});
       setTimeRemaining(session.timeRemainingSeconds || 0);
+      
+      // Initialize part selection
+      if (hasParts && questionsByPart) {
+        const firstPartId = Object.keys(questionsByPart)[0];
+        if (!currentPart) {
+          setCurrentPart(firstPartId);
+        }
+      }
+      
+      // Initialize part time limits
+      if (partTimeLimits) {
+        const initialPartTimes: Record<string, number> = {};
+        Object.keys(partTimeLimits).forEach((partId) => {
+          initialPartTimes[partId] = partTimeLimits[partId].timeLimitSeconds;
+        });
+        setPartTimeRemaining(initialPartTimes);
+      }
     }
-  }, [session]);
+  }, [session, hasParts, questionsByPart, partTimeLimits]);
 
   // Timer countdown
   useEffect(() => {
-    if (timeRemaining <= 0 || session?.status !== "in_progress") return;
+    if (currentPartTimeRemaining <= 0 || session?.status !== "in_progress") return;
 
     timerRef.current = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          // Time's up - auto submit
-          clearInterval(timerRef.current!);
-          handleSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
+      if (hasParts && currentPart && partTimeRemaining[currentPart] !== undefined) {
+        // Per-part timer
+        setPartTimeRemaining((prev) => {
+          const newTime = (prev[currentPart] || 0) - 1;
+          if (newTime <= 0) {
+            clearInterval(timerRef.current!);
+            handleSubmit();
+            return { ...prev, [currentPart]: 0 };
+          }
+          return { ...prev, [currentPart]: newTime };
+        });
+      } else {
+        // Overall timer
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current!);
+            handleSubmit();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
     }, 1000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [session?.status]);
+  }, [session?.status, currentPart, hasParts, partTimeRemaining]);
 
   // Auto-save every 30 seconds
   useEffect(() => {
@@ -133,9 +183,14 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   };
 
   const goToQuestion = (index: number) => {
-    if (index >= 0 && index < questions.length) {
+    if (index >= 0 && index < currentQuestions.length) {
       setCurrentIndex(index);
     }
+  };
+
+  const goToPart = (partId: string) => {
+    setCurrentPart(partId);
+    setCurrentIndex(0);
   };
 
   const handleSubmit = () => {
@@ -152,13 +207,29 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     });
   };
 
-  const answeredCount = Object.values(answers).filter((a) => a !== null && a !== undefined && (typeof a === "string" ? a.length > 0 : a.length > 0)).length;
-  const progressPercentage = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
+  const getAnsweredCount = () => {
+    if (hasParts && currentPart && questionsByPart) {
+      const partQuestions = questionsByPart[currentPart]?.questions || [];
+      return partQuestions.filter((q) => {
+        const answer = answers[q.id];
+        return answer !== null && answer !== undefined && (typeof answer === "string" ? answer.length > 0 : answer.length > 0);
+      }).length;
+    }
+    return Object.values(answers).filter((a) => a !== null && a !== undefined && (typeof a === "string" ? a.length > 0 : a.length > 0)).length;
+  };
+
+  const answeredCount = getAnsweredCount();
+  const progressPercentage = currentQuestions.length > 0 ? (answeredCount / currentQuestions.length) * 100 : 0;
   const isMultipleAnswer = Array.isArray(currentQuestion?.correctAnswer) && currentQuestion.correctAnswer.length > 1;
+  
+  // Get current part time remaining
+  const currentPartTimeRemaining = hasParts && currentPart && partTimeRemaining[currentPart] !== undefined
+    ? partTimeRemaining[currentPart]
+    : timeRemaining;
 
   // Timer color based on time remaining
   const timerColor =
-    timeRemaining < 60 ? "text-red-500" : timeRemaining < 300 ? "text-amber-500" : "text-foreground";
+    currentPartTimeRemaining < 60 ? "text-red-500" : currentPartTimeRemaining < 300 ? "text-amber-500" : "text-foreground";
 
   if (isLoading) return <PageLoader />;
   if (error || !session) {
@@ -191,6 +262,53 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     );
   }
 
+  // Instructions Dialog
+  if (showInstructions && session.exam) {
+    return (
+      <Dialog open={showInstructions} onOpenChange={() => {}}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Info className="h-5 w-5" />
+              Exam Instructions
+            </DialogTitle>
+            <DialogDescription>
+              Please read the instructions carefully before starting the exam.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {session.exam.instruction && (
+              <div>
+                <h3 className="font-semibold mb-2">Instructions:</h3>
+                <p className="text-sm whitespace-pre-wrap">{session.exam.instruction}</p>
+              </div>
+            )}
+            {hasParts && questionsByPart && (
+              <div>
+                <h3 className="font-semibold mb-2">Exam Structure:</h3>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  {Object.values(questionsByPart).map((partData, idx) => (
+                    <li key={partData.part.id}>
+                      <span className="font-medium">{partData.part.name}</span>
+                      {partData.part.description && ` - ${partData.part.description}`}
+                      {" "}({partData.questions.length} questions
+                      {partData.part.timeLimit && `, ${partData.part.timeLimit} minutes`})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowInstructions(false)} className="w-full">
+              Start Exam
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Top Bar */}
@@ -202,7 +320,12 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
           </div>
           <div className={cn("flex items-center gap-2 font-mono text-lg font-bold", timerColor)}>
             <Clock className="h-5 w-5" />
-            {formatDuration(timeRemaining)}
+            {formatDuration(currentPartTimeRemaining)}
+            {hasParts && currentPart && partTimeLimits && (
+              <span className="text-xs font-normal ml-2">
+                ({questionsByPart?.[currentPart]?.part.name})
+              </span>
+            )}
           </div>
           <Button
             variant="destructive"
@@ -217,11 +340,39 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       {/* Progress */}
       <div className="mx-auto max-w-5xl px-4 py-3">
         <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-          <span>{answeredCount} of {questions.length} answered</span>
+          <span>{answeredCount} of {currentQuestions.length} answered</span>
           <span>{Math.round(progressPercentage)}%</span>
         </div>
         <Progress value={progressPercentage} className="h-2" />
       </div>
+
+      {/* Part Navigation Tabs */}
+      {hasParts && questionsByPart && (
+        <div className="mx-auto max-w-5xl px-4">
+          <Tabs value={currentPart || ""} onValueChange={goToPart}>
+            <TabsList className="w-full justify-start">
+              {Object.entries(questionsByPart).map(([partId, partData]) => {
+                const partAnswered = partData.questions.filter((q) => {
+                  const answer = answers[q.id];
+                  return answer !== null && answer !== undefined && (typeof answer === "string" ? answer.length > 0 : answer.length > 0);
+                }).length;
+                const partProgress = partData.questions.length > 0 ? (partAnswered / partData.questions.length) * 100 : 0;
+                return (
+                  <TabsTrigger key={partId} value={partId} className="flex items-center gap-2">
+                    {partData.part.name}
+                    <Badge variant="secondary" className="text-xs">
+                      {partAnswered}/{partData.questions.length}
+                    </Badge>
+                    {partProgress === 100 && (
+                      <CheckCircle className="h-3 w-3 text-emerald-500" />
+                    )}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
 
       <div className="mx-auto max-w-5xl px-4 py-4 flex gap-6">
         {/* Question Navigator (sidebar) */}
@@ -232,7 +383,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-5 gap-2">
-                {questions.map((q, i) => {
+                {currentQuestions.map((q, i) => {
                   const isAnswered = answers[q.id] !== null && answers[q.id] !== undefined;
                   const isCurrent = i === currentIndex;
                   const isFlagged = flagged.has(q.id);
@@ -273,11 +424,16 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         <div className="flex-1 min-w-0">
           {currentQuestion ? (
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-xs">
-                    Question {currentIndex + 1} of {questions.length}
-                  </Badge>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <Badge variant="outline" className="text-xs">
+                  Question {currentIndex + 1} of {currentQuestions.length}
+                  {hasParts && currentPart && questionsByPart && (
+                    <span className="ml-2">
+                      ({questionsByPart[currentPart]?.part.name})
+                    </span>
+                  )}
+                </Badge>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary" className="text-xs">{currentQuestion.points} pts</Badge>
                     <Button
@@ -371,10 +527,10 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
             {/* Mobile question indicator */}
             <span className="text-sm text-muted-foreground lg:hidden">
-              {currentIndex + 1} / {questions.length}
+              {currentIndex + 1} / {currentQuestions.length}
             </span>
 
-            {currentIndex < questions.length - 1 ? (
+            {currentIndex < currentQuestions.length - 1 ? (
               <Button onClick={() => goToQuestion(currentIndex + 1)}>
                 Next <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
@@ -393,10 +549,15 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
           <AlertDialogHeader>
             <AlertDialogTitle>Submit Exam?</AlertDialogTitle>
             <AlertDialogDescription>
-              You have answered {answeredCount} out of {questions.length} questions.
-              {answeredCount < questions.length && (
+              You have answered {answeredCount} out of {currentQuestions.length} questions in {hasParts && currentPart && questionsByPart ? questionsByPart[currentPart]?.part.name : "this exam"}.
+              {answeredCount < currentQuestions.length && (
                 <span className="block mt-1 text-amber-600 dark:text-amber-400 font-medium">
-                  Warning: {questions.length - answeredCount} question(s) are unanswered.
+                  Warning: {currentQuestions.length - answeredCount} question(s) are unanswered.
+                </span>
+              )}
+              {hasParts && questionsByPart && Object.keys(questionsByPart).length > 1 && (
+                <span className="block mt-2 text-sm">
+                  Note: You can switch between parts using the tabs above.
                 </span>
               )}
               {flagged.size > 0 && (

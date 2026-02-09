@@ -32,16 +32,31 @@ export const examQuestionSchema = z.object({
   correctAnswer: z.union([z.string(), z.array(z.string())]),
   points: z.coerce.number().min(1, "Points must be at least 1"),
   numberOfChoices: z.coerce.number().min(2).optional(),
+  partId: z.string().nullable().optional(), // New: Part ID
   timeLimit: z.coerce.number().min(0).optional(),
   examId: z.string().min(1, "Exam ID is required"),
 });
 
 // ============ Exams ============
+const examPartSchema = z.object({
+  id: z.string().min(1, "Part ID is required"), // Auto-generated GUID, no regex validation needed
+  name: z.string().min(1, "Part name is required").max(200, "Part name too long"),
+  description: z.string().max(500, "Description too long").default(""),
+  numberOfItems: z.coerce.number().min(1).nullable().optional(),
+  timeLimit: z.coerce.number().min(1).nullable().optional(),
+  passingCondition: z.object({
+    type: z.enum(["percentage", "points", "items"]),
+    value: z.coerce.number().min(0, "Value must be positive"),
+  }).nullable().optional(),
+});
+
 export const examSchema = z.object({
   title: z.string().min(1, "Title is required").max(200, "Title too long"),
   description: z.string().max(1000, "Description too long").optional(),
+  instruction: z.string().max(5000, "Instructions too long").nullable().optional(),
+  parts: z.array(examPartSchema).nullable().optional(),
   questionOrder: z.enum(["random", "fixed"]),
-  timeType: z.enum(["per_exam", "per_question"]),
+  timeType: z.enum(["per_exam", "per_question", "per_part"]),
   timeLimit: z.coerce.number().min(1, "Time limit must be at least 1 minute"),
   numberOfItems: z.coerce.number().min(1).optional(),
   passingCondition: z.object({
@@ -49,6 +64,29 @@ export const examSchema = z.object({
     value: z.coerce.number().min(0, "Value must be positive"),
   }),
   isPublic: z.boolean(),
+}).refine((data) => {
+  // If timeType is 'per_part', parts must exist and each part must have a timeLimit
+  if (data.timeType === "per_part") {
+    if (!data.parts || data.parts.length === 0) {
+      return false;
+    }
+    // All parts must have timeLimit when timeType is 'per_part'
+    return data.parts.every(part => part.timeLimit !== null && part.timeLimit !== undefined && part.timeLimit > 0);
+  }
+  return true;
+}, {
+  message: "When time type is 'per_part', all parts must have a time limit",
+  path: ["parts"],
+}).refine((data) => {
+  // Validate part IDs are unique
+  if (data.parts && data.parts.length > 0) {
+    const ids = data.parts.map(p => p.id);
+    return ids.length === new Set(ids).size;
+  }
+  return true;
+}, {
+  message: "Part IDs must be unique",
+  path: ["parts"],
 });
 
 // ============ Exam Bundles ============
