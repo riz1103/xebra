@@ -107,7 +107,7 @@ export default function LandingPage() {
               Trusted examination platform
             </div>
             <h1 className="mx-auto max-w-4xl text-4xl font-bold tracking-tight sm:text-6xl lg:text-7xl">
-              <span className="text-primary">eX</span>amination{" "}
+              e<span className="text-primary">X</span>amination{" "}
               <span className="text-primary">EV</span>aluation &{" "}
               <span className="text-primary">R</span>esult{" "}
               <span className="text-primary">A</span>uthority
