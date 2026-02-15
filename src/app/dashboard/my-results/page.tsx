@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { DataTableSkeleton } from "@/components/ui/loading";
 import { BarChart3, Trophy, Target } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import Link from "next/link";
 
 export default function MyResultsPage() {
   const { data, isLoading } = useQuery({
@@ -66,8 +67,9 @@ export default function MyResultsPage() {
       ) : (
         <div className="space-y-3">
           {results.map((result) => (
-            <Card key={result.id} className="transition-shadow hover:shadow-md">
-              <CardContent className="flex items-center gap-4 py-5">
+            <Link key={result.id} href={`/dashboard/my-results/${result.id}`} className="block">
+              <Card className="transition-shadow hover:shadow-md cursor-pointer">
+                <CardContent className="flex items-center gap-4 py-5">
                 <div className={`flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold ${
                   result.passed
                     ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
@@ -83,9 +85,26 @@ export default function MyResultsPage() {
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Score: {result.score}/{result.totalPoints} &middot;
-                    Correct: {result.correctAnswers}/{result.totalQuestions} &middot;
-                    {formatDate(result.submittedAt || result.createdAt)}
+                    Points: {result.score}/{result.totalPoints} &middot;
+                    {(() => {
+                      // Use correctCount from API, fallback to correctAnswers, or calculate if needed
+                      let correctCount = result.correctCount ?? result.correctAnswers;
+                      
+                      // If still missing and all questions are worth 1 point, calculate from score
+                      if (correctCount === undefined && result.totalQuestions > 0 && result.totalPoints === result.totalQuestions) {
+                        correctCount = result.score;
+                      }
+                      
+                      // Only show "Correct" if we have a valid count
+                      if (result.totalQuestions > 0 && correctCount !== undefined) {
+                        return <>Correct: {correctCount}/{result.totalQuestions} &middot; </>;
+                      }
+                      return null;
+                    })()}
+                    {result.startedAt && (
+                      <>Started: {formatDate(result.startedAt)} &middot; </>
+                    )}
+                    Submitted: {formatDate(result.submittedAt || result.createdAt)}
                   </p>
                   {result.feedback && (
                     <p className="text-xs text-muted-foreground mt-1 italic">Feedback: {result.feedback}</p>
@@ -96,6 +115,7 @@ export default function MyResultsPage() {
                 </div>
               </CardContent>
             </Card>
+            </Link>
           ))}
         </div>
       )}

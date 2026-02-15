@@ -128,7 +128,7 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
             <span className="text-muted-foreground">Correct Answers</span>
             <span className="font-medium flex items-center gap-1">
               <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
-              {result.correctAnswers} / {result.totalQuestions}
+              {result.correctCount ?? result.correctAnswers ?? 0} / {result.totalQuestions}
             </span>
           </div>
           <div className="flex justify-between">
@@ -137,6 +137,19 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
               {result.passed ? "Passed" : "Failed"}
             </Badge>
           </div>
+          {result.startedAt && (
+            <>
+              <Separator />
+              <div className="flex justify-between">
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" /> Started
+                </span>
+                <span className="font-medium">
+                  {formatDate(result.startedAt)}
+                </span>
+              </div>
+            </>
+          )}
           <Separator />
           <div className="flex justify-between">
             <span className="text-muted-foreground flex items-center gap-1">

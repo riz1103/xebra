@@ -5,6 +5,7 @@ import { use, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import type { ExamQuestion } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentPart, setCurrentPart] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string | string[] | null>>({});
+  const [selectedIndices, setSelectedIndices] = useState<Record<string, number>>({}); // Track selected index for each question
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [partTimeRemaining, setPartTimeRemaining] = useState<Record<string, number>>({});
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
@@ -49,8 +51,36 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   });
 
   const session = data?.data;
-  const questions = session?.questions || [];
-  const questionsByPart = session?.questionsByPart || null;
+  const allQuestions = session?.questions || [];
+  const selectedQuestionIds = session?.selectedQuestionIds;
+  
+  // Filter and sort questions to match selectedQuestionIds order if it exists
+  const questions = selectedQuestionIds && selectedQuestionIds.length > 0
+    ? selectedQuestionIds
+        .map((id) => allQuestions.find((q) => q.id === id))
+        .filter((q): q is ExamQuestion => q !== undefined)
+    : allQuestions;
+  
+  // Filter questionsByPart if it exists and selectedQuestionIds is provided
+  // Maintain order within each part based on selectedQuestionIds
+  const rawQuestionsByPart = session?.questionsByPart || null;
+  const questionsByPart = rawQuestionsByPart && selectedQuestionIds && selectedQuestionIds.length > 0
+    ? Object.keys(rawQuestionsByPart).reduce((acc, partId) => {
+        const partData = rawQuestionsByPart[partId];
+        // Filter and sort by selectedQuestionIds order
+        const filteredQuestions = selectedQuestionIds
+          .map((id) => partData.questions.find((q) => q.id === id))
+          .filter((q): q is ExamQuestion => q !== undefined);
+        if (filteredQuestions.length > 0) {
+          acc[partId] = {
+            ...partData,
+            questions: filteredQuestions,
+          };
+        }
+        return acc;
+      }, {} as typeof rawQuestionsByPart)
+    : rawQuestionsByPart;
+  
   const partTimeLimits = session?.partTimeLimits || null;
   const hasParts = questionsByPart !== null && Object.keys(questionsByPart).length > 0;
   
@@ -71,6 +101,21 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       setCurrentIndex(session.currentQuestionIndex || 0);
       setAnswers(session.answers || {});
       setTimeRemaining(session.timeRemainingSeconds || 0);
+      
+      // Initialize selected indices from session answers
+      if (session.questions) {
+        const initialIndices: Record<string, number> = {};
+        session.questions.forEach((q) => {
+          const answer = session.answers?.[q.id];
+          if (answer && typeof answer === "string") {
+            const index = q.options.findIndex((opt) => opt === answer);
+            if (index >= 0) {
+              initialIndices[q.id] = index;
+            }
+          }
+        });
+        setSelectedIndices(initialIndices);
+      }
       
       // Initialize part selection
       if (hasParts && questionsByPart) {
@@ -93,7 +138,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   // Timer countdown
   useEffect(() => {
-    if (currentPartTimeRemaining <= 0 || session?.status !== "in_progress") return;
+    if (currentPartTimeRemaining <= 0 || (session?.status !== "in_progress" && session?.status !== "in-progress")) return;
 
     timerRef.current = setInterval(() => {
       if (hasParts && currentPart && partTimeRemaining[currentPart] !== undefined) {
@@ -128,7 +173,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   // Auto-save every 30 seconds
   useEffect(() => {
     const autoSave = setInterval(() => {
-      if (session?.status === "in_progress") {
+      if (session?.status === "in_progress" || session?.status === "in-progress") {
         saveMutation.mutate({
           currentQuestionIndex: currentIndex,
           answers,
@@ -172,8 +217,14 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     [currentQuestion, answers, answerMutation]
   );
 
-  const handleSingleAnswer = (value: string) => {
-    handleAnswer(value);
+  const handleSingleAnswer = (indexStr: string) => {
+    if (!currentQuestion) return;
+    const index = parseInt(indexStr, 10);
+    if (index >= 0 && index < currentQuestion.options.length) {
+      // Store both the answer value and the selected index
+      setSelectedIndices((prev) => ({ ...prev, [currentQuestion.id]: index }));
+      handleAnswer(currentQuestion.options[index]);
+    }
   };
 
   const handleMultipleAnswer = (option: string, checked: boolean) => {
@@ -208,14 +259,14 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   };
 
   const getAnsweredCount = () => {
-    if (hasParts && currentPart && questionsByPart) {
-      const partQuestions = questionsByPart[currentPart]?.questions || [];
-      return partQuestions.filter((q) => {
-        const answer = answers[q.id];
-        return answer !== null && answer !== undefined && (typeof answer === "string" ? answer.length > 0 : answer.length > 0);
-      }).length;
-    }
-    return Object.values(answers).filter((a) => a !== null && a !== undefined && (typeof a === "string" ? a.length > 0 : a.length > 0)).length;
+    // Only count answers for questions in currentQuestions
+    return currentQuestions.filter((q) => {
+      const answer = answers[q.id];
+      if (answer === null || answer === undefined) return false;
+      if (typeof answer === "string") return answer.length > 0;
+      if (Array.isArray(answer)) return answer.length > 0;
+      return true;
+    }).length;
   };
 
   const answeredCount = getAnsweredCount();
@@ -482,28 +533,46 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                   </div>
                 ) : (
                   // Single answer (radio)
-                  <RadioGroup
-                    value={(answers[currentQuestion.id] as string) || ""}
-                    onValueChange={handleSingleAnswer}
-                  >
-                    {currentQuestion.options.map((option, i) => (
-                      <label
-                        key={i}
-                        className={cn(
-                          "flex items-center gap-3 rounded-lg border p-4 cursor-pointer transition-all",
-                          answers[currentQuestion.id] === option
-                            ? "border-primary bg-primary/5"
-                            : "hover:bg-muted/50"
-                        )}
+                  (() => {
+                    // Use stored selected index if available, otherwise try to find it
+                    const storedIndex = selectedIndices[currentQuestion.id];
+                    const selectedAnswer = answers[currentQuestion.id] as string;
+                    const selectedIndex = storedIndex !== undefined
+                      ? storedIndex
+                      : selectedAnswer
+                      ? currentQuestion.options.findIndex((opt) => opt === selectedAnswer)
+                      : -1;
+                    const radioValue = selectedIndex >= 0 ? selectedIndex.toString() : "";
+                    
+                    return (
+                      <RadioGroup
+                        value={radioValue}
+                        onValueChange={handleSingleAnswer}
                       >
-                        <RadioGroupItem value={option} />
-                        <span className="text-sm font-medium text-muted-foreground mr-2">
-                          {String.fromCharCode(65 + i)}.
-                        </span>
-                        <span className="text-sm">{option}</span>
-                      </label>
-                    ))}
-                  </RadioGroup>
+                        {currentQuestion.options.map((option, i) => {
+                          // Use stored index to determine selection - this ensures only the exact clicked option is highlighted
+                          const isSelected = selectedIndex === i;
+                          return (
+                            <label
+                              key={i}
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg border p-4 cursor-pointer transition-all",
+                                isSelected
+                                  ? "border-primary bg-primary/5"
+                                  : "hover:bg-muted/50"
+                              )}
+                            >
+                              <RadioGroupItem value={i.toString()} />
+                              <span className="text-sm font-medium text-muted-foreground mr-2">
+                                {String.fromCharCode(65 + i)}.
+                              </span>
+                              <span className="text-sm">{option}</span>
+                            </label>
+                          );
+                        })}
+                      </RadioGroup>
+                    );
+                  })()
                 )}
               </CardContent>
             </Card>
@@ -581,6 +650,17 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Loading Overlay for Submission */}
+      {submitMutation.isPending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm font-medium">Submitting exam...</p>
+            <p className="text-xs text-muted-foreground">Please wait, do not close this page.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

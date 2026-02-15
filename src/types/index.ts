@@ -150,6 +150,19 @@ export interface UpdateExamPayload {
   status?: "draft" | "active" | "archived";
 }
 
+// Pending exam with invitation details
+export interface PendingExamInvitation {
+  id: string;
+  expiresAt: string | FirestoreTimestamp;
+  maxAttempts: number;
+  attemptsUsed: number;
+  createdAt: string | FirestoreTimestamp;
+}
+
+export interface PendingExam extends Exam {
+  invitations?: PendingExamInvitation[];
+}
+
 // ============ Exam Bundles ============
 export interface ExamBundle {
   id: string;
@@ -174,7 +187,11 @@ export interface ExamSession {
   examId: string;
   examineeId: string;
   invitationId?: string;
-  status: "in_progress" | "completed" | "abandoned" | "timed_out";
+  status: "in_progress" | "in-progress" | "completed" | "abandoned" | "timed_out" | "timed-out";
+  selectedQuestionIds?: string[]; // IDs of questions selected for this session
+  examTitle?: string; // Title of the exam
+  examineeName?: string; // Name of the examinee
+  examineeEmail?: string; // Email of the examinee
   currentQuestionIndex: number;
   answers: Record<string, string | string[] | null>;
   timeRemainingSeconds: number;
@@ -234,7 +251,9 @@ export interface ExamResult {
   totalPoints: number;
   percentage: number;
   passed: boolean;
-  correctAnswers: number;
+  correctAnswers?: number; // Legacy field
+  correctCount?: number; // New field from API
+  incorrectCount?: number;
   totalQuestions: number;
   partResults?: {
     // New: Per-part results
@@ -257,6 +276,7 @@ export interface ExamResult {
   } | null;
   answers?: Record<string, unknown>;
   feedback?: string;
+  startedAt?: string; // When the exam session was started
   submittedAt: string;
   createdAt: string;
   updatedAt: string;

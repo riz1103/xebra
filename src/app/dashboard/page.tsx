@@ -201,7 +201,7 @@ function ExamineeDashboard() {
   const isLoading = invLoading || resLoading || sessLoading;
 
   const pendingInvitations = invitations.filter((i) => i.status === "pending");
-  const inProgressSessions = sessions.filter((s) => s.status === "in_progress");
+  const inProgressSessions = sessions.filter((s) => s.status === "in_progress" || s.status === "in-progress");
 
   return (
     <div className="space-y-8">

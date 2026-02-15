@@ -16,9 +16,9 @@ export default function MyExamsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const { data: invitationsData, isLoading: invLoading } = useQuery({
-    queryKey: ["my-invitations"],
-    queryFn: () => api.getExamInvitations(),
+  const { data: pendingExamsData, isLoading: pendingLoading } = useQuery({
+    queryKey: ["pending-exams"],
+    queryFn: () => api.getPendingExams(),
   });
 
   const { data: sessionsData, isLoading: sessLoading } = useQuery({
@@ -30,6 +30,7 @@ export default function MyExamsPage() {
     mutationFn: (invitationId: string) => api.createExamSession({ invitationId }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["my-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-exams"] });
       if (data.data) {
         router.push(`/exam/${data.data.id}`);
       }
@@ -37,12 +38,35 @@ export default function MyExamsPage() {
     onError: (err: Error) => toast.error(err.message || "Failed to start exam"),
   });
 
-  const invitations = invitationsData?.data || [];
+  const pendingExams = pendingExamsData?.data || [];
   const sessions = sessionsData?.data || [];
-  const isLoading = invLoading || sessLoading;
+  const isLoading = pendingLoading || sessLoading;
 
-  const pendingInvitations = invitations.filter((i) => i.status === "pending" || i.status === "accepted");
-  const inProgressSessions = sessions.filter((s) => s.status === "in_progress");
+  // Extract invitation details from the invitations array in each exam
+  const pendingExamsWithInvitations = pendingExams.map((exam) => {
+    // Get the first invitation from the invitations array (usually there's only one)
+    const invitation = exam.invitations?.[0];
+    
+    // Convert FirestoreTimestamp to string if needed
+    let expiresAt: string | undefined;
+    if (invitation?.expiresAt) {
+      if (typeof invitation.expiresAt === "object" && "_seconds" in invitation.expiresAt) {
+        expiresAt = new Date(invitation.expiresAt._seconds * 1000).toISOString();
+      } else {
+        expiresAt = invitation.expiresAt as string;
+      }
+    }
+
+    return {
+      ...exam,
+      invitationId: invitation?.id,
+      expiresAt: expiresAt,
+      maxAttempts: invitation?.maxAttempts,
+      currentAttempts: invitation?.attemptsUsed ?? 0,
+    };
+  });
+
+  const inProgressSessions = sessions.filter((s) => s.status === "in_progress" || s.status === "in-progress");
   const completedSessions = sessions.filter((s) => s.status === "completed");
 
   return (
@@ -55,7 +79,7 @@ export default function MyExamsPage() {
       <Tabs defaultValue="pending">
         <TabsList>
           <TabsTrigger value="pending">
-            Pending ({pendingInvitations.length})
+            Pending ({pendingExamsWithInvitations.length})
           </TabsTrigger>
           <TabsTrigger value="in-progress">
             In Progress ({inProgressSessions.length})
@@ -68,7 +92,7 @@ export default function MyExamsPage() {
         <TabsContent value="pending" className="space-y-4">
           {isLoading ? (
             <DataTableSkeleton rows={4} />
-          ) : pendingInvitations.length === 0 ? (
+          ) : pendingExamsWithInvitations.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <GraduationCap className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -77,22 +101,30 @@ export default function MyExamsPage() {
               </CardContent>
             </Card>
           ) : (
-            pendingInvitations.map((inv) => (
-              <Card key={inv.id} className="transition-shadow hover:shadow-md">
+            pendingExamsWithInvitations.map((exam) => (
+              <Card key={exam.id} className="transition-shadow hover:shadow-md">
                 <CardContent className="flex items-center justify-between py-5">
                   <div>
-                    <h3 className="font-semibold">{inv.examTitle || "Exam"}</h3>
+                    <h3 className="font-semibold">{exam.title || "Exam"}</h3>
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        Expires: {formatDate(inv.expiresAt)}
-                      </span>
-                      <span>Attempts: {inv.currentAttempts}/{inv.maxAttempts}</span>
+                      {exam.expiresAt && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          Expires: {formatDate(exam.expiresAt)}
+                        </span>
+                      )}
+                      {exam.maxAttempts !== undefined && exam.currentAttempts !== undefined && (
+                        <span>Attempts: {exam.currentAttempts}/{exam.maxAttempts}</span>
+                      )}
                     </div>
                   </div>
                   <Button
-                    onClick={() => startSessionMutation.mutate(inv.id)}
-                    disabled={startSessionMutation.isPending}
+                    onClick={() => {
+                      if (exam.invitationId) {
+                        startSessionMutation.mutate(exam.invitationId);
+                      }
+                    }}
+                    disabled={startSessionMutation.isPending || !exam.invitationId}
                   >
                     {startSessionMutation.isPending ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -123,7 +155,7 @@ export default function MyExamsPage() {
                 <CardContent className="flex items-center justify-between py-5">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{session.exam?.title || "Exam"}</h3>
+                      <h3 className="font-semibold">{session.examTitle || session.exam?.title || "Exam"}</h3>
                       <Badge variant="warning">In Progress</Badge>
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
@@ -156,7 +188,7 @@ export default function MyExamsPage() {
               <Card key={session.id} className="opacity-75">
                 <CardContent className="flex items-center justify-between py-5">
                   <div>
-                    <h3 className="font-semibold">{session.exam?.title || "Exam"}</h3>
+                    <h3 className="font-semibold">{session.examTitle || session.exam?.title || "Exam"}</h3>
                     <p className="text-xs text-muted-foreground mt-1">
                       Completed: {formatDate(session.completedAt || session.updatedAt)}
                     </p>

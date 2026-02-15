@@ -11,6 +11,7 @@ import type {
   Exam,
   CreateExamPayload,
   UpdateExamPayload,
+  PendingExam,
   ExamBundle,
   CreateExamBundlePayload,
   ExamSession,
@@ -142,6 +143,11 @@ class ApiClient {
   // ============ Exams ============
   async getExams(params?: { status?: string; isPublic?: boolean; createdBy?: string }) {
     const { data } = await this.client.get<ApiResponse<Exam[]>>("/api/exams", { params });
+    return data;
+  }
+
+  async getPendingExams() {
+    const { data } = await this.client.get<ApiResponse<PendingExam[]>>("/api/exams/pending");
     return data;
   }
 
