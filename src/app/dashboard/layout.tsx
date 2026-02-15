@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { PageLoader } from "@/components/ui/loading";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { NavigationLoadingProvider } from "@/providers/navigation-loading-provider";
 
 export default function DashboardLayout({
   children,
@@ -32,13 +33,15 @@ export default function DashboardLayout({
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      <NavigationLoadingProvider>
+        <div className="flex h-screen overflow-hidden">
+          <Sidebar />
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <Header />
+            <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          </div>
         </div>
-      </div>
+      </NavigationLoadingProvider>
     </TooltipProvider>
   );
 }
