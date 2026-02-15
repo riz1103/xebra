@@ -21,12 +21,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DataTableSkeleton } from "@/components/ui/loading";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Plus, Loader2, Mail, XCircle, Search, Package, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
+import type { ExamInvitation } from "@/types";
 
 type InviteTarget = "exam" | "bundle";
 type InviteRecipient = "individual" | "group";
+
+const CANCELLABLE_STATUSES = ["pending", "accepted", "active"];
 
 export default function InvitationsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -34,6 +41,7 @@ export default function InvitationsPage() {
   const [inviteRecipient, setInviteRecipient] = useState<InviteRecipient>("individual");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [cancelTarget, setCancelTarget] = useState<ExamInvitation | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -132,9 +140,19 @@ export default function InvitationsPage() {
   const statusColors: Record<string, "default" | "success" | "warning" | "destructive" | "secondary" | "outline"> = {
     pending: "warning",
     accepted: "default",
+    active: "success",
     used: "success",
     expired: "secondary",
     revoked: "destructive",
+  };
+
+  const canCancel = (inv: ExamInvitation) => CANCELLABLE_STATUSES.includes(inv.status);
+
+  const handleConfirmCancel = () => {
+    if (cancelTarget) {
+      cancelMutation.mutate(cancelTarget.id);
+      setCancelTarget(null);
+    }
   };
 
   return (
@@ -195,9 +213,20 @@ export default function InvitationsPage() {
                     Exam: {inv.examTitle || inv.examId} &middot; Attempts: {inv.currentAttempts}/{inv.maxAttempts} &middot; Expires: {formatDate(inv.expiresAt)}
                   </p>
                 </div>
-                {inv.status === "pending" && (
-                  <Button variant="ghost" size="sm" onClick={() => cancelMutation.mutate(inv.id)} className="text-destructive">
-                    <XCircle className="mr-1 h-3 w-3" /> Cancel
+                {canCancel(inv) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCancelTarget(inv)}
+                    disabled={cancelMutation.isPending}
+                    className="text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    {cancelMutation.isPending && cancelTarget?.id === inv.id ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <XCircle className="mr-1 h-3 w-3" />
+                    )}
+                    Cancel invitation
                   </Button>
                 )}
               </CardContent>
@@ -205,6 +234,28 @@ export default function InvitationsPage() {
           ))}
         </div>
       )}
+
+      {/* Cancel invitation confirmation */}
+      <AlertDialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel invitation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will revoke the invitation for <strong>{cancelTarget?.examineeEmail}</strong> to take{" "}
+              {cancelTarget?.examTitle || "the exam"}. They will no longer be able to use this invitation.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep invitation</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmCancel}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Cancel invitation
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ===== Send Invitation Dialog ===== */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

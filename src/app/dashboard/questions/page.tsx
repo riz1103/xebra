@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
 import { questionTypeSchema, type QuestionTypeFormValues } from "@/lib/validations";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,10 +27,20 @@ import { formatDate } from "@/lib/utils";
 import type { QuestionType } from "@/types";
 
 export default function QuestionTypesPage() {
+  const router = useRouter();
+  const { user } = useAuthStore();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<QuestionType | null>(null);
   const [deleteType, setDeleteType] = useState<QuestionType | null>(null);
   const queryClient = useQueryClient();
+
+  const isAdmin = user?.role === "admin";
+
+  useEffect(() => {
+    if (user !== undefined && !isAdmin) {
+      router.replace("/dashboard");
+    }
+  }, [user, isAdmin, router]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["question-types"],
@@ -98,6 +110,10 @@ export default function QuestionTypesPage() {
   };
 
   const questionTypes = data?.data || [];
+
+  if (user !== undefined && !isAdmin) {
+    return <DataTableSkeleton rows={4} />;
+  }
 
   return (
     <div className="space-y-6">

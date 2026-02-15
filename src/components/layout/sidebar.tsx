@@ -24,17 +24,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
 
-const proctorNavItems = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+const proctorSectionItems = [
   { href: "/dashboard/exams", label: "Exams", icon: FileText },
-  { href: "/dashboard/questions", label: "Question Types", icon: HelpCircle },
   { href: "/dashboard/bundles", label: "Exam Bundles", icon: Package },
   { href: "/dashboard/invitations", label: "Invitations", icon: Mail },
   { href: "/dashboard/groups", label: "Examinee Groups", icon: Users },
   { href: "/dashboard/results", label: "Results", icon: BarChart3 },
 ];
 
+const myExamsSectionItems = [
+  { href: "/dashboard/my-exams", label: "My Exams", icon: GraduationCap },
+  { href: "/dashboard/my-results", label: "My Results", icon: BarChart3 },
+];
+
 const adminNavItems = [
+  { href: "/dashboard/questions", label: "Question Types", icon: HelpCircle },
   { href: "/dashboard/proctor-requests", label: "Proctor Requests", icon: UserCheck },
 ];
 
@@ -45,6 +49,37 @@ const examineeNavItems = [
   { href: "/dashboard/proctor-request", label: "Become a Proctor", icon: UserCheck },
 ];
 
+function NavLink({
+  href,
+  label,
+  icon: Icon,
+  pathname,
+  collapsed,
+}: {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  pathname: string;
+  collapsed: boolean;
+}) {
+  const isActive =
+    href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        isActive
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed && <span>{label}</span>}
+    </Link>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuthStore();
@@ -54,7 +89,11 @@ export function Sidebar() {
   const isAdmin = user?.role === "admin";
   // API returns "user" for examinees
 
-  const navItems = isProctorOrAdmin ? proctorNavItems : examineeNavItems;
+  const sectionLabel = (label: string) => (
+    <p className={cn("px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2", collapsed && "hidden")}>
+      {label}
+    </p>
+  );
 
   return (
     <aside
@@ -84,70 +123,41 @@ export function Sidebar() {
       {/* Navigation */}
       <ScrollArea className="flex-1 px-2 py-4">
         <nav className="space-y-1">
-          {navItems.map((item) => {
-            const isActive =
-              item.href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
-              </Link>
-            );
-          })}
+          {isProctorOrAdmin ? (
+            <>
+              <NavLink href="/dashboard" label="Overview" icon={LayoutDashboard} pathname={pathname} collapsed={collapsed} />
+              <Separator className="my-3" />
+              {sectionLabel("Proctoring")}
+              {proctorSectionItems.map((item) => (
+                <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} pathname={pathname} collapsed={collapsed} />
+              ))}
+              <Separator className="my-3" />
+              {sectionLabel("My exams")}
+              {myExamsSectionItems.map((item) => (
+                <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} pathname={pathname} collapsed={collapsed} />
+              ))}
+            </>
+          ) : (
+            examineeNavItems.map((item) => (
+              <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} pathname={pathname} collapsed={collapsed} />
+            ))
+          )}
 
           {isProctorOrAdmin && isAdmin && (
             <>
               <Separator className="my-3" />
-              <p className={cn("px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2", collapsed && "hidden")}>
-                Admin
-              </p>
-              {adminNavItems.map((item) => {
-                const isActive = pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    {!collapsed && <span>{item.label}</span>}
-                  </Link>
-                );
-              })}
+              {sectionLabel("Admin")}
+              {adminNavItems.map((item) => (
+                <NavLink key={item.href} href={item.href} label={item.label} icon={item.icon} pathname={pathname} collapsed={collapsed} />
+              ))}
             </>
           )}
 
           {isProctorOrAdmin && (
             <>
               <Separator className="my-3" />
-              <Link
-                href="/dashboard/settings"
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  pathname === "/dashboard/settings"
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <Settings className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>Settings</span>}
-              </Link>
+              {sectionLabel("Account")}
+              <NavLink href="/dashboard/settings" label="Settings" icon={Settings} pathname={pathname} collapsed={collapsed} />
             </>
           )}
         </nav>
