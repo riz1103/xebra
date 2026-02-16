@@ -55,6 +55,8 @@ export interface ExamQuestion {
   examId: string;
   partId?: string | null; // New: ID of the exam part this question belongs to
   timeLimit?: number;
+  /** 'active' (default) = included in question pool; 'disabled' = excluded from new sessions */
+  status?: "active" | "disabled";
   createdAt: string;
   updatedAt: string;
 }
@@ -79,6 +81,8 @@ export interface UpdateExamQuestionPayload {
   numberOfChoices?: number;
   partId?: string | null; // New: ID of the exam part this question belongs to
   timeLimit?: number;
+  /** When question has been used in a session, only status can be updated. */
+  status?: "active" | "disabled";
 }
 
 // ============ Exams ============

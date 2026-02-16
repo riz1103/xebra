@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Clock, FileText, Users, Settings, CheckCircle } from "lucide-react";
+import { ArrowLeft, Clock, FileText, Users, Settings, CheckCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
@@ -18,7 +18,7 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ["exam", id],
     queryFn: () => api.getExam(id, { includeQuestions: true }),
   });
@@ -34,6 +34,7 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
   });
 
   const exam = data?.data;
+  const isUpdatingStatus = updateMutation.isPending;
 
   if (isLoading) {
     return (
@@ -55,6 +56,12 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
+      {(isUpdatingStatus || isFetching) && (
+        <div className="flex items-center gap-2 rounded-lg border-2 border-primary/30 bg-primary/10 px-4 py-3 text-sm font-medium text-foreground">
+          <Loader2 className="h-5 w-5 animate-spin shrink-0 text-primary" />
+          <span>{isUpdatingStatus ? "Updating status…" : "Exam details reloading…"}</span>
+        </div>
+      )}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
           <Link href="/dashboard/exams"><ArrowLeft className="h-4 w-4" /></Link>
@@ -70,10 +77,22 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
         </div>
         <div className="flex items-center gap-2">
           {exam.status === "draft" && (
-            <Button onClick={() => updateMutation.mutate("active")} size="sm">Publish</Button>
+            <Button onClick={() => updateMutation.mutate("active")} size="sm" disabled={isUpdatingStatus}>
+              {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              <span className={isUpdatingStatus ? "ml-2" : ""}>Publish</span>
+            </Button>
           )}
           {exam.status === "active" && (
-            <Button onClick={() => updateMutation.mutate("archived")} variant="outline" size="sm">Archive</Button>
+            <Button onClick={() => updateMutation.mutate("archived")} variant="outline" size="sm" disabled={isUpdatingStatus}>
+              {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              <span className={isUpdatingStatus ? "ml-2" : ""}>Archive</span>
+            </Button>
+          )}
+          {exam.status === "archived" && (
+            <Button onClick={() => updateMutation.mutate("active")} size="sm" disabled={isUpdatingStatus}>
+              {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              <span className={isUpdatingStatus ? "ml-2" : ""}>Reactivate</span>
+            </Button>
           )}
           <Button variant="outline" size="sm" asChild>
             <Link href={`/dashboard/exams/${exam.id}/edit`}>Edit</Link>
@@ -81,13 +100,22 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="questions">Questions ({exam.questions?.length || exam.questionCount || 0})</TabsTrigger>
-        </TabsList>
+      <div className="relative">
+        {isFetching && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/80 backdrop-blur-[2px]" aria-busy="true" aria-live="polite">
+            <div className="flex flex-col items-center gap-3 rounded-lg border-2 border-primary/30 bg-card px-6 py-4 shadow-lg">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <span className="text-sm font-medium">Updating exam details…</span>
+            </div>
+          </div>
+        )}
+        <Tabs defaultValue="overview">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="questions">Questions ({exam.questions?.length || exam.questionCount || 0})</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="overview">
+          <TabsContent value="overview">
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
@@ -199,7 +227,8 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
+        </Tabs>
+      </div>
     </div>
   );
 }

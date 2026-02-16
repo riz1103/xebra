@@ -125,21 +125,26 @@ export default function MyExamsPage() {
                       )}
                     </div>
                   </div>
-                  <Button
-                    onClick={() => {
-                      if (exam.invitationId) {
-                        startSessionMutation.mutate(exam.invitationId);
-                      }
-                    }}
-                    disabled={startSessionMutation.isPending || !exam.invitationId}
-                  >
-                    {startSessionMutation.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Play className="mr-2 h-4 w-4" />
+                  <div className="flex flex-col items-end gap-1">
+                    {exam.status !== "active" && (
+                      <span className="text-xs text-muted-foreground">This exam is not available to start</span>
                     )}
-                    Start Exam
-                  </Button>
+                    <Button
+                      onClick={() => {
+                        if (exam.invitationId && exam.status === "active") {
+                          startSessionMutation.mutate(exam.invitationId);
+                        }
+                      }}
+                      disabled={startSessionMutation.isPending || !exam.invitationId || exam.status !== "active"}
+                    >
+                      {startSessionMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Play className="mr-2 h-4 w-4" />
+                      )}
+                      Start Exam
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))

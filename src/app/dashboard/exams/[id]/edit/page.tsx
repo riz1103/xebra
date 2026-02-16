@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { examSchema, type ExamFormValues } from "@/lib/validations";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,7 +32,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
   const [parts, setParts] = useState<ExamPart[]>([]);
   const [passingConditionType, setPassingConditionType] = useState<"whole_exam" | "per_part">("whole_exam");
 
-  const { data: examData, isLoading: examLoading } = useQuery({
+  const { data: examData, isLoading: examLoading, isFetching: examFetching } = useQuery({
     queryKey: ["exam", id],
     queryFn: () => api.getExam(id, { includeQuestions: true }),
   });
@@ -41,8 +42,28 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
     queryFn: () => api.getQuestionTypes(),
   });
 
+  const { data: resultsData } = useQuery({
+    queryKey: ["exam-results", id],
+    queryFn: () => api.getExamResults({ examId: id, size: 1 }),
+    enabled: !!id,
+  });
+
   const exam = examData?.data;
   const questionTypes = questionTypesData?.data || [];
+  const examHasBeenUsed = (resultsData?.data?.length ?? 0) > 0;
+  // Stable order so refetch (e.g. after disable) doesn't reorder and make the "wrong" row appear to change
+  const questionsOrdered = (exam?.questions ?? []).slice().sort((a, b) => {
+    const toKey = (q: (typeof exam)["questions"][0]) => {
+      const c = q?.createdAt;
+      if (typeof c === "string") return c;
+      if (c && typeof c === "object" && "_seconds" in c) return (c as { _seconds: number })._seconds as number;
+      return q?.id ?? "";
+    };
+    const ka = toKey(a);
+    const kb = toKey(b);
+    if (typeof ka === "number" && typeof kb === "number") return ka - kb;
+    return String(ka).localeCompare(String(kb), "en");
+  });
 
   const form = useForm<ExamFormValues>({
     resolver: zodResolver(examSchema),
@@ -180,6 +201,16 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["exam", id] });
       toast.success("Question removed");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const updateQuestionStatusMutation = useMutation({
+    mutationFn: ({ qId, status }: { qId: string; status: "active" | "disabled" }) =>
+      api.updateExamQuestion(qId, { status }),
+    onSuccess: (_, { status }) => {
+      queryClient.invalidateQueries({ queryKey: ["exam", id] });
+      toast.success(status === "disabled" ? "Question disabled" : "Question enabled");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -668,18 +699,45 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          {exam.questions?.map((q, i) => (
-            <div key={q.id} className="flex items-start gap-3 rounded-lg border p-3">
-              <span className="text-sm font-medium text-muted-foreground mt-0.5">Q{i + 1}.</span>
-              <div className="flex-1 text-sm">
-                <p>{q.questionText}</p>
-                <p className="text-xs text-muted-foreground mt-1">{q.options.length} options &middot; {q.points} pts</p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => deleteQuestionMutation.mutate(q.id)} className="text-destructive shrink-0">
-                <Trash2 className="h-3 w-3" />
-              </Button>
+          {examFetching && (
+            <div className="flex items-center gap-2 rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+              <span>Questions reloading…</span>
             </div>
-          ))}
+          )}
+          {questionsOrdered.map((q, i) => {
+            const status = q.status ?? "active";
+            const questionId = q.id;
+            const nextStatus = status === "active" ? "disabled" : "active";
+            const isUpdatingStatus = updateQuestionStatusMutation.isPending;
+            return (
+              <div key={q.id} className="flex items-start gap-3 rounded-lg border p-3">
+                <span className="text-sm font-medium text-muted-foreground mt-0.5">Q{i + 1}.</span>
+                <div className="flex-1 text-sm">
+                  <p>{q.questionText}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{q.options.length} options &middot; {q.points} pts</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Badge variant={status === "active" ? "default" : "secondary"} className="text-xs">
+                    {status === "active" ? "Active" : "Disabled"}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => updateQuestionStatusMutation.mutate({ qId: questionId, status: nextStatus })}
+                    disabled={isUpdatingStatus}
+                  >
+                    {status === "active" ? "Disable" : "Enable"}
+                  </Button>
+                  {!examHasBeenUsed && (
+                    <Button variant="ghost" size="icon" onClick={() => deleteQuestionMutation.mutate(questionId)} className="text-destructive" title="Delete question">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
           {/* New Question Forms */}
           {newQuestions.map((q, qi) => {
