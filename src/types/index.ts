@@ -112,6 +112,8 @@ export interface Exam {
   passingCondition: PassingCondition;
   passingScore?: number;
   isPublic: boolean;
+  /** If true, examinee can view their answers and correct answers after submission. */
+  reviewableByExaminee?: boolean;
   status: "draft" | "active" | "archived";
   createdBy: string;
   createdByName?: string;
@@ -133,6 +135,7 @@ export interface CreateExamPayload {
   numberOfItems?: number;
   passingCondition: PassingCondition;
   isPublic: boolean;
+  reviewableByExaminee?: boolean;
   questions?: CreateExamQuestionPayload[];
 }
 
@@ -147,6 +150,7 @@ export interface UpdateExamPayload {
   numberOfItems?: number;
   passingCondition?: PassingCondition;
   isPublic?: boolean;
+  reviewableByExaminee?: boolean;
   status?: "draft" | "active" | "archived";
 }
 
@@ -161,6 +165,29 @@ export interface PendingExamInvitation {
 
 export interface PendingExam extends Exam {
   invitations?: PendingExamInvitation[];
+}
+
+// ============ Exam Reconciliations ============
+/** Reconciliation overrides correct answer or marks question as bonus for scoring. */
+export interface ExamReconciliation {
+  id: string;
+  examId: string;
+  questionId: string;
+  type: "new_answer" | "bonus";
+  newCorrectAnswer: string | string[] | null;
+  noAnswerCountsCorrect: boolean | null;
+  reconciledBy: string;
+  reconciledByEmail?: string;
+  reconciledAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReconcileQuestionPayload {
+  questionId: string;
+  type: "new_answer" | "bonus";
+  newCorrectAnswer?: string | string[];
+  noAnswerCountsCorrect?: boolean;
 }
 
 // ============ Exam Bundles ============
@@ -240,11 +267,19 @@ export interface AnswerQuestionPayload {
 }
 
 // ============ Exam Results ============
+export interface QuestionResult {
+  questionId: string;
+  isCorrect: boolean;
+  score: number;
+  points: number;
+}
+
 export interface ExamResult {
   id: string;
   examId: string;
   examineeId: string;
   examineeName?: string;
+  examineeEmail?: string;
   sessionId?: string;
   examTitle?: string;
   score: number;
@@ -255,6 +290,8 @@ export interface ExamResult {
   correctCount?: number; // New field from API
   incorrectCount?: number;
   totalQuestions: number;
+  /** Per-question results; used for proctor review and override */
+  questionResults?: QuestionResult[];
   partResults?: {
     // New: Per-part results
     [partId: string]: {
@@ -276,6 +313,15 @@ export interface ExamResult {
   } | null;
   answers?: Record<string, unknown>;
   feedback?: string;
+  /** When true, examinee can view questions and answers for this result (from exam setting). */
+  reviewableByExaminee?: boolean;
+  /** Passing threshold (e.g. percentage value). Used when recalculating after proctor review. */
+  passingScore?: number;
+  passingCondition?: PassingCondition;
+  /** Time allocated to finish the exam (minutes). May come from exam/session. */
+  timeLimitMinutes?: number;
+  /** Minutes the examinee spent on the exam. */
+  timeSpentMinutes?: number;
   startedAt?: string; // When the exam session was started
   submittedAt: string;
   createdAt: string;
@@ -296,7 +342,9 @@ export interface ExamInvitation {
   groupName?: string;
   status: "pending" | "accepted" | "used" | "expired" | "revoked";
   maxAttempts: number;
-  currentAttempts: number;
+  currentAttempts?: number;
+  /** API may return attemptsUsed instead of currentAttempts */
+  attemptsUsed?: number;
   expiresAt: string;
   createdBy: string;
   createdAt: string;
@@ -382,4 +430,19 @@ export interface ApiResponse<T = unknown> {
   data?: T;
   message?: string;
   error?: string;
+}
+
+// ============ Pagination ============
+export interface PaginationMeta {
+  page: number;
+  size: number;
+  total: number;
+  totalPages: number;
+  hasNext?: boolean;
+  hasPrev?: boolean;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  data: T[];
+  pagination: PaginationMeta;
 }

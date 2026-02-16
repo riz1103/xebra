@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DataTableSkeleton } from "@/components/ui/loading";
+import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import { UserCheck, Check, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
@@ -19,11 +20,12 @@ import type { ProctorRequest } from "@/types";
 export default function ProctorRequestsPage() {
   const [reviewDialog, setReviewDialog] = useState<{ request: ProctorRequest; action: "approve" | "reject" } | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["proctor-requests"],
-    queryFn: () => api.getProctorRequests(),
+    queryKey: ["proctor-requests", page],
+    queryFn: () => api.getProctorRequests({ page, size: DEFAULT_PAGE_SIZE }),
   });
 
   const approveMutation = useMutation({
@@ -62,6 +64,7 @@ export default function ProctorRequestsPage() {
   };
 
   const requests = data?.data || [];
+  const pagination = data?.pagination;
   const pendingRequests = requests.filter((r) => r.status === "pending");
   const reviewedRequests = requests.filter((r) => r.status !== "pending");
 
@@ -144,6 +147,10 @@ export default function ProctorRequestsPage() {
             </div>
           )}
         </>
+      )}
+
+      {pagination && (
+        <Pagination pagination={pagination} onPageChange={setPage} />
       )}
 
       {/* Review Dialog */}

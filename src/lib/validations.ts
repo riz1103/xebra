@@ -55,15 +55,22 @@ export const examSchema = z.object({
   description: z.string().max(1000, "Description too long").optional(),
   instruction: z.string().max(5000, "Instructions too long").nullable().optional(),
   parts: z.array(examPartSchema).nullable().optional(),
-  questionOrder: z.enum(["random", "fixed"]),
+  questionOrder: z.preprocess(
+    (val) => (val === "random" || val === "fixed" ? val : "fixed"),
+    z.enum(["random", "fixed"])
+  ),
   timeType: z.enum(["per_exam", "per_question", "per_part"]),
   timeLimit: z.coerce.number().min(1, "Time limit must be at least 1 minute"),
-  numberOfItems: z.coerce.number().min(1).optional(),
+  numberOfItems: z.preprocess(
+    (val) => (val === "" || val === null || val === undefined ? undefined : val),
+    z.coerce.number().min(1).optional()
+  ),
   passingCondition: z.object({
     type: z.enum(["percentage", "points", "items"]),
     value: z.coerce.number().min(0, "Value must be positive"),
   }),
   isPublic: z.boolean(),
+  reviewableByExaminee: z.boolean().optional(),
 }).refine((data) => {
   // If timeType is 'per_part', parts must exist and each part must have a timeLimit
   if (data.timeType === "per_part") {

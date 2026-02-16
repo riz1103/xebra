@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTableSkeleton } from "@/components/ui/loading";
+import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import { GraduationCap, Clock, ArrowRight, Loader2, Play, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate, formatDuration } from "@/lib/utils";
@@ -16,14 +18,17 @@ export default function MyExamsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
+  const [pendingPage, setPendingPage] = useState(1);
+  const [sessionsPage, setSessionsPage] = useState(1);
+
   const { data: pendingExamsData, isLoading: pendingLoading } = useQuery({
-    queryKey: ["pending-exams"],
-    queryFn: () => api.getPendingExams(),
+    queryKey: ["pending-exams", pendingPage],
+    queryFn: () => api.getPendingExams({ page: pendingPage, size: DEFAULT_PAGE_SIZE }),
   });
 
   const { data: sessionsData, isLoading: sessLoading } = useQuery({
-    queryKey: ["my-sessions"],
-    queryFn: () => api.getExamSessions(),
+    queryKey: ["my-sessions", sessionsPage],
+    queryFn: () => api.getExamSessions({ page: sessionsPage, size: DEFAULT_PAGE_SIZE }),
   });
 
   const startSessionMutation = useMutation({
@@ -40,6 +45,8 @@ export default function MyExamsPage() {
 
   const pendingExams = pendingExamsData?.data || [];
   const sessions = sessionsData?.data || [];
+  const pendingPagination = pendingExamsData?.pagination;
+  const sessionsPagination = sessionsData?.pagination;
   const isLoading = pendingLoading || sessLoading;
 
   // Extract invitation details from the invitations array in each exam
@@ -137,6 +144,9 @@ export default function MyExamsPage() {
               </Card>
             ))
           )}
+          {pendingPagination && (
+            <Pagination pagination={pendingPagination} onPageChange={setPendingPage} className="mt-4" />
+          )}
         </TabsContent>
 
         <TabsContent value="in-progress" className="space-y-4">
@@ -172,6 +182,9 @@ export default function MyExamsPage() {
                 </CardContent>
               </Card>
             ))
+          )}
+          {sessionsPagination && (
+            <Pagination pagination={sessionsPagination} onPageChange={setSessionsPage} className="mt-4" />
           )}
         </TabsContent>
 

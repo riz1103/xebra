@@ -21,6 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DataTableSkeleton } from "@/components/ui/loading";
+import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import { Plus, Trash2, Loader2, Package, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
@@ -31,11 +32,12 @@ export default function BundlesPage() {
   const [editingBundle, setEditingBundle] = useState<ExamBundle | null>(null);
   const [deleteBundle, setDeleteBundle] = useState<ExamBundle | null>(null);
   const [selectedExamIds, setSelectedExamIds] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["bundles"],
-    queryFn: () => api.getExamBundles(),
+    queryKey: ["bundles", page],
+    queryFn: () => api.getExamBundles({ page, size: DEFAULT_PAGE_SIZE }),
   });
 
   const { data: examsData } = useQuery({
@@ -116,6 +118,7 @@ export default function BundlesPage() {
   };
 
   const bundles = data?.data || [];
+  const pagination = data?.pagination;
   const exams = examsData?.data || [];
 
   return (
@@ -172,6 +175,10 @@ export default function BundlesPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {pagination && (
+        <Pagination pagination={pagination} onPageChange={setPage} />
       )}
 
       {/* Create/Edit Dialog */}

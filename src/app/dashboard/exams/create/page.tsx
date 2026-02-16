@@ -75,6 +75,7 @@ export default function CreateExamPage() {
       timeLimit: 60,
       passingCondition: { type: "percentage", value: 70 },
       isPublic: false,
+      reviewableByExaminee: false,
     },
   });
 
@@ -389,7 +390,13 @@ export default function CreateExamPage() {
         </div>
       </div>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form
+        onSubmit={form.handleSubmit(onSubmit, (errors) => {
+          const firstError = Object.values(errors)[0]?.message;
+          toast.error(firstError ?? "Please fix the errors below before saving.");
+        })}
+        className="space-y-6"
+      >
         {/* Basic Info */}
         <Card>
           <CardHeader>
@@ -528,6 +535,18 @@ export default function CreateExamPage() {
                 onCheckedChange={(v) => form.setValue("isPublic", v)}
               />
               <Label>Make this exam public (accessible without invitation)</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={form.watch("reviewableByExaminee") ?? false}
+                onCheckedChange={(v) => form.setValue("reviewableByExaminee", v)}
+              />
+              <div>
+                <Label>Allow examinees to review their answers</Label>
+                <p className="text-xs text-muted-foreground">
+                  When on, examinees can open &quot;View my answers&quot; after submitting to see questions and correct/incorrect.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

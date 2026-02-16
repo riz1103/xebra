@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DataTableSkeleton } from "@/components/ui/loading";
+import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -41,12 +42,18 @@ export default function InvitationsPage() {
   const [inviteRecipient, setInviteRecipient] = useState<InviteRecipient>("individual");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [cancelTarget, setCancelTarget] = useState<ExamInvitation | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["invitations"],
-    queryFn: () => api.getExamInvitations(),
+    queryKey: ["invitations", page, statusFilter],
+    queryFn: () =>
+      api.getExamInvitations({
+        page,
+        size: DEFAULT_PAGE_SIZE,
+        status: statusFilter === "all" ? undefined : statusFilter,
+      }),
   });
 
   const { data: examsData } = useQuery({ queryKey: ["exams"], queryFn: () => api.getExams() });
@@ -125,12 +132,13 @@ export default function InvitationsPage() {
     examIndividualMutation.isPending || examGroupMutation.isPending ||
     bundleIndividualMutation.isPending || bundleGroupMutation.isPending;
 
-  const invitations = (data?.data || []).filter((inv) => {
+  const items = data?.data || [];
+  const pagination = data?.pagination;
+  const invitations = items.filter((inv) => {
     const matchesSearch =
       (inv.examineeEmail || "").toLowerCase().includes(search.toLowerCase()) ||
       (inv.examTitle || "").toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || inv.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   const exams = examsData?.data || [];
@@ -172,7 +180,7 @@ export default function InvitationsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search invitations..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
@@ -210,7 +218,7 @@ export default function InvitationsPage() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Exam: {inv.examTitle || inv.examId} &middot; Attempts: {inv.currentAttempts}/{inv.maxAttempts} &middot; Expires: {formatDate(inv.expiresAt)}
+                    Exam: {inv.examTitle || inv.examId} &middot; Attempts: {inv.currentAttempts ?? inv.attemptsUsed ?? 0}/{inv.maxAttempts} &middot; Expires: {formatDate(inv.expiresAt)}
                   </p>
                 </div>
                 {canCancel(inv) && (
@@ -233,6 +241,10 @@ export default function InvitationsPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {pagination && (
+        <Pagination pagination={pagination} onPageChange={setPage} />
       )}
 
       {/* Cancel invitation confirmation */}

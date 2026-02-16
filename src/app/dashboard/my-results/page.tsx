@@ -1,22 +1,27 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DataTableSkeleton } from "@/components/ui/loading";
+import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import { BarChart3, Trophy, Target } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 
 export default function MyResultsPage() {
+  const [page, setPage] = useState(1);
+
   const { data, isLoading } = useQuery({
-    queryKey: ["my-results"],
-    queryFn: () => api.getExamResults(),
+    queryKey: ["my-results", page],
+    queryFn: () => api.getExamResults({ page, size: DEFAULT_PAGE_SIZE }),
   });
 
   const results = data?.data || [];
+  const pagination = data?.pagination;
   const passedCount = results.filter((r) => r.passed).length;
   const avgScore = results.length > 0 ? Math.round(results.reduce((s, r) => s + r.percentage, 0) / results.length) : 0;
 
@@ -118,6 +123,10 @@ export default function MyResultsPage() {
             </Link>
           ))}
         </div>
+      )}
+
+      {pagination && (
+        <Pagination pagination={pagination} onPageChange={setPage} />
       )}
     </div>
   );

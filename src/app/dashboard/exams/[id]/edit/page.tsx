@@ -56,6 +56,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
       timeLimit: 60,
       passingCondition: { type: "percentage", value: 70 },
       isPublic: false,
+      reviewableByExaminee: false,
     },
   });
 
@@ -66,12 +67,13 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         description: exam.description || "",
         instruction: exam.instruction || null,
         parts: exam.parts || null,
-        questionOrder: exam.questionOrder,
+        questionOrder: exam.questionOrder === "random" ? "random" : "fixed",
         timeType: exam.timeType,
         timeLimit: exam.timeLimit,
         numberOfItems: exam.numberOfItems,
         passingCondition: exam.passingCondition || { type: "percentage", value: exam.passingScore || 70 },
         isPublic: exam.isPublic,
+        reviewableByExaminee: exam.reviewableByExaminee ?? false,
       });
       if (exam.parts) {
         setParts(exam.parts);
@@ -152,6 +154,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         parts: finalParts,
         passingCondition: finalPassingCondition,
         timeLimit: finalTimeLimit,
+        reviewableByExaminee: values.reviewableByExaminee,
       });
     },
     onSuccess: () => {
@@ -273,7 +276,16 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
 
-      <form onSubmit={form.handleSubmit((v) => updateMutation.mutate(v))} className="space-y-6">
+      <form
+        onSubmit={form.handleSubmit(
+          (v) => updateMutation.mutate(v),
+          (errors) => {
+            const firstError = Object.values(errors)[0]?.message;
+            toast.error(firstError ?? "Please fix the errors below before saving.");
+          }
+        )}
+        className="space-y-6"
+      >
         <Card>
           <CardHeader>
             <CardTitle>Basic Information</CardTitle>
@@ -396,6 +408,18 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
             <div className="flex items-center gap-3">
               <Switch checked={form.watch("isPublic")} onCheckedChange={(v) => form.setValue("isPublic", v)} />
               <Label>Public Exam</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={form.watch("reviewableByExaminee") ?? false}
+                onCheckedChange={(v) => form.setValue("reviewableByExaminee", v)}
+              />
+              <div>
+                <Label>Allow examinees to review their answers</Label>
+                <p className="text-xs text-muted-foreground">
+                  When on, examinees can open &quot;View my answers&quot; after submitting to see questions and correct/incorrect.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -605,6 +629,18 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
             <div className="flex items-center gap-3">
               <Switch checked={form.watch("isPublic")} onCheckedChange={(v) => form.setValue("isPublic", v)} />
               <Label>Public Exam</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={form.watch("reviewableByExaminee") ?? false}
+                onCheckedChange={(v) => form.setValue("reviewableByExaminee", v)}
+              />
+              <div>
+                <Label>Allow examinees to review their answers</Label>
+                <p className="text-xs text-muted-foreground">
+                  When on, examinees can open &quot;View my answers&quot; after submitting to see questions and correct/incorrect.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

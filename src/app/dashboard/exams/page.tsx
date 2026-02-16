@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DataTableSkeleton } from "@/components/ui/loading";
+import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import { Plus, Search, Pencil, Trash2, Eye, Clock, FileText } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -33,12 +34,18 @@ import type { Exam } from "@/types";
 export default function ExamsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [deleteExam, setDeleteExam] = useState<Exam | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["exams"],
-    queryFn: () => api.getExams(),
+    queryKey: ["exams", page, statusFilter],
+    queryFn: () =>
+      api.getExams({
+        page,
+        size: DEFAULT_PAGE_SIZE,
+        status: statusFilter === "all" ? undefined : statusFilter,
+      }),
   });
 
   const deleteMutation = useMutation({
@@ -51,11 +58,11 @@ export default function ExamsPage() {
     onError: (err: Error) => toast.error(err.message || "Failed to delete exam"),
   });
 
-  const exams = (data?.data || []).filter((exam) => {
-    const matchesSearch = exam.title.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || exam.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const items = data?.data || [];
+  const pagination = data?.pagination;
+  const exams = items.filter((exam) =>
+    exam.title.toLowerCase().includes(search.toLowerCase())
+  );
 
   const statusColors: Record<string, "success" | "secondary" | "outline"> = {
     active: "success",
@@ -88,7 +95,7 @@ export default function ExamsPage() {
             className="pl-9"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -173,6 +180,10 @@ export default function ExamsPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {pagination && (
+        <Pagination pagination={pagination} onPageChange={setPage} />
       )}
 
       {/* Delete Confirmation */}

@@ -1,27 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataTableSkeleton } from "@/components/ui/loading";
-import { Search, BarChart3, Download, Eye } from "lucide-react";
+import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
+import Link from "next/link";
+import { Search, BarChart3, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { formatDate } from "@/lib/utils";
 import type { ExamResult } from "@/types";
 
 export default function ResultsPage() {
+  const { user } = useAuthStore();
   const [search, setSearch] = useState("");
+  const [examFilter, setExamFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [selectedResult, setSelectedResult] = useState<ExamResult | null>(null);
 
+  const isProctorOrAdmin = user?.role === "proctor" || user?.role === "admin";
+
   const { data: resultsData, isLoading } = useQuery({
-    queryKey: ["results"],
-    queryFn: () => api.getExamResults(),
+    queryKey: ["results", page, examFilter],
+    queryFn: () =>
+      api.getExamResults({
+        page,
+        size: DEFAULT_PAGE_SIZE,
+        examId: examFilter === "all" ? undefined : examFilter,
+      }),
   });
 
   const { data: examsData } = useQuery({
@@ -29,20 +43,28 @@ export default function ResultsPage() {
     queryFn: () => api.getExams(),
   });
 
-  const [examFilter, setExamFilter] = useState("all");
-  const results = (resultsData?.data || []).filter((r) => {
+  const { data: fullResultData } = useQuery({
+    queryKey: ["exam-result", selectedResult?.id],
+    queryFn: () => api.getExamResult(selectedResult!.id),
+    enabled: !!selectedResult?.id,
+  });
+
+  const resultForReview = fullResultData?.data ?? selectedResult;
+
+  const items = resultsData?.data || [];
+  const pagination = resultsData?.pagination;
+  const results = items.filter((r) => {
     const matchesSearch = (r.examineeName || "").toLowerCase().includes(search.toLowerCase()) ||
       (r.examTitle || "").toLowerCase().includes(search.toLowerCase());
-    const matchesExam = examFilter === "all" || r.examId === examFilter;
-    return matchesSearch && matchesExam;
+    return matchesSearch;
   });
 
   const exams = examsData?.data || [];
 
-  const totalResults = results.length;
+  const totalResults = pagination?.total ?? results.length;
   const passedCount = results.filter((r) => r.passed).length;
-  const avgPercentage = totalResults > 0
-    ? Math.round(results.reduce((s, r) => s + r.percentage, 0) / totalResults)
+  const avgPercentage = results.length > 0
+    ? Math.round(results.reduce((s, r) => s + r.percentage, 0) / results.length)
     : 0;
 
   return (
@@ -68,7 +90,7 @@ export default function ResultsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-600">
-              {totalResults > 0 ? Math.round((passedCount / totalResults) * 100) : 0}%
+              {results.length > 0 ? Math.round((passedCount / results.length) * 100) : 0}%
             </div>
           </CardContent>
         </Card>
@@ -86,7 +108,7 @@ export default function ResultsPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search results..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={examFilter} onValueChange={setExamFilter}>
+        <Select value={examFilter} onValueChange={(v) => { setExamFilter(v); setPage(1); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder="Filter by exam" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Exams</SelectItem>
@@ -142,54 +164,110 @@ export default function ResultsPage() {
         </div>
       )}
 
+      {pagination && (
+        <Pagination pagination={pagination} onPageChange={setPage} />
+      )}
+
       {/* Result Detail Dialog */}
-      <Dialog open={!!selectedResult} onOpenChange={() => setSelectedResult(null)}>
+      <Dialog open={!!selectedResult} onOpenChange={(open) => { if (!open) setSelectedResult(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Exam Result Details</DialogTitle>
             <DialogDescription>{selectedResult?.examTitle || "Exam Result"}</DialogDescription>
           </DialogHeader>
-          {selectedResult && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-lg border p-3 text-center">
-                  <p className="text-2xl font-bold">{selectedResult.percentage}%</p>
-                  <p className="text-xs text-muted-foreground">Score</p>
-                </div>
-                <div className="rounded-lg border p-3 text-center">
-                  <Badge variant={selectedResult.passed ? "success" : "destructive"} className="text-sm">
-                    {selectedResult.passed ? "PASSED" : "FAILED"}
-                  </Badge>
-                  <p className="text-xs text-muted-foreground mt-1">Status</p>
-                </div>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Examinee</span>
-                  <span className="font-medium">{selectedResult.examineeName || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Score</span>
-                  <span className="font-medium">{selectedResult.score}/{selectedResult.totalPoints}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Correct Answers</span>
-                  <span className="font-medium">{selectedResult.correctAnswers}/{selectedResult.totalQuestions}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Submitted</span>
-                  <span className="font-medium">{formatDate(selectedResult.submittedAt || selectedResult.createdAt)}</span>
-                </div>
-                {selectedResult.feedback && (
-                  <div className="pt-2">
-                    <p className="text-muted-foreground mb-1">Feedback</p>
-                    <p className="rounded-md bg-muted p-2 text-sm">{selectedResult.feedback}</p>
+          {selectedResult && (() => {
+            const displayResult = resultForReview ?? selectedResult;
+            const score = Number(displayResult.score);
+            const totalPoints = Number(displayResult.totalPoints);
+            const totalQuestions = Number(displayResult.totalQuestions) || 0;
+            const correctCount = displayResult.correctCount ?? displayResult.correctAnswers;
+            const correctNum = typeof correctCount === "number" ? correctCount : Number(correctCount);
+            const correctDisplay = totalQuestions > 0 && !Number.isNaN(correctNum)
+              ? `${correctNum}/${totalQuestions}`
+              : totalQuestions > 0 ? `—/${totalQuestions}` : "—";
+            const scoreDisplay = !Number.isNaN(score) && !Number.isNaN(totalPoints)
+              ? `${score}/${totalPoints}`
+              : "—";
+            const percentage = Number(displayResult.percentage);
+            const percentageSafe = Number.isNaN(percentage) ? 0 : Math.min(100, Math.max(0, percentage));
+            const hasReviewData = (displayResult.questionResults?.length ?? 0) > 0;
+            const canShowReviewButton = isProctorOrAdmin ? hasReviewData : (displayResult.reviewableByExaminee === true && hasReviewData);
+
+            return (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-lg border p-3 text-center">
+                    <p className="text-2xl font-bold">{percentageSafe}%</p>
+                    <p className="text-xs text-muted-foreground">Score</p>
                   </div>
+                  <div className="rounded-lg border p-3 text-center">
+                    <Badge variant={displayResult.passed ? "success" : "destructive"} className="text-sm">
+                      {displayResult.passed ? "PASSED" : "FAILED"}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground mt-1">Status</p>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Examinee</span>
+                    <span className="font-medium">{displayResult.examineeName || "N/A"}</span>
+                  </div>
+                  {displayResult.examineeEmail && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Email</span>
+                      <span className="font-medium">{displayResult.examineeEmail}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Score</span>
+                    <span className="font-medium">{scoreDisplay}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Correct Answers</span>
+                    <span className="font-medium">{correctDisplay}</span>
+                  </div>
+                  {(displayResult.timeLimitMinutes != null && displayResult.timeLimitMinutes > 0) && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Time allocated</span>
+                      <span className="font-medium">{displayResult.timeLimitMinutes} min</span>
+                    </div>
+                  )}
+                  {(displayResult.timeSpentMinutes != null && displayResult.timeSpentMinutes >= 0) && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Time spent</span>
+                      <span className="font-medium">{displayResult.timeSpentMinutes} min</span>
+                    </div>
+                  )}
+                  {displayResult.startedAt && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Started</span>
+                      <span className="font-medium">{formatDate(displayResult.startedAt)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Ended</span>
+                    <span className="font-medium">{formatDate(displayResult.submittedAt || displayResult.createdAt)}</span>
+                  </div>
+                  {displayResult.feedback && (
+                    <div className="pt-2">
+                      <p className="text-muted-foreground mb-1">Feedback</p>
+                      <p className="rounded-md bg-muted p-2 text-sm">{displayResult.feedback}</p>
+                    </div>
+                  )}
+                </div>
+                <Progress value={percentageSafe} className="h-3" />
+
+                {canShowReviewButton && (
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link href={`/dashboard/results/${displayResult.id}/review`}>
+                      <Eye className="mr-2 h-4 w-4" />
+                      {isProctorOrAdmin ? "Review answers" : "View my answers"}
+                    </Link>
+                  </Button>
                 )}
               </div>
-              <Progress value={selectedResult.percentage} className="h-3" />
-            </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

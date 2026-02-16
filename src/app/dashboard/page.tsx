@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
+import { DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,23 +32,23 @@ export default function DashboardPage() {
 
 function ProctorDashboard() {
   const { data: examsData, isLoading: examsLoading } = useQuery({
-    queryKey: ["exams"],
-    queryFn: () => api.getExams(),
+    queryKey: ["exams", 1],
+    queryFn: () => api.getExams({ page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
   const { data: bundlesData, isLoading: bundlesLoading } = useQuery({
-    queryKey: ["bundles"],
-    queryFn: () => api.getExamBundles(),
+    queryKey: ["bundles", 1],
+    queryFn: () => api.getExamBundles({ page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
   const { data: groupsData, isLoading: groupsLoading } = useQuery({
-    queryKey: ["groups"],
-    queryFn: () => api.getExamineeGroups(),
+    queryKey: ["groups", 1],
+    queryFn: () => api.getExamineeGroups({ page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
   const { data: resultsData, isLoading: resultsLoading } = useQuery({
-    queryKey: ["results"],
-    queryFn: () => api.getExamResults(),
+    queryKey: ["results", 1],
+    queryFn: () => api.getExamResults({ page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
   const exams = examsData?.data || [];
@@ -56,11 +57,16 @@ function ProctorDashboard() {
   const results = resultsData?.data || [];
   const isLoading = examsLoading || bundlesLoading || groupsLoading || resultsLoading;
 
+  const totalExams = examsData?.pagination?.total ?? exams.length;
+  const totalBundles = bundlesData?.pagination?.total ?? bundles.length;
+  const totalGroups = groupsData?.pagination?.total ?? groups.length;
+  const totalResults = resultsData?.pagination?.total ?? results.length;
+
   const stats = [
-    { label: "Total Exams", value: exams.length, icon: FileText, color: "text-blue-500", href: "/dashboard/exams" },
-    { label: "Exam Bundles", value: bundles.length, icon: Package, color: "text-purple-500", href: "/dashboard/bundles" },
-    { label: "Groups", value: groups.length, icon: Users, color: "text-emerald-500", href: "/dashboard/groups" },
-    { label: "Results", value: results.length, icon: BarChart3, color: "text-amber-500", href: "/dashboard/results" },
+    { label: "Total Exams", value: totalExams, icon: FileText, color: "text-blue-500", href: "/dashboard/exams" },
+    { label: "Exam Bundles", value: totalBundles, icon: Package, color: "text-purple-500", href: "/dashboard/bundles" },
+    { label: "Groups", value: totalGroups, icon: Users, color: "text-emerald-500", href: "/dashboard/groups" },
+    { label: "Results", value: totalResults, icon: BarChart3, color: "text-amber-500", href: "/dashboard/results" },
   ];
 
   const activeExams = exams.filter((e) => e.status === "active");
@@ -181,18 +187,18 @@ function ProctorDashboard() {
 
 function ExamineeDashboard() {
   const { data: invitationsData, isLoading: invLoading } = useQuery({
-    queryKey: ["my-invitations"],
-    queryFn: () => api.getExamInvitations(),
+    queryKey: ["my-invitations", 1],
+    queryFn: () => api.getExamInvitations({ page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
   const { data: resultsData, isLoading: resLoading } = useQuery({
-    queryKey: ["my-results"],
-    queryFn: () => api.getExamResults(),
+    queryKey: ["my-results", 1],
+    queryFn: () => api.getExamResults({ page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
   const { data: sessionsData, isLoading: sessLoading } = useQuery({
-    queryKey: ["my-sessions"],
-    queryFn: () => api.getExamSessions(),
+    queryKey: ["my-sessions", 1],
+    queryFn: () => api.getExamSessions({ page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
   const invitations = invitationsData?.data || [];

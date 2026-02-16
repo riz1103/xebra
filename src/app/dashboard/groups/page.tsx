@@ -21,6 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DataTableSkeleton, LoadingSpinner } from "@/components/ui/loading";
+import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import { Plus, Trash2, Loader2, Users, UserPlus, Eye, X, Search, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { getInitials } from "@/lib/utils";
@@ -35,11 +36,12 @@ export default function GroupsPage() {
   const [selectedGroup, setSelectedGroup] = useState<ExamineeGroup | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["groups"],
-    queryFn: () => api.getExamineeGroups(),
+    queryKey: ["groups", page],
+    queryFn: () => api.getExamineeGroups({ page, size: DEFAULT_PAGE_SIZE }),
   });
 
   // Fetch group detail with members when viewing
@@ -158,6 +160,7 @@ export default function GroupsPage() {
   };
 
   const groups = data?.data || [];
+  const pagination = data?.pagination;
 
   // Get members from the group detail response — handle nested response
   const groupDetail = groupDetailData?.data;
@@ -234,6 +237,10 @@ export default function GroupsPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {pagination && (
+        <Pagination pagination={pagination} onPageChange={setPage} />
       )}
 
       {/* ===== View Members Dialog ===== */}

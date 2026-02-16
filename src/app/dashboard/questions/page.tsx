@@ -21,6 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DataTableSkeleton } from "@/components/ui/loading";
+import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import { Plus, Pencil, Trash2, Loader2, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
@@ -32,6 +33,7 @@ export default function QuestionTypesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<QuestionType | null>(null);
   const [deleteType, setDeleteType] = useState<QuestionType | null>(null);
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
 
   const isAdmin = user?.role === "admin";
@@ -43,8 +45,8 @@ export default function QuestionTypesPage() {
   }, [user, isAdmin, router]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["question-types"],
-    queryFn: () => api.getQuestionTypes(),
+    queryKey: ["question-types", page],
+    queryFn: () => api.getQuestionTypes({ page, size: DEFAULT_PAGE_SIZE }),
   });
 
   const form = useForm<QuestionTypeFormValues>({
@@ -110,6 +112,7 @@ export default function QuestionTypesPage() {
   };
 
   const questionTypes = data?.data || [];
+  const pagination = data?.pagination;
 
   if (user !== undefined && !isAdmin) {
     return <DataTableSkeleton rows={4} />;
@@ -160,6 +163,10 @@ export default function QuestionTypesPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {pagination && (
+        <Pagination pagination={pagination} onPageChange={setPage} />
       )}
 
       {/* Create/Edit Dialog */}

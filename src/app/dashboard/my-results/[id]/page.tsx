@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ArrowLeft, Trophy, Target, CheckCircle, XCircle, Clock, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ArrowLeft, Trophy, Target, CheckCircle, XCircle, Clock, AlertTriangle, Eye } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 
@@ -161,6 +161,32 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
           </div>
         </CardContent>
       </Card>
+
+      {/* Review: when exam allows it and we have question-level data, examinee can open the full review page */}
+      {result.reviewableByExaminee === true && (result.questionResults?.length ?? 0) > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Eye className="h-4 w-4" /> Review your answers
+            </CardTitle>
+            <CardDescription>
+              View each question, your answers, and which were correct or incorrect (same layout as the exam, read-only).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="default" className="w-full" asChild>
+              <Link href={`/dashboard/results/${result.id}/review`}>
+                <Eye className="mr-2 h-4 w-4" /> View my answers
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+      {result.reviewableByExaminee === true && (result.questionResults?.length ?? 0) === 0 && (
+        <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4 text-center">
+          Question-by-question review is not available for this result (no question-level data).
+        </p>
+      )}
 
       {/* Part Results */}
       {result.partResults && Object.keys(result.partResults).length > 0 && (

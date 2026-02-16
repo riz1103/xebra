@@ -2,6 +2,7 @@ import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from "axio
 import { getIdToken } from "./firebase";
 import type {
   ApiResponse,
+  PaginationMeta,
   User,
   QuestionType,
   CreateQuestionTypePayload,
@@ -12,6 +13,8 @@ import type {
   CreateExamPayload,
   UpdateExamPayload,
   PendingExam,
+  ExamReconciliation,
+  ReconcileQuestionPayload,
   ExamBundle,
   CreateExamBundlePayload,
   ExamSession,
@@ -30,6 +33,11 @@ import type {
   ProctorRequest,
   CreateProctorRequestPayload,
 } from "@/types";
+
+/** List response with optional pagination metadata from API */
+export interface ListResponse<T> extends ApiResponse<T[]> {
+  pagination?: PaginationMeta;
+}
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "https://xebra-api.netlify.app";
@@ -89,8 +97,8 @@ class ApiClient {
   }
 
   // ============ Question Types ============
-  async getQuestionTypes() {
-    const { data } = await this.client.get<ApiResponse<QuestionType[]>>("/api/question-types");
+  async getQuestionTypes(params?: { page?: number; size?: number }) {
+    const { data } = await this.client.get<ListResponse<QuestionType>>("/api/question-types", { params });
     return data;
   }
 
@@ -115,8 +123,13 @@ class ApiClient {
   }
 
   // ============ Exam Questions ============
-  async getExamQuestions(params?: { questionTypeId?: string; examId?: string }) {
-    const { data } = await this.client.get<ApiResponse<ExamQuestion[]>>("/api/exam-questions", { params });
+  async getExamQuestions(params?: {
+    questionTypeId?: string;
+    examId?: string;
+    page?: number;
+    size?: number;
+  }) {
+    const { data } = await this.client.get<ListResponse<ExamQuestion>>("/api/exam-questions", { params });
     return data;
   }
 
@@ -141,13 +154,19 @@ class ApiClient {
   }
 
   // ============ Exams ============
-  async getExams(params?: { status?: string; isPublic?: boolean; createdBy?: string }) {
-    const { data } = await this.client.get<ApiResponse<Exam[]>>("/api/exams", { params });
+  async getExams(params?: {
+    status?: string;
+    isPublic?: boolean;
+    createdBy?: string;
+    page?: number;
+    size?: number;
+  }) {
+    const { data } = await this.client.get<ListResponse<Exam>>("/api/exams", { params });
     return data;
   }
 
-  async getPendingExams() {
-    const { data } = await this.client.get<ApiResponse<PendingExam[]>>("/api/exams/pending");
+  async getPendingExams(params?: { page?: number; size?: number }) {
+    const { data } = await this.client.get<ListResponse<PendingExam>>("/api/exams/pending", { params });
     return data;
   }
 
@@ -171,9 +190,31 @@ class ApiClient {
     return data;
   }
 
+  async getExamReconciliations(examId: string) {
+    const { data } = await this.client.get<ApiResponse<ExamReconciliation[]>>(
+      `/api/exams/${examId}/reconciliations`
+    );
+    return data;
+  }
+
+  async reconcileQuestion(examId: string, payload: ReconcileQuestionPayload) {
+    const { data } = await this.client.post<ApiResponse<{ resultsUpdated?: number }>>(
+      `/api/exams/${examId}/reconcile`,
+      payload
+    );
+    return data;
+  }
+
+  async removeReconciliation(examId: string, questionId: string) {
+    const { data } = await this.client.delete<ApiResponse<{ resultsUpdated?: number }>>(
+      `/api/exams/${examId}/reconciliations/${questionId}`
+    );
+    return data;
+  }
+
   // ============ Exam Bundles ============
-  async getExamBundles() {
-    const { data } = await this.client.get<ApiResponse<ExamBundle[]>>("/api/exam-bundles");
+  async getExamBundles(params?: { page?: number; size?: number }) {
+    const { data } = await this.client.get<ListResponse<ExamBundle>>("/api/exam-bundles", { params });
     return data;
   }
 
@@ -208,8 +249,15 @@ class ApiClient {
   }
 
   // ============ Exam Sessions ============
-  async getExamSessions(params?: { examId?: string; examineeId?: string; invitationId?: string; status?: string }) {
-    const { data } = await this.client.get<ApiResponse<ExamSession[]>>("/api/exam-sessions", { params });
+  async getExamSessions(params?: {
+    examId?: string;
+    examineeId?: string;
+    invitationId?: string;
+    status?: string;
+    page?: number;
+    size?: number;
+  }) {
+    const { data } = await this.client.get<ListResponse<ExamSession>>("/api/exam-sessions", { params });
     return data;
   }
 
@@ -247,8 +295,8 @@ class ApiClient {
   }
 
   // ============ Exam Results ============
-  async getExamResults(params?: { examId?: string; examineeId?: string }) {
-    const { data } = await this.client.get<ApiResponse<ExamResult[]>>("/api/exam-results", { params });
+  async getExamResults(params?: { examId?: string; examineeId?: string; page?: number; size?: number }) {
+    const { data } = await this.client.get<ListResponse<ExamResult>>("/api/exam-results", { params });
     return data;
   }
 
@@ -275,8 +323,10 @@ class ApiClient {
     groupId?: string;
     status?: string;
     groupByBundle?: boolean;
+    page?: number;
+    size?: number;
   }) {
-    const { data } = await this.client.get<ApiResponse<ExamInvitation[]>>("/api/exam-invitations", { params });
+    const { data } = await this.client.get<ListResponse<ExamInvitation>>("/api/exam-invitations", { params });
     return data;
   }
 
@@ -329,8 +379,8 @@ class ApiClient {
   }
 
   // ============ Examinee Groups ============
-  async getExamineeGroups(params?: { memberId?: string }) {
-    const { data } = await this.client.get<ApiResponse<ExamineeGroup[]>>("/api/examinee-groups", { params });
+  async getExamineeGroups(params?: { memberId?: string; page?: number; size?: number }) {
+    const { data } = await this.client.get<ListResponse<ExamineeGroup>>("/api/examinee-groups", { params });
     return data;
   }
 
@@ -367,8 +417,8 @@ class ApiClient {
   }
 
   // ============ Proctor Requests ============
-  async getProctorRequests(params?: { status?: string; userId?: string }) {
-    const { data } = await this.client.get<ApiResponse<ProctorRequest[]>>("/api/proctor-requests", { params });
+  async getProctorRequests(params?: { status?: string; userId?: string; page?: number; size?: number }) {
+    const { data } = await this.client.get<ListResponse<ProctorRequest>>("/api/proctor-requests", { params });
     return data;
   }
 
