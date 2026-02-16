@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Trash2, Save } from "lucide-react";
 import Link from "next/link";
 import { getLayoutConfig } from "@/lib/question-layout";
-import type { CreateExamQuestionPayload, ExamPart } from "@/types";
+import type { CreateExamQuestionPayload, ExamPart, ExamQuestion } from "@/types";
 
 export default function EditExamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -52,8 +52,8 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
   const questionTypes = questionTypesData?.data || [];
   const examHasBeenUsed = (resultsData?.data?.length ?? 0) > 0;
   // Stable order so refetch (e.g. after disable) doesn't reorder and make the "wrong" row appear to change
-  const questionsOrdered = (exam?.questions ?? []).slice().sort((a, b) => {
-    const toKey = (q: (typeof exam)["questions"][0]) => {
+  const questionsOrdered = (exam?.questions ?? []).slice().sort((a: ExamQuestion, b: ExamQuestion) => {
+    const toKey = (q: ExamQuestion) => {
       const c = q?.createdAt;
       if (typeof c === "string") return c;
       if (c && typeof c === "object" && "_seconds" in c) return (c as { _seconds: number })._seconds as number;
