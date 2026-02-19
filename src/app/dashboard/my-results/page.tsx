@@ -1,29 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DataTableSkeleton } from "@/components/ui/loading";
 import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
-import { BarChart3, Trophy, Target } from "lucide-react";
+import { BarChart3, Trophy, Target, ArrowLeft } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 
 export default function MyResultsPage() {
   const [page, setPage] = useState(1);
+  const searchParams = useSearchParams();
+  const examIdFilter = searchParams.get("examId") ?? undefined;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["my-results", page],
-    queryFn: () => api.getExamResults({ page, size: DEFAULT_PAGE_SIZE }),
+    queryKey: ["my-results", page, examIdFilter],
+    queryFn: () =>
+      api.getExamResults({
+        page,
+        size: DEFAULT_PAGE_SIZE,
+        ...(examIdFilter ? { examId: examIdFilter } : {}),
+      }),
   });
 
   const results = data?.data || [];
   const pagination = data?.pagination;
   const passedCount = results.filter((r) => r.passed).length;
-  const avgScore = results.length > 0 ? Math.round(results.reduce((s, r) => s + r.percentage, 0) / results.length) : 0;
+  const avgScore =
+    results.length > 0
+      ? Math.round(
+          results.reduce((s, r) => s + r.percentage, 0) / results.length
+        )
+      : 0;
+
+  const examTitle = useMemo(() => {
+    if (!examIdFilter || results.length === 0) return null;
+    return results[0]?.examTitle ?? "Exam";
+  }, [examIdFilter, results]);
 
   return (
     <div className="space-y-6">
@@ -32,11 +50,27 @@ export default function MyResultsPage() {
         <p className="text-muted-foreground">View your exam performance and scores.</p>
       </div>
 
+      {examIdFilter && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="py-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Showing all attempts for:</span>
+            <span className="font-medium">{examTitle ?? "Exam"}</span>
+            <Link
+              href="/dashboard/my-results"
+              className="text-sm text-primary hover:underline inline-flex items-center gap-1 ml-2"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              View all results
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Target className="h-4 w-4" /> Total Exams
+              <Target className="h-4 w-4" /> {examIdFilter ? "Attempts" : "Total Exams"}
             </CardTitle>
           </CardHeader>
           <CardContent><div className="text-2xl font-bold">{results.length}</div></CardContent>
@@ -65,8 +99,23 @@ export default function MyResultsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <BarChart3 className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold">No results yet</h3>
-            <p className="text-sm text-muted-foreground">Complete exams to see your results here.</p>
+            <h3 className="text-lg font-semibold">
+              {examIdFilter ? "No attempts for this exam" : "No results yet"}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {examIdFilter
+                ? "Try viewing all results or check another exam."
+                : "Complete exams to see your results here."}
+            </p>
+            {examIdFilter && (
+              <Link
+                href="/dashboard/my-results"
+                className="mt-4 text-sm text-primary hover:underline inline-flex items-center gap-1"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                View all results
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (

@@ -28,11 +28,13 @@ import {
   AlertTriangle, Send, Loader2, Info,
 } from "lucide-react";
 import { cn, formatDuration } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 
 export default function ExamPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { isLoading: authLoading, isAuthenticated } = useAuthStore();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentPart, setCurrentPart] = useState<string | null>(null);
@@ -45,9 +47,19 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["exam-session", sessionId],
     queryFn: () => api.getExamSession(sessionId, { includeQuestions: true }),
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
+    staleTime: 0,
+    enabled: !authLoading && isAuthenticated,
   });
 
   const session = data?.data;
@@ -138,7 +150,32 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   // Timer countdown
   useEffect(() => {
-    if (currentPartTimeRemaining <= 0 || (session?.status !== "in_progress" && session?.status !== "in-progress")) return;
+    // Don't start timer if session is not in progress
+    if (session?.status !== "in_progress" && session?.status !== "in-progress") {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    // Determine which time value to check based on time type
+    const shouldUsePartTimer = hasParts && currentPart && partTimeRemaining[currentPart] !== undefined;
+    const currentTime = shouldUsePartTimer ? partTimeRemaining[currentPart] : timeRemaining;
+
+    // Don't start timer if time is already 0 or less
+    if (currentTime <= 0) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    // Clear any existing timer before starting a new one
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
 
     timerRef.current = setInterval(() => {
       if (hasParts && currentPart && partTimeRemaining[currentPart] !== undefined) {
@@ -146,17 +183,23 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         setPartTimeRemaining((prev) => {
           const newTime = (prev[currentPart] || 0) - 1;
           if (newTime <= 0) {
-            clearInterval(timerRef.current!);
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
             handleSubmit();
             return { ...prev, [currentPart]: 0 };
           }
           return { ...prev, [currentPart]: newTime };
         });
       } else {
-        // Overall timer
+        // Overall timer (per_exam or per_question)
         setTimeRemaining((prev) => {
           if (prev <= 1) {
-            clearInterval(timerRef.current!);
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
             handleSubmit();
             return 0;
           }
@@ -166,34 +209,49 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     }, 1000);
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
-  }, [session?.status, currentPart, hasParts, partTimeRemaining]);
+  }, [session?.status, currentPart, hasParts, partTimeRemaining, timeRemaining]);
 
-  // Auto-save every 30 seconds
+  // Auto-save every 30 seconds (server computes remaining time; do not send it)
   useEffect(() => {
     const autoSave = setInterval(() => {
       if (session?.status === "in_progress" || session?.status === "in-progress") {
         saveMutation.mutate({
           currentQuestionIndex: currentIndex,
           answers,
-          timeRemainingSeconds: timeRemaining,
         });
       }
     }, 30000);
 
     return () => clearInterval(autoSave);
-  }, [currentIndex, answers, timeRemaining, session?.status]);
+  }, [currentIndex, answers, session?.status]);
 
   const answerMutation = useMutation({
     mutationFn: ({ questionId, answer }: { questionId: string; answer: string | string[] | null }) =>
-      api.answerQuestion(sessionId, questionId, { answer, timeRemainingSeconds: timeRemaining }),
+      api.answerQuestion(sessionId, questionId, { answer }),
     onError: (err: Error) => toast.error("Failed to save answer: " + err.message),
   });
 
   const saveMutation = useMutation({
-    mutationFn: (payload: { currentQuestionIndex: number; answers: Record<string, string | string[] | null>; timeRemainingSeconds: number }) =>
+    mutationFn: (payload: { currentQuestionIndex: number; answers: Record<string, string | string[] | null> }) =>
       api.updateExamSession(sessionId, payload),
+    onSuccess: (response) => {
+      const updated = response?.data;
+      if (updated) {
+        setTimeRemaining(updated.timeRemainingSeconds ?? 0);
+        if (updated.partTimeLimits) {
+          const next: Record<string, number> = {};
+          Object.keys(updated.partTimeLimits).forEach((partId) => {
+            next[partId] = updated.partTimeLimits![partId].timeLimitSeconds;
+          });
+          setPartTimeRemaining(next);
+        }
+      }
+    },
   });
 
   const submitMutation = useMutation({
@@ -244,10 +302,10 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     setCurrentIndex(0);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     submitMutation.mutate();
-  };
+  }, [submitMutation]);
 
   const toggleFlag = (questionId: string) => {
     setFlagged((prev) => {
@@ -282,7 +340,8 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const timerColor =
     currentPartTimeRemaining < 60 ? "text-red-500" : currentPartTimeRemaining < 300 ? "text-amber-500" : "text-foreground";
 
-  if (isLoading) return <PageLoader />;
+  if (authLoading || isLoading) return <PageLoader />;
+  if (!authLoading && !isAuthenticated) return <PageLoader />;
   if (error || !session) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -613,7 +672,12 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       </div>
 
       {/* Submit Confirmation Dialog */}
-      <AlertDialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
+      <AlertDialog
+        open={showSubmitDialog}
+        onOpenChange={(open) => {
+          if (!submitMutation.isPending) setShowSubmitDialog(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Submit Exam?</AlertDialogTitle>
@@ -651,13 +715,22 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Loading Overlay for Submission */}
+      {/* Full-screen overlay during submission: blocks all interaction */}
       {submitMutation.isPending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm font-medium">Submitting exam...</p>
-            <p className="text-xs text-muted-foreground">Please wait, do not close this page.</p>
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 backdrop-blur-md pointer-events-auto"
+          aria-live="polite"
+          aria-busy="true"
+          role="alert"
+        >
+          <div className="flex flex-col items-center gap-4 max-w-sm px-6 text-center">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <div className="space-y-1">
+              <p className="text-base font-semibold">Submitting your exam</p>
+              <p className="text-sm text-muted-foreground">
+                Your exam is still being submitted. Please wait and do not close this page or navigate away.
+              </p>
+            </div>
           </div>
         </div>
       )}

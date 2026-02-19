@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  sendEmailVerification,
   type User as FirebaseUser,
   updateProfile,
 } from "firebase/auth";
@@ -43,8 +44,19 @@ export async function signUpWithEmail(
 ) {
   const result = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(result.user, { displayName });
+  await sendEmailVerification(result.user);
   const idToken = await result.user.getIdToken();
   return { user: result.user, idToken };
+}
+
+/** Send verification email to the current user (e.g. for resend). */
+export async function resendVerificationEmail(user: FirebaseUser): Promise<void> {
+  await sendEmailVerification(user);
+}
+
+/** True if the user signed in with email/password (so we require email verification). */
+export function isEmailPasswordUser(user: FirebaseUser): boolean {
+  return user.providerData.some((p) => p.providerId === "password");
 }
 
 export async function signOut() {

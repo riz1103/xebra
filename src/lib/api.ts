@@ -13,6 +13,7 @@ import type {
   CreateExamPayload,
   UpdateExamPayload,
   PendingExam,
+  ExamForExaminee,
   ExamReconciliation,
   ReconcileQuestionPayload,
   ExamBundle,
@@ -167,6 +168,12 @@ class ApiClient {
 
   async getPendingExams(params?: { page?: number; size?: number }) {
     const { data } = await this.client.get<ListResponse<PendingExam>>("/api/exams/pending", { params });
+    return data;
+  }
+
+  /** All exams for current examinee with invitationStatus: pending | in_progress | completed */
+  async getExamsForExaminee(params?: { page?: number; size?: number }) {
+    const { data } = await this.client.get<ListResponse<ExamForExaminee>>("/api/exams/for-examinee", { params });
     return data;
   }
 

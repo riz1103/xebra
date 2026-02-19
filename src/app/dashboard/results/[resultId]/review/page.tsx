@@ -379,7 +379,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
 
       <div className="mx-auto max-w-5xl px-4 py-4 flex gap-6">
         {/* Question Navigator - jump to any question, correct/incorrect visible */}
-        <div className="hidden md:block w-56 shrink-0">
+        <div className="hidden md:block w-[15.5rem] shrink-0">
           <Card className="sticky top-24">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Jump to question</CardTitle>
@@ -389,7 +389,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
             </CardHeader>
             <CardContent className="pt-0">
               <ScrollArea className="h-[min(60vh,28rem)] pr-2">
-                <div className="grid grid-cols-5 gap-1.5">
+                <div className="grid grid-cols-5 gap-1.5 p-1">
                   {currentQuestions.map((q, i) => {
                     const res = resultByQuestionId[q.id];
                     const correct = res?.isCorrect ?? false;

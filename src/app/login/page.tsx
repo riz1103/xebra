@@ -1,10 +1,20 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { signInWithGoogle, signInWithEmail, signUpWithEmail } from "@/lib/firebase";
+import {
+  auth,
+  signInWithGoogle,
+  signInWithEmail,
+  signUpWithEmail,
+  signOut,
+  resendVerificationEmail,
+  isEmailPasswordUser,
+  onAuthChange,
+} from "@/lib/firebase";
+import { getAuthErrorMessage } from "@/lib/auth-errors";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { loginSchema, registerSchema, type LoginFormValues, type RegisterFormValues } from "@/lib/validations";
@@ -15,7 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Loader2, Moon, Sun } from "lucide-react";
+import { Loader2, Mail, Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTheme } from "next-themes";
@@ -26,7 +36,26 @@ function LoginContent() {
   const defaultTab = searchParams.get("tab") || "login";
   const { setUser } = useAuthStore();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
+  const [isResending, setIsResending] = useState(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
   const { theme, setTheme } = useTheme();
+
+  // Show "verify your email" when Firebase user is email/password and not verified (e.g. returned to login page)
+  useEffect(() => {
+    const unsubscribe = onAuthChange((firebaseUser) => {
+      if (
+        firebaseUser &&
+        isEmailPasswordUser(firebaseUser) &&
+        !firebaseUser.emailVerified
+      ) {
+        setPendingVerificationEmail(firebaseUser.email ?? null);
+      } else {
+        setPendingVerificationEmail(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -38,22 +67,12 @@ function LoginContent() {
     defaultValues: { name: "", email: "", password: "", confirmPassword: "" },
   });
 
-  // Helper: after Firebase auth succeeds, fetch or register backend user
-  const syncBackendUser = async (idToken: string, firebasePhotoURL?: string | null) => {
-    let userData = null;
-    try {
-      // Try /me first — works for returning users (Bearer token auto-attached)
-      const meResponse = await api.getMe();
-      if (meResponse.data) userData = meResponse.data;
-    } catch {
-      // User not registered in backend yet — call /login to create them
-    }
-    if (!userData) {
-      await api.login(idToken);
-      const meResponse = await api.getMe();
-      userData = meResponse.data || null;
-    }
-    // Merge Firebase photoURL if the backend doesn't provide a profile image
+  // Helper: after Firebase auth succeeds, fetch backend user profile.
+  // The idToken is already used as the Authorization header by the API client,
+  // so we only need to call /me — no separate /login endpoint.
+  const syncBackendUser = async (firebasePhotoURL?: string | null) => {
+    const meResponse = await api.getMe();
+    const userData = meResponse.data || null;
     if (userData && !userData.picture && !userData.photoURL && firebasePhotoURL) {
       userData.photoURL = firebasePhotoURL;
     }
@@ -63,16 +82,15 @@ function LoginContent() {
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     try {
-      const { user: firebaseUser, idToken } = await signInWithGoogle();
-      const user = await syncBackendUser(idToken, firebaseUser.photoURL);
+      const { user: firebaseUser } = await signInWithGoogle();
+      const user = await syncBackendUser(firebaseUser.photoURL);
       if (user) {
         setUser(user);
         toast.success("Welcome to Xevra!");
         router.push("/dashboard");
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Google sign-in failed";
-      toast.error(message);
+      toast.error(getAuthErrorMessage(error, "Google sign-in failed. Please try again."));
     } finally {
       setIsGoogleLoading(false);
     }
@@ -80,37 +98,69 @@ function LoginContent() {
 
   const handleEmailLogin = async (values: LoginFormValues) => {
     try {
-      const { user: firebaseUser, idToken } = await signInWithEmail(values.email, values.password);
-      const user = await syncBackendUser(idToken, firebaseUser.photoURL);
+      const { user: firebaseUser } = await signInWithEmail(values.email, values.password);
+      if (!firebaseUser.emailVerified) {
+        setPendingVerificationEmail(firebaseUser.email ?? null);
+        toast.error("Please verify your email first. Check your inbox for the verification link.");
+        return;
+      }
+      const user = await syncBackendUser(firebaseUser.photoURL);
       if (user) {
         setUser(user);
         toast.success("Welcome back!");
         router.push("/dashboard");
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Login failed";
-      toast.error(message);
+      toast.error(getAuthErrorMessage(error, "Sign-in failed. Please try again."));
     }
   };
 
   const handleEmailRegister = async (values: RegisterFormValues) => {
     try {
-      const { user: firebaseUser, idToken } = await signUpWithEmail(values.email, values.password, values.name);
-      // New user — /login is required to register in backend
-      await api.login(idToken);
-      const meResponse = await api.getMe();
-      if (meResponse.data) {
-        const userData = meResponse.data;
-        if (!userData.picture && !userData.photoURL && firebaseUser.photoURL) {
-          userData.photoURL = firebaseUser.photoURL;
+      const { user: firebaseUser } = await signUpWithEmail(values.email, values.password, values.name);
+      setPendingVerificationEmail(firebaseUser.email ?? null);
+      toast.success("Account created! Please check your email and click the verification link.");
+    } catch (error: unknown) {
+      toast.error(getAuthErrorMessage(error, "Registration failed. Please try again."));
+    }
+  };
+
+  const handleResendVerification = async () => {
+    const user = auth.currentUser;
+    if (!user || !pendingVerificationEmail) return;
+    setIsResending(true);
+    try {
+      await resendVerificationEmail(user);
+      toast.success("Verification email sent. Check your inbox.");
+    } catch (error: unknown) {
+      toast.error(getAuthErrorMessage(error, "Failed to resend email. Try again later."));
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const handleCheckVerification = async () => {
+    const user = auth.currentUser;
+    if (!user || !pendingVerificationEmail) return;
+    setIsCheckingVerification(true);
+    try {
+      await user.reload();
+      const updated = auth.currentUser;
+      if (updated?.emailVerified) {
+        setPendingVerificationEmail(null);
+        const userData = await syncBackendUser(updated.photoURL ?? null);
+        if (userData) {
+          setUser(userData);
+          toast.success("Email verified! Welcome to Xevra.");
+          router.push("/dashboard");
         }
-        setUser(userData);
-        toast.success("Account created successfully!");
-        router.push("/dashboard");
+      } else {
+        toast.info("Not verified yet. Click the link in the email we sent you.");
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Registration failed";
-      toast.error(message);
+      toast.error(getAuthErrorMessage(error, "Could not check verification. Try again."));
+    } finally {
+      setIsCheckingVerification(false);
     }
   };
 
@@ -148,6 +198,52 @@ function LoginContent() {
             eXamination EValuation & Result Authority
           </p>
         </div>
+
+        {/* Email verification required — shown after sign-up or when signing in with unverified email */}
+        {pendingVerificationEmail && (
+          <Card className="border-0 shadow-xl mb-4 border-primary/20 bg-primary/5">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg">Verify your email</CardTitle>
+              </div>
+              <CardDescription>
+                We sent a verification link to <strong>{pendingVerificationEmail}</strong>.
+                Click the link in that email, then press the button below to continue.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResendVerification}
+                disabled={isResending}
+              >
+                {isResending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Resend verification email
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleCheckVerification}
+                disabled={isCheckingVerification}
+              >
+                {isCheckingVerification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                I&apos;ve verified my email
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={async () => {
+                  await signOut();
+                  setPendingVerificationEmail(null);
+                }}
+              >
+                Use a different account
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="border-0 shadow-xl">
           <Tabs defaultValue={defaultTab}>

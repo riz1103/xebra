@@ -158,7 +158,7 @@ export interface UpdateExamPayload {
   status?: "draft" | "active" | "archived";
 }
 
-// Pending exam with invitation details
+// Pending exam with invitation details (legacy /api/exams/pending)
 export interface PendingExamInvitation {
   id: string;
   expiresAt: string | FirestoreTimestamp;
@@ -169,6 +169,28 @@ export interface PendingExamInvitation {
 
 export interface PendingExam extends Exam {
   invitations?: PendingExamInvitation[];
+}
+
+/** Status of an exam invitation for the current examinee (GET /api/exams/for-examinee) */
+export type ExamInvitationStatus = "pending" | "in_progress" | "completed";
+
+/** Invitation info on each exam from for-examinee */
+export interface ExamForExamineeInvitation {
+  id: string;
+  status: ExamInvitationStatus;
+  maxAttempts: number;
+  attemptsUsed: number;
+  expiresAt: string | FirestoreTimestamp;
+}
+
+/** Exam returned by GET /api/exams/for-examinee with invitation status and attempt info */
+export interface ExamForExaminee extends Exam {
+  invitationStatus: ExamInvitationStatus;
+  invitationId: string;
+  maxAttempts: number;
+  attemptsUsed: number;
+  expiresAt?: string | FirestoreTimestamp;
+  invitations?: ExamForExamineeInvitation[];
 }
 
 // ============ Exam Reconciliations ============
@@ -262,12 +284,10 @@ export interface CreateExamSessionPayload {
 export interface UpdateExamSessionPayload {
   currentQuestionIndex?: number;
   answers?: Record<string, string | string[] | null>;
-  timeRemainingSeconds?: number;
 }
 
 export interface AnswerQuestionPayload {
   answer: string | string[] | null;
-  timeRemainingSeconds?: number;
 }
 
 // ============ Exam Results ============
