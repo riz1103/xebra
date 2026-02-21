@@ -49,7 +49,14 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
     enabled: !!id,
   });
 
+  const { data: phrasesData } = useQuery({
+    queryKey: ["phrases", id],
+    queryFn: () => api.getPhrases({ examId: id, size: 500 }),
+    enabled: !!id,
+  });
+
   const exam = examData?.data;
+  const phrases = (phrasesData?.data ?? []) as { id: string; title?: string | null; usageType?: string | null }[];
   const questionTypes = questionTypesData?.data || [];
   const examHasBeenUsed = (resultsData?.data?.length ?? 0) > 0;
   // Stable order so refetch (e.g. after disable) doesn't reorder and make the "wrong" row appear to change
