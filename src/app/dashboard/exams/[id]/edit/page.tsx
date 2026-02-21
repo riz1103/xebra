@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Trash2, Save } from "lucide-react";
 import Link from "next/link";
 import { getLayoutConfig } from "@/lib/question-layout";
+import { parseBlanks } from "@/lib/question-blanks";
 import type { CreateExamQuestionPayload, ExamPart, ExamQuestion } from "@/types";
 
 export default function EditExamPage({ params }: { params: Promise<{ id: string }> }) {
@@ -230,6 +231,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         correctAnswer: layout.correctAnswerIsText ? "" : [],
         points: 1,
         examId: id,
+        phraseId: null,
       },
     ]);
   };
@@ -260,12 +262,33 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
   const saveNewQuestion = (index: number) => {
     const q = newQuestions[index];
-    if (!q.questionText || !q.options.some(Boolean)) {
-      toast.error("Please fill in the question text and options");
+    const config = getLayoutConfig(getTypeName(q.questionTypeId));
+    if (!q.questionText) {
+      toast.error("Please fill in the question text.");
+      return;
+    }
+    if (config?.layout === "identification" && config.correctAnswerIsText) {
+      const blankCount = parseBlanks(q.questionText).blankCount;
+      if (blankCount > 0) {
+        const arr = Array.isArray(q.correctAnswer)
+          ? (q.correctAnswer as string[])
+          : typeof q.correctAnswer === "string"
+            ? [q.correctAnswer]
+            : [];
+        const filled = arr.slice(0, blankCount).map((a) => (a ?? "").trim());
+        if (filled.length !== blankCount || filled.some((a) => !a)) {
+          toast.error(
+            `Fill in the blanks requires ${blankCount} answer(s), one per blank. Please provide all.`
+          );
+          return;
+        }
+      }
+    }
+    if (config?.showOptions && !q.options.some(Boolean)) {
+      toast.error("Please fill in at least one option.");
       return;
     }
     // Convert correctAnswer for the API
-    const config = getLayoutConfig(getTypeName(q.questionTypeId));
     let finalAnswer: string | string[] = q.correctAnswer;
     if (Array.isArray(q.correctAnswer)) {
       if (config.correctAnswerIsText) {
@@ -802,6 +825,31 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                   </div>
                 )}
 
+                <div className="space-y-2">
+                  <Label className="text-xs">Passage / Phrase (Optional)</Label>
+                  <Select
+                    value={q.phraseId ?? "none"}
+                    onValueChange={(v) => {
+                      const updated = [...newQuestions];
+                      updated[qi].phraseId = v && v !== "none" ? v : null;
+                      setNewQuestions(updated);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="No phrase" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No phrase</SelectItem>
+                      {phrases.map((ph) => (
+                        <SelectItem key={ph.id} value={ph.id}>
+                          {ph.title || "(No title)"} {ph.usageType ? ` · ${ph.usageType}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Show this passage above the question when the examinee takes the exam.
+                  </p>
+                </div>
+
                 {/* Options - shown for MC, T/F, Multiple Answer */}
                 {layoutConfig.showOptions && (
                   <div className="space-y-2">
@@ -838,6 +886,44 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                     <Label className="text-xs">{layoutConfig.correctAnswerLabel}</Label>
 
                     {layoutConfig.correctAnswerIsText ? (() => {
+                      const blankCount =
+                        layoutConfig.layout === "identification"
+                          ? parseBlanks(newQuestions[qi].questionText).blankCount
+                          : 0;
+                      if (blankCount > 0) {
+                        const base = Array.isArray(q.correctAnswer)
+                          ? (q.correctAnswer as string[])
+                          : typeof q.correctAnswer === "string"
+                            ? [q.correctAnswer]
+                            : [""];
+                        const answers = Array.from({ length: blankCount }, (_, i) =>
+                          base[i] !== undefined ? base[i] : ""
+                        );
+                        return (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">
+                              This question has {blankCount} blank{blankCount !== 1 ? "s" : ""}. Provide the correct answer for each in order.
+                            </p>
+                            {answers.map((ans, ai) => (
+                              <div key={ai} className="flex items-center gap-2">
+                                <Label className="shrink-0 text-xs w-24">Blank {ai + 1}</Label>
+                                <Input
+                                  value={ans}
+                                  onChange={(e) => {
+                                    const updated = [...newQuestions];
+                                    const next = [...answers];
+                                    next[ai] = e.target.value;
+                                    updated[qi].correctAnswer = next;
+                                    setNewQuestions(updated);
+                                  }}
+                                  placeholder={layoutConfig.correctAnswerPlaceholder}
+                                  className="flex-1"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }
                       const answers = Array.isArray(q.correctAnswer)
                         ? (q.correctAnswer as string[])
                         : typeof q.correctAnswer === "string" && q.correctAnswer

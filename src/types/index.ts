@@ -61,6 +61,12 @@ export interface ExamQuestion {
   updatedAt: string;
 }
 
+/** Question in exam session response: same as ExamQuestion with optional embedded phrase */
+export interface SessionQuestion extends ExamQuestion {
+  phraseId?: string | null;
+  phrase?: PhraseBlock | null;
+}
+
 export interface CreateExamQuestionPayload {
   questionTypeId: string;
   questionText: string;
@@ -70,6 +76,7 @@ export interface CreateExamQuestionPayload {
   numberOfChoices?: number;
   examId: string;
   partId?: string | null; // New: ID of the exam part this question belongs to
+  phraseId?: string | null;
   timeLimit?: number;
 }
 
@@ -80,6 +87,7 @@ export interface UpdateExamQuestionPayload {
   points?: number;
   numberOfChoices?: number;
   partId?: string | null; // New: ID of the exam part this question belongs to
+  phraseId?: string | null;
   timeLimit?: number;
   /** When question has been used in a session, only status can be updated. */
   status?: "active" | "disabled";
@@ -248,7 +256,10 @@ export interface ExamSession {
   currentQuestionIndex: number;
   answers: Record<string, string | string[] | null>;
   timeRemainingSeconds: number;
-  questions?: ExamQuestion[];
+  /** Session questions (ordered); may include phraseId and embedded phrase for display */
+  questions?: SessionQuestion[];
+  /** Map of phrase id -> phrase data (also available on each question.phrase) */
+  phrases?: Record<string, PhraseBlock>;
   questionsByPart?: {
     // New: Grouped by part (null if no parts)
     [partId: string]: {
@@ -258,7 +269,7 @@ export interface ExamSession {
         description: string;
         timeLimit?: number | null; // Only when exam timeType is 'per_part'
       };
-      questions: ExamQuestion[];
+      questions: SessionQuestion[];
     };
   } | null;
   partTimeLimits?: {

@@ -1,16 +1,30 @@
 import type { CreateExamQuestionPayload } from "@/types";
+import { hasBlanks } from "@/lib/question-blanks";
 
 export interface ParsedQuestion {
   questionText: string;
   options: string[];
   correctAnswer: string;
   points: number;
+  /** Index into ParseResult.sections when question falls in a section range */
+  sectionIndex?: number;
+}
+
+/** Section header from the document (e.g. "True or False (11-20)", "Grammar and Vocabulary (21-40)") */
+export interface ParsedSection {
+  name: string;
+  /** Question numbers that belong to this section (by range) */
+  questionNumbers: number[];
+  /** Hint to set question type from section title (e.g. "true_false") */
+  typeHint?: "true_false" | "multiple_choice" | "identification";
 }
 
 export interface ParseResult {
   questions: ParsedQuestion[];
   rawText: string;
   warnings: string[];
+  /** Sections detected from headers; used to create exam parts and assign question types */
+  sections: ParsedSection[];
 }
 
 // ============ Text Extraction ============
@@ -43,6 +57,50 @@ async function extractTextFromWord(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const result = await mammoth.extractRawText({ arrayBuffer });
   return result.value;
+}
+
+// ============ Section Headers (Part Exams) ============
+
+/**
+ * Detects section headers that define "part exams" (e.g. "True or False (11-20)", "Grammar and Vocabulary (21-40)").
+ * Returns sections with name, optional range, and typeHint derived from the title (e.g. "true or false" → true_false).
+ */
+function extractSectionHeaders(text: string): { name: string; range: [number, number]; typeHint?: ParsedSection["typeHint"] }[] {
+  const sections: { name: string; range: [number, number]; typeHint?: ParsedSection["typeHint"] }[] = [];
+  const lines = text.split("\n");
+
+  // Match: "Title (11-20)" or "Title (11 - 20)" with optional dash variants
+  const headerWithRange = /^\s*(.+?)\s*\(\s*(\d+)\s*[-–]\s*(\d+)\s*\)\s*$/;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const match = trimmed.match(headerWithRange);
+    if (match) {
+      const name = match[1].trim();
+      const start = parseInt(match[2], 10);
+      const end = parseInt(match[3], 10);
+      if (start <= end && name.length > 0 && name.length < 200) {
+        const lower = name.toLowerCase();
+        let typeHint: ParsedSection["typeHint"] | undefined;
+        if (lower.includes("true") && lower.includes("false")) {
+          typeHint = "true_false";
+        } else if (lower.includes("multiple") && lower.includes("choice")) {
+          typeHint = "multiple_choice";
+        } else if (
+          lower.includes("fill in the blank") ||
+          lower.includes("identification") ||
+          lower.includes("short answer")
+        ) {
+          typeHint = "identification";
+        }
+        sections.push({ name, range: [start, end], typeHint });
+      }
+    }
+  }
+
+  return sections;
 }
 
 // ============ Answer Key Parsing ============
@@ -192,7 +250,14 @@ function extractOptionsFromText(text: string): {
   // both the letter and the text that follows until the next option letter.
 
   // First, join all text into a single string for inline parsing
-  const fullText = text.replace(/\n/g, " ").trim();
+  let fullText = text.replace(/\n/g, " ").trim();
+
+  // Normalize so option markers are detected when they run right after a word
+  // (e.g. "bookB." or "wetC." from Word export). Insert space before A.–J. when
+  // preceded by an alphanumeric so the negative lookbehind can see a non-letter.
+  fullText = fullText
+    .replace(/([a-zA-Z0-9])([A-Ja-j])[.)]\s*/g, "$1 $2. ")
+    .replace(/ {2,}/g, " ");
 
   // Find all option positions using a pattern that matches letter markers.
   // Uses a negative lookbehind to ensure the letter is NOT preceded by
@@ -362,6 +427,32 @@ function resolveCorrectAnswer(
   return "";
 }
 
+/**
+ * Resolves correct answer for fill-in-the-blank (free text) when there are no options.
+ * Looks for "Answer: X", "Correct answer: X", or answer key line with text.
+ */
+function resolveFillInCorrectAnswer(
+  questionNumber: number,
+  answerMap: Map<number, string>,
+  blockText: string
+): string {
+  const patterns = [
+    /(?:correct\s+)?answer\s*[:=]\s*(.+?)(?:\n|$)/i,
+    /\bans(?:wer)?\s*[:=]\s*(.+?)(?:\n|$)/i,
+    /\bkey\s*[:=]\s*(.+?)(?:\n|$)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = blockText.match(pattern);
+    if (match) {
+      const text = match[1].trim();
+      if (text.length > 0 && text.length < 500) return text;
+    }
+  }
+  const keyLetter = answerMap.get(questionNumber);
+  if (keyLetter) return keyLetter;
+  return "";
+}
+
 // ============ Main Parse Function ============
 
 export async function parseExamFile(file: File): Promise<ParseResult> {
@@ -397,6 +488,9 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
     // Answer key found - not a warning, just informational
   }
 
+  // Detect section headers for part exams (e.g. "True or False (11-20)")
+  const headerSections = extractSectionHeaders(textWithoutKey);
+
   // Split into question blocks
   const blocks = splitIntoQuestionBlocks(textWithoutKey);
 
@@ -405,6 +499,15 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
       "Could not identify any questions in the file. Make sure questions are numbered (e.g., 1., 2., Q1, etc.)."
     );
   }
+
+  // Build sections with question numbers: each section gets questions whose number is in its range
+  const sections: ParsedSection[] = headerSections.map((h) => ({
+    name: h.name,
+    questionNumbers: blocks
+      .filter((b) => b.questionNumber >= h.range[0] && b.questionNumber <= h.range[1])
+      .map((b) => b.questionNumber),
+    typeHint: h.typeHint,
+  }));
 
   const questions: ParsedQuestion[] = [];
   let skippedCount = 0;
@@ -419,8 +522,41 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
     const { questionText, options, correctIndex } =
       extractOptionsFromText(body);
 
-    // Need at least 2 options for a valid question
-    if (options.length < 2 || !questionText) {
+    if (!questionText) {
+      skippedCount++;
+      continue;
+    }
+
+    const trimmedQuestionText = questionText.trim();
+    // Skip "ghost" questions where the stem is only blanks/whitespace (real stem was lost during parse)
+    if (/^[\s_]+$/.test(trimmedQuestionText)) {
+      skippedCount++;
+      continue;
+    }
+
+    const isFillInTheBlank = hasBlanks(trimmedQuestionText);
+
+    // Fill-in-the-blank free text: no options or single "option" (answer); question has _____
+    if (options.length < 2 && isFillInTheBlank) {
+      const correctAnswer =
+        options.length === 1
+          ? options[0].text
+          : resolveFillInCorrectAnswer(questionNumber, answerMap, block);
+      const sectionIndex = sections.findIndex((s) =>
+        s.questionNumbers.includes(questionNumber)
+      );
+      questions.push({
+        questionText: trimmedQuestionText,
+        options: [], // free-text fill-in: render as text input(s), not dropdown
+        correctAnswer,
+        points: 1,
+        ...(sectionIndex >= 0 && { sectionIndex }),
+      });
+      continue;
+    }
+
+    // Need at least 2 options for a valid MC/choice question
+    if (options.length < 2) {
       skippedCount++;
       continue;
     }
@@ -431,7 +567,6 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
     );
 
     // Resolve correct answer
-    // If options were reordered, we need to recalculate correctIndex
     let resolvedCorrectIndex = correctIndex;
     if (correctIndex >= 0) {
       const correctLetter = options[correctIndex].letter;
@@ -448,11 +583,15 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
       block
     );
 
+    const sectionIndex = sections.findIndex((s) =>
+      s.questionNumbers.includes(questionNumber)
+    );
     questions.push({
-      questionText: questionText.trim(),
+      questionText: trimmedQuestionText,
       options: sortedOptions.map((o) => o.text),
       correctAnswer,
       points: 1,
+      ...(sectionIndex >= 0 && { sectionIndex }),
     });
   }
 
@@ -475,17 +614,64 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
     );
   }
 
-  return { questions, rawText, warnings };
+  return { questions, rawText, warnings, sections };
 }
 
 /**
- * Detects the best question type for a parsed question based on its content.
+ * Detects the best question type for a parsed question based on its content and optional section type hint.
  */
 function detectQuestionType(
   question: ParsedQuestion,
-  types: { id: string; name: string }[]
+  types: { id: string; name: string }[],
+  sectionTypeHint?: ParsedSection["typeHint"]
 ): string {
   if (types.length === 0) return "";
+
+  // Section header says "True or False" → use True/False type for questions in that section
+  if (sectionTypeHint === "true_false") {
+    const tf = types.find((t) => {
+      const n = t.name.toLowerCase();
+      return n.includes("true") && n.includes("false");
+    });
+    if (tf) return tf.id;
+  }
+
+  if (sectionTypeHint === "identification") {
+    const fillIn = types.find((t) => {
+      const n = t.name.toLowerCase();
+      return (
+        n.includes("fill in the blank") ||
+        n.includes("identification") ||
+        n.includes("fill") ||
+        n.includes("blank") ||
+        n.includes("short answer")
+      );
+    });
+    if (fillIn) return fillIn.id;
+  }
+
+  if (sectionTypeHint === "multiple_choice") {
+    const mc = types.find((t) => {
+      const n = t.name.toLowerCase();
+      return n.includes("multiple") && n.includes("choice");
+    });
+    if (mc) return mc.id;
+  }
+
+  // Prefer "Fill in the blanks" (or similar) type when question has blanks and no options
+  if (question.options.length === 0 && hasBlanks(question.questionText)) {
+    const fillIn = types.find((t) => {
+      const n = t.name.toLowerCase();
+      return (
+        n.includes("fill in the blank") ||
+        n.includes("identification") ||
+        n.includes("fill") ||
+        n.includes("blank") ||
+        n.includes("short answer")
+      );
+    });
+    if (fillIn) return fillIn.id;
+  }
 
   const opts = question.options.map((o) => o.toLowerCase().trim());
 
@@ -518,22 +704,33 @@ function detectQuestionType(
 
 /**
  * Converts parsed questions to the CreateExamQuestionPayload format.
- * Automatically detects the best question type for each question.
+ * Automatically detects the best question type for each question; uses section type hint when present (e.g. "True or False" header).
  */
 export function parsedToPayload(
   parsed: ParsedQuestion[],
   defaultQuestionTypeId: string,
-  availableTypes?: { id: string; name: string }[]
+  availableTypes?: { id: string; name: string }[],
+  sections?: ParsedSection[]
 ): CreateExamQuestionPayload[] {
-  return parsed.map((q) => ({
-    questionTypeId: availableTypes && availableTypes.length > 0
-      ? detectQuestionType(q, availableTypes)
-      : defaultQuestionTypeId,
-    questionText: q.questionText,
-    options: q.options,
-    correctAnswer: q.correctAnswer,
-    points: q.points,
-    numberOfChoices: q.options.length,
-    examId: "", // Will be set server-side
-  }));
+  return parsed.map((q) => {
+    const sectionTypeHint =
+      sections &&
+      q.sectionIndex !== undefined &&
+      q.sectionIndex >= 0 &&
+      sections[q.sectionIndex]
+        ? sections[q.sectionIndex].typeHint
+        : undefined;
+    return {
+      questionTypeId:
+        availableTypes && availableTypes.length > 0
+          ? detectQuestionType(q, availableTypes, sectionTypeHint)
+          : defaultQuestionTypeId,
+      questionText: q.questionText,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+      points: q.points,
+      numberOfChoices: q.options.length,
+      examId: "", // Will be set server-side
+    };
+  });
 }

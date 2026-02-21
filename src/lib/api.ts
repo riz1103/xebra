@@ -154,6 +154,55 @@ class ApiClient {
     return data;
   }
 
+  // ============ Phrases ============
+  async getPhrases(params?: {
+    examId?: string;
+    bundleId?: string;
+    partId?: string;
+    usageType?: string;
+    page?: number;
+    size?: number;
+  }) {
+    const { data } = await this.client.get<ListResponse<Phrase>>("/api/phrases", { params });
+    return data;
+  }
+
+  async getPhrase(id: string) {
+    const { data } = await this.client.get<ApiResponse<Phrase>>(`/api/phrases/${id}`);
+    return data;
+  }
+
+  async createPhrase(payload: CreatePhrasePayload) {
+    const { data } = await this.client.post<ApiResponse<Phrase>>("/api/phrases", payload);
+    return data;
+  }
+
+  /** Create phrase with optional image files (multipart). Total images ≤ 10MB. */
+  async createPhraseWithFiles(formData: FormData) {
+    const { data } = await this.client.post<ApiResponse<Phrase>>("/api/phrases", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  }
+
+  async updatePhrase(id: string, payload: UpdatePhrasePayload) {
+    const { data } = await this.client.put<ApiResponse<Phrase>>(`/api/phrases/${id}`, payload);
+    return data;
+  }
+
+  /** Update phrase, optionally adding more images via multipart. */
+  async updatePhraseWithFiles(id: string, formData: FormData) {
+    const { data } = await this.client.put<ApiResponse<Phrase>>(`/api/phrases/${id}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  }
+
+  async deletePhrase(id: string) {
+    const { data } = await this.client.delete<ApiResponse>(`/api/phrases/${id}`);
+    return data;
+  }
+
   // ============ Exams ============
   async getExams(params?: {
     status?: string;

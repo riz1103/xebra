@@ -13,6 +13,8 @@ import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -29,6 +31,7 @@ import {
 } from "lucide-react";
 import { cn, formatDuration } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { parseBlanks } from "@/lib/question-blanks";
 
 export default function ExamPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
@@ -67,11 +70,11 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const selectedQuestionIds = session?.selectedQuestionIds;
   
   // Filter and sort questions to match selectedQuestionIds order if it exists
-  const questions = selectedQuestionIds && selectedQuestionIds.length > 0
+  const questions: SessionQuestion[] = selectedQuestionIds && selectedQuestionIds.length > 0
     ? selectedQuestionIds
         .map((id) => allQuestions.find((q) => q.id === id))
-        .filter((q): q is ExamQuestion => q !== undefined)
-    : allQuestions;
+        .filter((q): q is SessionQuestion => q !== undefined)
+    : (allQuestions as SessionQuestion[]);
   
   // Filter questionsByPart if it exists and selectedQuestionIds is provided
   // Maintain order within each part based on selectedQuestionIds
@@ -82,7 +85,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         // Filter and sort by selectedQuestionIds order
         const filteredQuestions = selectedQuestionIds
           .map((id) => partData.questions.find((q) => q.id === id))
-          .filter((q): q is ExamQuestion => q !== undefined);
+          .filter((q): q is SessionQuestion => q !== undefined);
         if (filteredQuestions.length > 0) {
           acc[partId] = {
             ...partData,
@@ -104,8 +107,17 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     return questions;
   };
   
-  const currentQuestions = getCurrentQuestions();
+  const currentQuestions: SessionQuestion[] = getCurrentQuestions();
   const currentQuestion = currentQuestions[currentIndex];
+
+  // Show phrase block once before the first question of each phrase block (backend orders so same phraseId is consecutive)
+  const shouldShowPhraseBlock =
+    currentQuestion?.phraseId &&
+    (currentIndex === 0 || (currentQuestions[currentIndex - 1] as SessionQuestion)?.phraseId !== currentQuestion.phraseId);
+  const rawPhrase =
+    currentQuestion?.phrase ?? (currentQuestion?.phraseId && session?.phrases?.[currentQuestion.phraseId]);
+  const phraseForBlock: PhraseBlock | undefined =
+    rawPhrase && rawPhrase !== null && typeof rawPhrase === "object" ? (rawPhrase as PhraseBlock) : undefined;
 
   // Initialize state from session
   useEffect(() => {
@@ -291,6 +303,26 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     handleAnswer(updated.length > 0 ? updated : null);
   };
 
+  /** For fill-in-the-blank: one blank → string, multiple blanks → string[] */
+  const handleFillInAnswer = useCallback(
+    (blankIndex: number, value: string, blankCount: number) => {
+      if (!currentQuestion) return;
+      const current = answers[currentQuestion.id];
+      const base = blankCount === 1
+        ? typeof current === "string" ? current : ""
+        : (Array.isArray(current) ? [...current] : Array(blankCount).fill(""));
+      if (blankCount === 1) {
+        handleAnswer(value.trim() || null);
+        return;
+      }
+      const arr = base as string[];
+      const next = [...arr];
+      next[blankIndex] = value;
+      handleAnswer(next.every((v) => !v.trim()) ? null : next);
+    },
+    [currentQuestion, answers, handleAnswer]
+  );
+
   const goToQuestion = (index: number) => {
     if (index >= 0 && index < currentQuestions.length) {
       setCurrentIndex(index);
@@ -330,6 +362,11 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const answeredCount = getAnsweredCount();
   const progressPercentage = currentQuestions.length > 0 ? (answeredCount / currentQuestions.length) * 100 : 0;
   const isMultipleAnswer = Array.isArray(currentQuestion?.correctAnswer) && currentQuestion.correctAnswer.length > 1;
+
+  const blankResult = currentQuestion ? parseBlanks(currentQuestion.questionText) : { segments: [], blankCount: 0 };
+  const blankCount = blankResult.blankCount;
+  const isFillInTheBlank = blankCount > 0;
+  const hasOptionsForBlank = isFillInTheBlank && currentQuestion?.options?.length > 0;
   
   // Get current part time remaining
   const currentPartTimeRemaining = hasParts && currentPart && partTimeRemaining[currentPart] !== undefined
@@ -533,6 +570,31 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         {/* Question Content */}
         <div className="flex-1 min-w-0">
           {currentQuestion ? (
+            <>
+            {shouldShowPhraseBlock && phraseForBlock && (
+              <Card className="mb-4 border-dashed bg-muted/30">
+                <CardHeader className="pb-2">
+                  {phraseForBlock.title && (
+                    <CardTitle className="text-base">{phraseForBlock.title}</CardTitle>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{phraseForBlock.body}</p>
+                  {phraseForBlock.imageUrls && phraseForBlock.imageUrls.length > 0 && (
+                    <div className="flex flex-col gap-3 pt-2">
+                      {phraseForBlock.imageUrls.map((url, i) => (
+                        <img
+                          key={i}
+                          src={url}
+                          alt={phraseForBlock.title ? `${phraseForBlock.title} image ${i + 1}` : `Passage image ${i + 1}`}
+                          className="max-w-full h-auto rounded-md border object-contain"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -556,13 +618,59 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                     </Button>
                   </div>
                 </div>
-                <CardTitle className="text-lg mt-3 leading-relaxed">{currentQuestion.questionText}</CardTitle>
-                {isMultipleAnswer && (
+                {!isFillInTheBlank && (
+                  <CardTitle className="text-lg mt-3 leading-relaxed">{currentQuestion.questionText}</CardTitle>
+                )}
+                {isMultipleAnswer && !isFillInTheBlank && (
                   <p className="text-xs text-muted-foreground mt-1">Select all that apply</p>
                 )}
               </CardHeader>
               <CardContent className="space-y-3">
-                {isMultipleAnswer ? (
+                {isFillInTheBlank ? (
+                  // Fill in the blank: stem with one input/dropdown per blank
+                  <div className="space-y-3">
+                    <p className="text-lg leading-relaxed flex flex-wrap items-baseline gap-x-1 gap-y-2">
+                      {blankResult.segments.map((seg, i) => (
+                        <span key={i}>
+                          {seg}
+                          {i < blankCount && (
+                            hasOptionsForBlank ? (
+                              <Select
+                                value={
+                                  blankCount === 1
+                                    ? (answers[currentQuestion.id] as string) || ""
+                                    : ((answers[currentQuestion.id] as string[])?.[i] ?? "")
+                                }
+                                onValueChange={(v) => handleFillInAnswer(i, v, blankCount)}
+                              >
+                                <SelectTrigger className="inline-flex w-auto min-w-[120px] h-9 mx-0.5 align-baseline">
+                                  <SelectValue placeholder="Choose..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {currentQuestion.options.map((opt, j) => (
+                                    <SelectItem key={j} value={opt}>{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                type="text"
+                                placeholder="______"
+                                className="inline-flex w-32 h-9 mx-0.5 align-baseline"
+                                value={
+                                  blankCount === 1
+                                    ? (answers[currentQuestion.id] as string) ?? ""
+                                    : ((answers[currentQuestion.id] as string[])?.[i] ?? "")
+                                }
+                                onChange={(e) => handleFillInAnswer(i, e.target.value, blankCount)}
+                              />
+                            )
+                          )}
+                        </span>
+                      ))}
+                    </p>
+                  </div>
+                ) : isMultipleAnswer ? (
                   // Multiple answer (checkboxes)
                   <div className="space-y-3">
                     {currentQuestion.options.map((option, i) => {
@@ -593,7 +701,6 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                 ) : (
                   // Single answer (radio)
                   (() => {
-                    // Use stored selected index if available, otherwise try to find it
                     const storedIndex = selectedIndices[currentQuestion.id];
                     const selectedAnswer = answers[currentQuestion.id] as string;
                     const selectedIndex = storedIndex !== undefined
@@ -602,14 +709,12 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                       ? currentQuestion.options.findIndex((opt) => opt === selectedAnswer)
                       : -1;
                     const radioValue = selectedIndex >= 0 ? selectedIndex.toString() : "";
-                    
                     return (
                       <RadioGroup
                         value={radioValue}
                         onValueChange={handleSingleAnswer}
                       >
                         {currentQuestion.options.map((option, i) => {
-                          // Use stored index to determine selection - this ensures only the exact clicked option is highlighted
                           const isSelected = selectedIndex === i;
                           return (
                             <label
@@ -635,6 +740,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                 )}
               </CardContent>
             </Card>
+            </>
           ) : (
             <Card>
               <CardContent className="py-16 text-center">

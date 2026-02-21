@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import {
   LayoutDashboard,
   FileText,
+  BookOpen,
   HelpCircle,
   Package,
   Mail,
@@ -26,6 +27,7 @@ import { useState } from "react";
 
 const proctorSectionItems = [
   { href: "/dashboard/exams", label: "Exams", icon: FileText },
+  { href: "/dashboard/phrases", label: "Phrases", icon: BookOpen },
   { href: "/dashboard/bundles", label: "Exam Bundles", icon: Package },
   { href: "/dashboard/invitations", label: "Invitations", icon: Mail },
   { href: "/dashboard/groups", label: "Examinee Groups", icon: Users },

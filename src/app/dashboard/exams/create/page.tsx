@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { examSchema, type ExamFormValues } from "@/lib/validations";
 import { parseExamFile, parsedToPayload } from "@/lib/exam-parser";
 import type { ParseResult } from "@/lib/exam-parser";
-import { getLayoutConfig } from "@/lib/question-layout";
+import { getLayoutConfig, type LayoutConfig } from "@/lib/question-layout";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,12 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
@@ -35,22 +41,369 @@ import {
   Trash2,
   Upload,
   FileText,
+  BookOpen,
   AlertTriangle,
   CheckCircle2,
   X,
+  ImageIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { parseBlanks } from "@/lib/question-blanks";
 import type { CreateExamQuestionPayload, ExamPart } from "@/types";
+
+/** One item in the Questions section: either a standalone question or a phrase block with nested questions */
+type QuestionSection =
+  | { id: string; type: "standalone"; question: CreateExamQuestionPayload }
+  | {
+      id: string;
+      type: "phrase";
+      phrase: { title: string; body: string; usageType?: string };
+      imageFiles: File[];
+      questions: CreateExamQuestionPayload[];
+    };
+
+function genSectionId() {
+  return `sec_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+const MAX_PHRASE_IMAGES_BYTES = 10 * 1024 * 1024; // 10MB per phrase
+
+/** Thumbnail for a phrase image with limited height; click to open full preview */
+function PhraseImageThumbnail({
+  file,
+  onPreview,
+  onRemove,
+}: {
+  file: File;
+  onPreview: (url: string) => void;
+  onRemove: () => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  if (!url) return null;
+  return (
+    <li className="flex items-center gap-2 rounded border overflow-hidden bg-muted/30">
+      <button
+        type="button"
+        onClick={() => onPreview(url)}
+        className="flex-1 min-w-0 flex items-center gap-2 p-1.5 text-left hover:bg-muted/50 transition-colors cursor-pointer"
+      >
+        <img
+          src={url}
+          alt={file.name}
+          className="h-20 w-auto max-w-[120px] object-contain shrink-0 rounded"
+        />
+        <span className="truncate text-sm flex-1">{file.name}</span>
+        <span className="text-xs text-muted-foreground shrink-0">{(file.size / 1024).toFixed(1)} KB</span>
+      </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 shrink-0"
+        onClick={onRemove}
+        aria-label="Remove image"
+      >
+        <X className="h-3 w-3" />
+      </Button>
+    </li>
+  );
+}
+
+/** Renders one question form (standalone or under a phrase) */
+function QuestionCard({
+  question: q,
+  questionLabel,
+  layoutConfig,
+  needsAnswer,
+  questionTypes,
+  parts,
+  getQuestionCountForPart,
+  onRemove,
+  updateQuestion,
+  handleQuestionTypeChange,
+  updateOption,
+  addOption,
+  removeOption,
+  toggleCorrectAnswer,
+  setQuestion,
+}: {
+  sectionId: string;
+  question: CreateExamQuestionPayload;
+  questionLabel: string;
+  layoutConfig: LayoutConfig;
+  needsAnswer: boolean;
+  questionTypes: { id: string; name: string }[];
+  parts: ExamPart[];
+  getQuestionCountForPart: (partId: string) => number;
+  onRemove: () => void;
+  phraseQuestionIndex: number | undefined;
+  updateQuestion: (field: string, value: unknown) => void;
+  handleQuestionTypeChange: (newTypeId: string) => void;
+  updateOption: (oIndex: number, value: string) => void;
+  addOption: () => void;
+  removeOption: (oIndex: number) => void;
+  toggleCorrectAnswer: (optionIndex: number, checked: boolean) => void;
+  setQuestion: (q: CreateExamQuestionPayload) => void;
+  sections: QuestionSection[];
+  setSections: React.Dispatch<React.SetStateAction<QuestionSection[]>>;
+}) {
+  return (
+    <div
+      className={`rounded-lg border p-4 space-y-4 ${
+        needsAnswer ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h4 className="font-medium text-sm">{questionLabel}</h4>
+          {needsAnswer && (
+            <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="mr-1 h-2.5 w-2.5" /> Needs answer
+            </Badge>
+          )}
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onRemove} className="text-destructive">
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2 sm:col-span-2">
+          <Label>Question Text *</Label>
+          <Textarea
+            value={q.questionText}
+            onChange={(e) => updateQuestion("questionText", e.target.value)}
+            placeholder="Enter your question..."
+          />
+          {layoutConfig.layout === "identification" && (
+            <p className="text-xs text-muted-foreground">
+              Tip: Use _____ (two or more underscores) for fill-in-the-blank. One input per blank; answer as text or multiple accepted answers.
+            </p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label>Question Type</Label>
+          <Select value={q.questionTypeId} onValueChange={handleQuestionTypeChange}>
+            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+            <SelectContent>
+              {questionTypes.map((qt) => (
+                <SelectItem key={qt.id} value={qt.id}>{qt.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Points</Label>
+          <Input
+            type="number"
+            min={1}
+            value={q.points}
+            onChange={(e) => updateQuestion("points", parseInt(e.target.value) || 1)}
+          />
+        </div>
+        {parts.length > 0 && (
+          <div className="space-y-2 sm:col-span-2">
+            <Label>Exam Part (Optional)</Label>
+            <Select
+              value={q.partId || "none"}
+              onValueChange={(v) => updateQuestion("partId", v && v !== "none" ? v : null)}
+            >
+              <SelectTrigger><SelectValue placeholder="No Part" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No Part</SelectItem>
+                {parts.map((part) => (
+                  <SelectItem key={part.id} value={part.id}>
+                    {part.name} ({getQuestionCountForPart(part.id)} questions)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+      {layoutConfig.showOptions && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Options</Label>
+              {layoutConfig.editableOptions && (
+                <Button type="button" variant="ghost" size="sm" onClick={addOption}>
+                  <Plus className="mr-1 h-3 w-3" /> Add
+                </Button>
+              )}
+            </div>
+            {q.options.map((opt, oi) => (
+              <div key={oi} className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-6">{String.fromCharCode(65 + oi)}.</span>
+                {layoutConfig.editableOptions ? (
+                  <Input
+                    value={opt}
+                    onChange={(e) => updateOption(oi, e.target.value)}
+                    placeholder={`Option ${String.fromCharCode(65 + oi)}`}
+                    className="flex-1"
+                  />
+                ) : (
+                  <span className="text-sm flex-1">{opt}</span>
+                )}
+                {layoutConfig.editableOptions && q.options.length > 2 && (
+                  <Button type="button" variant="ghost" size="icon" onClick={() => removeOption(oi)} className="shrink-0">
+                    <Trash2 className="h-3 w-3 text-destructive" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {layoutConfig.showCorrectAnswer && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <Label>{layoutConfig.correctAnswerLabel}</Label>
+            {layoutConfig.correctAnswerIsText ? (
+              (() => {
+                const blankCount =
+                  layoutConfig.layout === "identification"
+                    ? parseBlanks(q.questionText).blankCount
+                    : 0;
+                if (blankCount > 0) {
+                  const base = Array.isArray(q.correctAnswer)
+                    ? (q.correctAnswer as string[])
+                    : typeof q.correctAnswer === "string"
+                      ? [q.correctAnswer]
+                      : [""];
+                  const answers = Array.from({ length: blankCount }, (_, i) =>
+                    base[i] !== undefined ? base[i] : ""
+                  );
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        This question has {blankCount} blank{blankCount !== 1 ? "s" : ""}. Provide the correct answer for each in order.
+                      </p>
+                      {answers.map((ans, ai) => (
+                        <div key={ai} className="flex items-center gap-2">
+                          <Label className="shrink-0 text-xs w-24">Blank {ai + 1}</Label>
+                          <Input
+                            value={ans}
+                            onChange={(e) => {
+                              const next = [...answers];
+                              next[ai] = e.target.value;
+                              setQuestion({ ...q, correctAnswer: next });
+                            }}
+                            placeholder={layoutConfig.correctAnswerPlaceholder}
+                            className="flex-1"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+                const answers = Array.isArray(q.correctAnswer)
+                  ? (q.correctAnswer as string[])
+                  : typeof q.correctAnswer === "string" && q.correctAnswer
+                    ? [q.correctAnswer]
+                    : [""];
+                return (
+                  <div className="space-y-2">
+                    {answers.map((ans, ai) => (
+                      <div key={ai} className="flex items-center gap-2">
+                        <Input
+                          value={ans}
+                          onChange={(e) => {
+                            const arr = Array.isArray(q.correctAnswer)
+                              ? [...(q.correctAnswer as string[])]
+                              : [String(q.correctAnswer || "")];
+                            arr[ai] = e.target.value;
+                            setQuestion({ ...q, correctAnswer: arr });
+                          }}
+                          placeholder={answers.length > 1 ? `Accepted answer ${ai + 1}` : layoutConfig.correctAnswerPlaceholder}
+                          className="flex-1"
+                        />
+                        {answers.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const arr = Array.isArray(q.correctAnswer)
+                                ? [...(q.correctAnswer as string[])]
+                                : [String(q.correctAnswer || "")];
+                              arr.splice(ai, 1);
+                              setQuestion({ ...q, correctAnswer: arr });
+                            }}
+                            className="shrink-0"
+                          >
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const arr = Array.isArray(q.correctAnswer)
+                          ? [...(q.correctAnswer as string[])]
+                          : [String(q.correctAnswer || "")];
+                        arr.push("");
+                        setQuestion({ ...q, correctAnswer: arr });
+                      }}
+                    >
+                      <Plus className="mr-1 h-3 w-3" /> Add Accepted Answer
+                    </Button>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="space-y-2">
+                {q.options.filter(Boolean).map((opt, oi) => {
+                  const selectedIndices = Array.isArray(q.correctAnswer) ? (q.correctAnswer as string[]) : [];
+                  return (
+                    <label key={oi} className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={selectedIndices.includes(String(oi))}
+                        onCheckedChange={(checked) => toggleCorrectAnswer(oi, !!checked)}
+                      />
+                      <span className="text-xs text-muted-foreground">{String.fromCharCode(65 + oi)}.</span>
+                      <span className="text-sm">{opt}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+      {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && (
+        <>
+          <Separator />
+          <p className="text-xs text-muted-foreground italic">
+            This question type will be graded manually. No options or correct answer needed.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function CreateExamPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [questions, setQuestions] = useState<CreateExamQuestionPayload[]>([]);
+  const [sections, setSections] = useState<QuestionSection[]>([]);
   const [parts, setParts] = useState<ExamPart[]>([]);
   const [passingConditionType, setPassingConditionType] = useState<"whole_exam" | "per_part">("whole_exam");
 
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const phraseImageInputRef = useRef<HTMLInputElement>(null);
+  const phraseImageTargetSectionIdRef = useRef<string | null>(null);
+  const [phrasePreviewUrl, setPhrasePreviewUrl] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanResult, setScanResult] = useState<ParseResult | null>(null);
@@ -80,11 +433,98 @@ export default function CreateExamPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (payload: ExamFormValues & { questions: CreateExamQuestionPayload[] }) =>
-      api.createExam({
-        ...payload,
-        questions: payload.questions.length > 0 ? payload.questions : undefined,
-      }),
+    mutationFn: async (payload: { values: ExamFormValues; sections: QuestionSection[] }) => {
+      const { values, sections: secs } = payload;
+      const layoutMap = new Map(
+        questionTypes.map((qt) => [qt.id, getLayoutConfig(qt.name)])
+      );
+      const toQuestionPayload = (q: CreateExamQuestionPayload) => {
+        const config = layoutMap.get(q.questionTypeId);
+        if (Array.isArray(q.correctAnswer) && config) {
+          if (config.correctAnswerIsText) {
+            const filtered = (q.correctAnswer as string[]).filter(Boolean);
+            return { ...q, correctAnswer: filtered.length === 1 ? filtered[0] : filtered };
+          }
+          return {
+            ...q,
+            correctAnswer: (q.correctAnswer as string[])
+              .map((idx) => q.options[Number(idx)])
+              .filter(Boolean),
+          };
+        }
+        return q;
+      };
+
+      let finalTimeLimit = values.timeLimit;
+      if (values.timeType === "per_part" && parts.length > 0) {
+        finalTimeLimit = parts.reduce((sum, part) => sum + (part.timeLimit || 0), 0);
+      }
+      let finalPassingCondition = values.passingCondition;
+      let finalParts: ExamPart[] | null =
+        parts.length > 0
+          ? parts.map((p): ExamPart => ({
+              id: p.id,
+              name: p.name,
+              description: p.description,
+              numberOfItems: p.numberOfItems ?? null,
+              timeLimit: p.timeLimit ?? null,
+              passingCondition: p.passingCondition ?? null,
+            }))
+          : null;
+      if (passingConditionType === "per_part") {
+        finalPassingCondition = { type: "percentage" as const, value: 0 };
+      } else if (finalParts) {
+        finalParts = finalParts.map((p) => ({ ...p, passingCondition: null }));
+      }
+
+      const examRes = await api.createExam({
+        ...values,
+        instruction: values.instruction || null,
+        parts: finalParts,
+        passingCondition: finalPassingCondition,
+        timeLimit: finalTimeLimit,
+        questions: [], // We add questions (and phrases) below
+      });
+      const examId = (examRes?.data as { id?: string })?.id;
+      if (!examId) throw new Error("Exam created but no ID returned");
+
+      for (const sec of secs) {
+        if (sec.type === "standalone") {
+          await api.createExamQuestion({ ...toQuestionPayload(sec.question), examId });
+        } else {
+          const hasImages = sec.imageFiles.length > 0;
+          let phraseId: string;
+          if (hasImages) {
+            const formData = new FormData();
+            formData.set("body", (sec.phrase.body || "").trim() || "(No content)");
+            const title = (sec.phrase.title || "").trim();
+            if (title) formData.set("title", title);
+            formData.set("examId", examId);
+            formData.set("usageType", sec.phrase.usageType || "passage");
+            sec.imageFiles.forEach((f) => formData.append("images", f));
+            const phraseRes = await api.createPhraseWithFiles(formData);
+            phraseId = (phraseRes?.data as { id?: string })?.id ?? "";
+          } else {
+            const phraseRes = await api.createPhrase({
+              body: (sec.phrase.body || "").trim() || "(No content)",
+              title: (sec.phrase.title || "").trim() || null,
+              examId,
+              usageType: sec.phrase.usageType || "passage",
+            });
+            phraseId = (phraseRes?.data as { id?: string })?.id ?? "";
+          }
+          if (!phraseId) throw new Error("Phrase created but no ID returned");
+          for (const q of sec.questions) {
+            await api.createExamQuestion({
+              ...toQuestionPayload(q),
+              examId,
+              phraseId,
+            });
+          }
+        }
+      }
+      return { examId };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["exams"] });
       toast.success("Exam created successfully!");
@@ -96,86 +536,215 @@ export default function CreateExamPage() {
   const getTypeName = (typeId: string) =>
     questionTypes.find((qt) => qt.id === typeId)?.name || "";
 
+  /** Flatten all questions from sections (for counts and for legacy upload) */
+  const allQuestions = sections.flatMap((s) =>
+    s.type === "standalone" ? [s.question] : s.questions
+  );
+
   const addQuestion = () => {
     const defaultTypeId = questionTypes[0]?.id || "";
     const layout = getLayoutConfig(getTypeName(defaultTypeId));
-    setQuestions([
-      ...questions,
+    setSections((prev) => [
+      ...prev,
       {
-        questionTypeId: defaultTypeId,
-        questionText: "",
-        options: layout.defaultOptions.length > 0 ? [...layout.defaultOptions] : ["", "", "", ""],
-        correctAnswer: layout.correctAnswerIsText ? "" : [],
-        points: 1,
-        examId: "", // Will be set server-side
+        id: genSectionId(),
+        type: "standalone",
+        question: {
+          questionTypeId: defaultTypeId,
+          questionText: "",
+          options: layout.defaultOptions.length > 0 ? [...layout.defaultOptions] : ["", "", "", ""],
+          correctAnswer: layout.correctAnswerIsText ? "" : [],
+          points: 1,
+          examId: "",
+        },
       },
     ]);
   };
 
-  const handleQuestionTypeChange = (qIndex: number, newTypeId: string) => {
-    const updated = [...questions];
-    const oldLayout = getLayoutConfig(getTypeName(updated[qIndex].questionTypeId));
-    const newLayout = getLayoutConfig(getTypeName(newTypeId));
-
-    updated[qIndex].questionTypeId = newTypeId;
-
-    // Reset form fields when switching between incompatible layouts
-    if (oldLayout.layout !== newLayout.layout) {
-      updated[qIndex].options = [...newLayout.defaultOptions];
-      updated[qIndex].numberOfChoices = newLayout.defaultOptions.length || undefined;
-      updated[qIndex].correctAnswer = newLayout.correctAnswerIsText ? "" : [];
-    }
-
-    setQuestions(updated);
+  const addPhrase = () => {
+    setSections((prev) => [
+      ...prev,
+      {
+        id: genSectionId(),
+        type: "phrase",
+        phrase: { title: "", body: "", usageType: "passage" },
+        imageFiles: [],
+        questions: [],
+      },
+    ]);
   };
 
-  const toggleCorrectAnswer = (qIndex: number, optionIndex: number, checked: boolean) => {
-    const updated = [...questions];
-    const existing = updated[qIndex].correctAnswer;
+  const addPhraseImages = (sectionId: string, files: File[]) => {
+    setSections((prev) =>
+      prev.map((s) => {
+        if (s.type !== "phrase" || s.id !== sectionId) return s;
+        const total = [...s.imageFiles, ...files].reduce((sum, f) => sum + f.size, 0);
+        if (total > MAX_PHRASE_IMAGES_BYTES) {
+          toast.error("Total images for this passage must be 10 MB or less.");
+          return s;
+        }
+        return { ...s, imageFiles: [...s.imageFiles, ...files] };
+      })
+    );
+  };
+
+  const removePhraseImage = (sectionId: string, index: number) => {
+    setPhrasePreviewUrl(null);
+    setSections((prev) =>
+      prev.map((s) =>
+        s.type === "phrase" && s.id === sectionId
+          ? { ...s, imageFiles: s.imageFiles.filter((_, i) => i !== index) }
+          : s
+      )
+    );
+  };
+
+  const openPhraseImagePicker = (sectionId: string) => {
+    phraseImageTargetSectionIdRef.current = sectionId;
+    phraseImageInputRef.current?.click();
+  };
+
+  const onPhraseImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const sectionId = phraseImageTargetSectionIdRef.current;
+    if (!sectionId) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length > 0) addPhraseImages(sectionId, files);
+    phraseImageTargetSectionIdRef.current = null;
+    if (phraseImageInputRef.current) phraseImageInputRef.current.value = "";
+  };
+
+  const addQuestionUnderPhrase = (sectionId: string) => {
+    const defaultTypeId = questionTypes[0]?.id || "";
+    const layout = getLayoutConfig(getTypeName(defaultTypeId));
+    const newQ: CreateExamQuestionPayload = {
+      questionTypeId: defaultTypeId,
+      questionText: "",
+      options: layout.defaultOptions.length > 0 ? [...layout.defaultOptions] : ["", "", "", ""],
+      correctAnswer: layout.correctAnswerIsText ? "" : [],
+      points: 1,
+      examId: "",
+    };
+    setSections((prev) =>
+      prev.map((s) =>
+        s.type === "phrase" && s.id === sectionId
+          ? { ...s, questions: [...s.questions, newQ] }
+          : s
+      )
+    );
+  };
+
+  const updatePhraseBlock = (sectionId: string, phrase: { title: string; body: string; usageType?: string }) => {
+    setSections((prev) =>
+      prev.map((s) =>
+        s.type === "phrase" && s.id === sectionId ? { ...s, phrase } : s
+      )
+    );
+  };
+
+  const removeSection = (sectionId: string) => {
+    setSections((prev) => prev.filter((s) => s.id !== sectionId));
+  };
+
+  const removeQuestionUnderPhrase = (sectionId: string, qIndex: number) => {
+    setSections((prev) =>
+      prev.map((s) =>
+        s.type === "phrase" && s.id === sectionId
+          ? { ...s, questions: s.questions.filter((_, i) => i !== qIndex) }
+          : s
+      )
+    );
+  };
+
+  const getQuestionAt = (sectionId: string, phraseQuestionIndex?: number): CreateExamQuestionPayload | null => {
+    const sec = sections.find((s) => s.id === sectionId);
+    if (!sec) return null;
+    if (sec.type === "standalone") return sec.question;
+    if (sec.type === "phrase" && typeof phraseQuestionIndex === "number") {
+      return sec.questions[phraseQuestionIndex] ?? null;
+    }
+    return null;
+  };
+
+  const setQuestionAt = (sectionId: string, phraseQuestionIndex: number | undefined, q: CreateExamQuestionPayload) => {
+    setSections((prev) =>
+      prev.map((s) => {
+        if (s.id !== sectionId) return s;
+        if (s.type === "standalone") return { ...s, question: q };
+        if (s.type === "phrase" && typeof phraseQuestionIndex === "number") {
+          const next = [...s.questions];
+          next[phraseQuestionIndex] = q;
+          return { ...s, questions: next };
+        }
+        return s;
+      })
+    );
+  };
+
+  const handleQuestionTypeChange = (sectionId: string, phraseQuestionIndex: number | undefined, newTypeId: string) => {
+    const q = getQuestionAt(sectionId, phraseQuestionIndex);
+    if (!q) return;
+    const oldLayout = getLayoutConfig(getTypeName(q.questionTypeId));
+    const newLayout = getLayoutConfig(getTypeName(newTypeId));
+    const next: CreateExamQuestionPayload = { ...q, questionTypeId: newTypeId };
+    if (oldLayout.layout !== newLayout.layout) {
+      next.options = [...newLayout.defaultOptions];
+      next.numberOfChoices = newLayout.defaultOptions.length || undefined;
+      next.correctAnswer = newLayout.correctAnswerIsText ? "" : [];
+    }
+    setQuestionAt(sectionId, phraseQuestionIndex, next);
+  };
+
+  const toggleCorrectAnswer = (sectionId: string, phraseQuestionIndex: number | undefined, optionIndex: number, checked: boolean) => {
+    const q = getQuestionAt(sectionId, phraseQuestionIndex);
+    if (!q) return;
+    const existing = q.correctAnswer;
     const current = Array.isArray(existing) ? (existing as string[]) : [];
     const idx = String(optionIndex);
-    updated[qIndex].correctAnswer = checked
-      ? [...current, idx]
-      : current.filter((a) => a !== idx);
-    setQuestions(updated);
+    const next = { ...q, correctAnswer: checked ? [...current, idx] : current.filter((a) => a !== idx) };
+    setQuestionAt(sectionId, phraseQuestionIndex, next);
   };
 
-  const updateQuestion = (index: number, field: string, value: unknown) => {
-    const updated = [...questions];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (updated[index] as any)[field] = value;
-    setQuestions(updated);
+  const updateQuestion = (sectionId: string, phraseQuestionIndex: number | undefined, field: string, value: unknown) => {
+    const q = getQuestionAt(sectionId, phraseQuestionIndex);
+    if (!q) return;
+    setQuestionAt(sectionId, phraseQuestionIndex, { ...q, [field]: value });
   };
 
-  const updateOption = (qIndex: number, oIndex: number, value: string) => {
-    const updated = [...questions];
-    updated[qIndex].options[oIndex] = value;
-    setQuestions(updated);
+  const updateOption = (sectionId: string, phraseQuestionIndex: number | undefined, oIndex: number, value: string) => {
+    const q = getQuestionAt(sectionId, phraseQuestionIndex);
+    if (!q) return;
+    const next = [...q.options];
+    next[oIndex] = value;
+    setQuestionAt(sectionId, phraseQuestionIndex, { ...q, options: next });
   };
 
-  const removeQuestion = (index: number) => {
-    setQuestions(questions.filter((_, i) => i !== index));
+  const addOption = (sectionId: string, phraseQuestionIndex: number | undefined) => {
+    const q = getQuestionAt(sectionId, phraseQuestionIndex);
+    if (!q) return;
+    setQuestionAt(sectionId, phraseQuestionIndex, {
+      ...q,
+      options: [...q.options, ""],
+      numberOfChoices: q.options.length + 1,
+    });
   };
 
-  const addOption = (qIndex: number) => {
-    const updated = [...questions];
-    updated[qIndex].options.push("");
-    updated[qIndex].numberOfChoices = updated[qIndex].options.length;
-    setQuestions(updated);
-  };
-
-  const removeOption = (qIndex: number, oIndex: number) => {
-    const updated = [...questions];
-    updated[qIndex].options = updated[qIndex].options.filter((_, i) => i !== oIndex);
-    updated[qIndex].numberOfChoices = updated[qIndex].options.length;
-    // Adjust correctAnswer indices after removal
-    if (Array.isArray(updated[qIndex].correctAnswer)) {
-      updated[qIndex].correctAnswer = (updated[qIndex].correctAnswer as string[])
+  const removeOption = (sectionId: string, phraseQuestionIndex: number | undefined, oIndex: number) => {
+    const q = getQuestionAt(sectionId, phraseQuestionIndex);
+    if (!q) return;
+    const nextOpts = q.options.filter((_, i) => i !== oIndex);
+    let nextAnswer = q.correctAnswer;
+    if (Array.isArray(nextAnswer)) {
+      nextAnswer = (nextAnswer as string[])
         .map((idx) => Number(idx))
         .filter((idx) => idx !== oIndex)
         .map((idx) => String(idx > oIndex ? idx - 1 : idx));
     }
-    setQuestions(updated);
+    setQuestionAt(sectionId, phraseQuestionIndex, {
+      ...q,
+      options: nextOpts,
+      numberOfChoices: nextOpts.length,
+      correctAnswer: nextAnswer,
+    });
   };
 
   const handleFileUpload = useCallback(
@@ -225,25 +794,60 @@ export default function CreateExamPage() {
 
         setScanResult(result);
 
-        // Convert parsed questions to payload format and add to questions list
+        // Create exam parts from detected section headers (e.g. "True or False (11-20)", "Grammar and Vocabulary (21-40)")
+        const newParts: ExamPart[] =
+          result.sections?.length > 0
+            ? result.sections.map((s) => ({
+                id: generatePartId(),
+                name: s.name,
+                description: "",
+                numberOfItems: null,
+                timeLimit: null,
+                passingCondition: null,
+              }))
+            : [];
+        if (newParts.length > 0) {
+          setParts((prev) => [...prev, ...newParts]);
+        }
+
         const defaultTypeId = questionTypes[0]?.id || "";
-        const newQuestions = parsedToPayload(result.questions, defaultTypeId, questionTypes).map((q) => {
-          // Convert text-based correctAnswer to index-based for form state
+        const payloads = parsedToPayload(
+          result.questions,
+          defaultTypeId,
+          questionTypes,
+          result.sections
+        );
+        const newQuestions = payloads.map((q, i) => {
+          const partId =
+            result.questions[i].sectionIndex !== undefined &&
+            result.questions[i].sectionIndex! >= 0 &&
+            newParts[result.questions[i].sectionIndex!]
+              ? newParts[result.questions[i].sectionIndex!].id
+              : null;
+          let out = { ...q, examId: "", partId: partId ?? undefined };
           if (typeof q.correctAnswer === "string" && q.correctAnswer) {
             const idx = q.options.indexOf(q.correctAnswer);
-            return { ...q, correctAnswer: idx >= 0 ? [String(idx)] : [] };
-          }
-          if (Array.isArray(q.correctAnswer)) {
-            return {
-              ...q,
+            out = { ...out, correctAnswer: idx >= 0 ? [String(idx)] : [] };
+          } else if (Array.isArray(q.correctAnswer)) {
+            out = {
+              ...out,
               correctAnswer: (q.correctAnswer as string[])
                 .map((ans) => String(q.options.indexOf(ans)))
                 .filter((idx) => idx !== "-1"),
             };
+          } else {
+            out = { ...out, correctAnswer: [] };
           }
-          return { ...q, correctAnswer: [] };
+          return out;
         });
-        setQuestions((prev) => [...prev, ...newQuestions]);
+        setSections((prev) => [
+          ...prev,
+          ...newQuestions.map((q) => ({
+            id: genSectionId(),
+            type: "standalone" as const,
+            question: q,
+          })),
+        ]);
 
         setScanProgress(100);
         toast.success(
@@ -304,78 +908,47 @@ export default function CreateExamPage() {
   };
 
   const getQuestionCountForPart = (partId: string) => {
-    return questions.filter((q) => q.partId === partId).length;
+    return allQuestions.filter((q) => q.partId === partId).length;
   };
 
   const onSubmit = (values: ExamFormValues) => {
     const layoutMap = new Map(
       questionTypes.map((qt) => [qt.id, getLayoutConfig(qt.name)])
     );
-
-    // Convert correctAnswer for the API
-    const payload = questions.map((q) => {
+    const allQuestions: { q: CreateExamQuestionPayload; label: string }[] = [];
+    sections.forEach((sec, si) => {
+      if (sec.type === "standalone") {
+        allQuestions.push({ q: sec.question, label: `Question ${si + 1}` });
+      } else {
+        sec.questions.forEach((q, qi) => {
+          allQuestions.push({
+            q,
+            label: `Section ${si + 1} (passage), question ${qi + 1}`,
+          });
+        });
+      }
+    });
+    for (const { q, label } of allQuestions) {
       const config = layoutMap.get(q.questionTypeId);
-      if (Array.isArray(q.correctAnswer)) {
-        if (config?.correctAnswerIsText) {
-          // Text-based answers: filter empties, keep as array
-          const filtered = (q.correctAnswer as string[]).filter(Boolean);
-          return {
-            ...q,
-            correctAnswer: filtered.length === 1 ? filtered[0] : filtered,
-          };
+      if (config?.layout === "identification" && config.correctAnswerIsText) {
+        const blankCount = parseBlanks(q.questionText).blankCount;
+        if (blankCount > 0) {
+          const arr = Array.isArray(q.correctAnswer)
+            ? (q.correctAnswer as string[])
+            : typeof q.correctAnswer === "string"
+              ? [q.correctAnswer]
+              : [];
+          const filled = arr.slice(0, blankCount).map((a) => (a ?? "").trim());
+          if (filled.length !== blankCount || filled.some((a) => !a)) {
+            toast.error(
+              `${label}: Fill in the blanks requires ${blankCount} answer(s), one per blank. Please provide all.`
+            );
+            return;
+          }
         }
-        // Index-based: convert indices to option text values
-        return {
-          ...q,
-          correctAnswer: (q.correctAnswer as string[])
-            .map((idx) => q.options[Number(idx)])
-            .filter(Boolean),
-        };
-      }
-      return q;
-    });
-
-    // Calculate total time limit if timeType is 'per_part'
-    let finalTimeLimit = values.timeLimit;
-    if (values.timeType === "per_part" && parts.length > 0) {
-      finalTimeLimit = parts.reduce((sum, part) => sum + (part.timeLimit || 0), 0);
-    }
-
-    // Handle passing condition based on type
-    let finalPassingCondition = values.passingCondition;
-    // Normalize parts to ensure all optional fields are null instead of undefined
-    let finalParts: ExamPart[] | null = parts.length > 0
-      ? parts.map((part): ExamPart => ({
-          id: part.id,
-          name: part.name,
-          description: part.description,
-          numberOfItems: part.numberOfItems ?? null,
-          timeLimit: part.timeLimit ?? null,
-          passingCondition: part.passingCondition ?? null,
-        }))
-      : null;
-    
-    if (passingConditionType === "per_part") {
-      // Clear exam-level passing condition when using per-part
-      finalPassingCondition = { type: "percentage" as const, value: 0 };
-    } else {
-      // Clear part-level passing conditions when using whole exam
-      if (finalParts) {
-        finalParts = finalParts.map(part => ({
-          ...part,
-          passingCondition: null,
-        }));
       }
     }
-
-    createMutation.mutate({
-      ...values,
-      instruction: values.instruction || null,
-      parts: finalParts,
-      passingCondition: finalPassingCondition,
-      timeLimit: finalTimeLimit,
-      questions: payload,
-    });
+    createMutation.mutate({ values, sections });
   };
 
   return (
@@ -727,11 +1300,22 @@ export default function CreateExamPage() {
               <Button type="button" variant="outline" size="sm" onClick={addQuestion}>
                 <Plus className="mr-1 h-3 w-3" /> Add Question
               </Button>
+              <Button type="button" variant="outline" size="sm" onClick={addPhrase}>
+                <BookOpen className="mr-1 h-3 w-3" /> Add Phrase (passage)
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={handleFileUpload}
+                className="hidden"
+              />
+              <input
+                ref={phraseImageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={onPhraseImageChange}
                 className="hidden"
               />
             </div>
@@ -824,8 +1408,8 @@ export default function CreateExamPage() {
               </div>
             )}
 
-            {/* Drop zone when no questions */}
-            {questions.length === 0 && !isScanning && !scanResult && !scanError ? (
+            {/* Drop zone when no sections */}
+            {sections.length === 0 && !isScanning && !scanResult && !scanError ? (
               <div
                 className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed py-10 px-6 cursor-pointer transition-colors hover:border-primary/50 hover:bg-muted/50"
                 onClick={() => fileInputRef.current?.click()}
@@ -863,255 +1447,174 @@ export default function CreateExamPage() {
                 <p className="text-xs text-muted-foreground mb-3">
                   Drag & drop or click to browse. Supports PDF and Word (.docx, .doc)
                 </p>
+                <a
+                  href="/api/template/exam"
+                  download="XEVRA-Exam-Import-Template.docx"
+                  className="text-xs text-primary hover:underline mb-3 inline-block"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Download Word template (.docx) — proctor guide with all question types
+                </a>
                 <p className="text-xs text-muted-foreground">
-                  Or add questions manually using the &quot;Add Question&quot; button above.
+                  Or add questions manually, or add a passage (phrase) and then add questions under it.
                 </p>
               </div>
-            ) : questions.length === 0 && !isScanning ? (
+            ) : sections.length === 0 && !isScanning ? (
               <p className="text-center text-sm text-muted-foreground py-6">
-                No questions added yet. You can add them now or after creating the exam.
+                No questions added yet. Add a question or add a phrase and then add questions under it.
               </p>
             ) : (
-              questions.map((q, qi) => {
-                const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
-                const needsAnswer = layoutConfig.showCorrectAnswer && (
-                  Array.isArray(q.correctAnswer)
-                    ? q.correctAnswer.length === 0 || q.correctAnswer.every((a) => !a)
-                    : !q.correctAnswer
-                );
-
+              sections.map((sec) => {
+                if (sec.type === "standalone") {
+                  const q = sec.question;
+                  const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
+                  const needsAnswer = layoutConfig.showCorrectAnswer && (
+                    Array.isArray(q.correctAnswer)
+                      ? q.correctAnswer.length === 0 || q.correctAnswer.every((a) => !a)
+                      : !q.correctAnswer
+                  );
+                  const qNum = allQuestions.indexOf(q) + 1;
+                  return (
+                    <QuestionCard
+                      key={sec.id}
+                      sectionId={sec.id}
+                      question={q}
+                      questionLabel={`Question ${qNum}`}
+                      layoutConfig={layoutConfig}
+                      needsAnswer={!!needsAnswer}
+                      questionTypes={questionTypes}
+                      parts={parts}
+                      getQuestionCountForPart={getQuestionCountForPart}
+                      onRemove={() => removeSection(sec.id)}
+                      phraseQuestionIndex={undefined}
+                      updateQuestion={(field, value) => updateQuestion(sec.id, undefined, field, value)}
+                      handleQuestionTypeChange={(newTypeId) => handleQuestionTypeChange(sec.id, undefined, newTypeId)}
+                      updateOption={(oIndex, value) => updateOption(sec.id, undefined, oIndex, value)}
+                      addOption={() => addOption(sec.id, undefined)}
+                      removeOption={(oIndex) => removeOption(sec.id, undefined, oIndex)}
+                      toggleCorrectAnswer={(optionIndex, checked) => toggleCorrectAnswer(sec.id, undefined, optionIndex, checked)}
+                      setQuestion={(next) => setQuestionAt(sec.id, undefined, next)}
+                      sections={sections}
+                      setSections={setSections}
+                    />
+                  );
+                }
+                const phraseSec = sec;
                 return (
-                  <div
-                    key={qi}
-                    className={`rounded-lg border p-4 space-y-4 ${
-                      needsAnswer
-                        ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20"
-                        : ""
-                    }`}
-                  >
+                  <div key={phraseSec.id} className="rounded-lg border-2 border-primary/20 bg-muted/20 p-4 space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-sm">Question {qi + 1}</h4>
-                        {needsAnswer && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] border-amber-400 text-amber-600 dark:text-amber-400"
-                          >
-                            <AlertTriangle className="mr-1 h-2.5 w-2.5" />
-                            Needs answer
-                          </Badge>
-                        )}
+                        <BookOpen className="h-4 w-4 text-primary" />
+                        <h4 className="font-medium text-sm">Passage (phrase)</h4>
+                        <Badge variant="secondary" className="text-xs">
+                          {phraseSec.questions.length} question(s) under this passage
+                        </Badge>
                       </div>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeQuestion(qi)} className="text-destructive">
-                        <Trash2 className="h-3 w-3" />
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeSection(phraseSec.id)} className="text-destructive">
+                        <Trash2 className="h-3 w-3" /> Remove passage
                       </Button>
                     </div>
-
-                    {/* Question text, type, and points - always shown */}
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2 sm:col-span-2">
-                        <Label>Question Text *</Label>
+                        <Label>Passage title (optional)</Label>
+                        <Input
+                          value={phraseSec.phrase.title}
+                          onChange={(e) => updatePhraseBlock(phraseSec.id, { ...phraseSec.phrase, title: e.target.value })}
+                          placeholder="e.g. Reading passage"
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label>Passage body *</Label>
                         <Textarea
-                          value={q.questionText}
-                          onChange={(e) => updateQuestion(qi, "questionText", e.target.value)}
-                          placeholder="Enter your question..."
+                          value={phraseSec.phrase.body}
+                          onChange={(e) => updatePhraseBlock(phraseSec.id, { ...phraseSec.phrase, body: e.target.value })}
+                          placeholder="Enter the text that will appear above the questions..."
+                          rows={5}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Question Type</Label>
+                        <Label>Usage type</Label>
                         <Select
-                          value={q.questionTypeId}
-                          onValueChange={(v) => handleQuestionTypeChange(qi, v)}
+                          value={phraseSec.phrase.usageType || "passage"}
+                          onValueChange={(v) => updatePhraseBlock(phraseSec.id, { ...phraseSec.phrase, usageType: v })}
                         >
-                          <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {questionTypes.map((qt) => (
-                              <SelectItem key={qt.id} value={qt.id}>{qt.name}</SelectItem>
-                            ))}
+                            <SelectItem value="passage">Passage</SelectItem>
+                            <SelectItem value="instruction">Instruction</SelectItem>
+                            <SelectItem value="scenario">Scenario</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Label>Points</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={q.points}
-                          onChange={(e) => updateQuestion(qi, "points", parseInt(e.target.value) || 1)}
-                        />
-                      </div>
-                      {parts.length > 0 && (
-                        <div className="space-y-2 sm:col-span-2">
-                          <Label>Exam Part (Optional)</Label>
-                          <Select
-                            value={q.partId || "none"}
-                            onValueChange={(v) => updateQuestion(qi, "partId", v && v !== "none" ? v : null)}
-                          >
-                            <SelectTrigger><SelectValue placeholder="No Part" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">No Part</SelectItem>
-                              {parts.map((part) => (
-                                <SelectItem key={part.id} value={part.id}>
-                                  {part.name} ({getQuestionCountForPart(part.id)} questions)
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Select which part this question belongs to
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Options section - shown for MC, T/F, Multiple Answer */}
-                    {layoutConfig.showOptions && (
-                      <>
-                        <Separator />
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Label>Options</Label>
-                            {layoutConfig.editableOptions && (
-                              <Button type="button" variant="ghost" size="sm" onClick={() => addOption(qi)}>
-                                <Plus className="mr-1 h-3 w-3" /> Add
-                              </Button>
-                            )}
-                          </div>
-                          {q.options.map((opt, oi) => (
-                            <div key={oi} className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground w-6">{String.fromCharCode(65 + oi)}.</span>
-                              {layoutConfig.editableOptions ? (
-                                <Input
-                                  value={opt}
-                                  onChange={(e) => updateOption(qi, oi, e.target.value)}
-                                  placeholder={`Option ${String.fromCharCode(65 + oi)}`}
-                                  className="flex-1"
-                                />
-                              ) : (
-                                <span className="text-sm flex-1">{opt}</span>
-                              )}
-                              {layoutConfig.editableOptions && q.options.length > 2 && (
-                                <Button type="button" variant="ghost" size="icon" onClick={() => removeOption(qi, oi)} className="shrink-0">
-                                  <Trash2 className="h-3 w-3 text-destructive" />
-                                </Button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-
-                    {/* Correct Answer - varies by layout */}
-                    {layoutConfig.showCorrectAnswer && (
-                      <>
-                        <Separator />
-                        <div className="space-y-2">
-                          <Label>{layoutConfig.correctAnswerLabel}</Label>
-
-                          {/* Text inputs for identification/fill-in-the-blank */}
-                          {layoutConfig.correctAnswerIsText && (() => {
-                            const answers = Array.isArray(q.correctAnswer)
-                              ? (q.correctAnswer as string[])
-                              : typeof q.correctAnswer === "string" && q.correctAnswer
-                                ? [q.correctAnswer]
-                                : [""];
-                            return (
-                              <div className="space-y-2">
-                                {answers.map((ans, ai) => (
-                                  <div key={ai} className="flex items-center gap-2">
-                                    <Input
-                                      value={ans}
-                                      onChange={(e) => {
-                                        const updated = [...questions];
-                                        const arr = Array.isArray(updated[qi].correctAnswer)
-                                          ? [...(updated[qi].correctAnswer as string[])]
-                                          : [String(updated[qi].correctAnswer || "")];
-                                        arr[ai] = e.target.value;
-                                        updated[qi].correctAnswer = arr;
-                                        setQuestions(updated);
-                                      }}
-                                      placeholder={answers.length > 1 ? `Accepted answer ${ai + 1}` : layoutConfig.correctAnswerPlaceholder}
-                                      className="flex-1"
-                                    />
-                                    {answers.length > 1 && (
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          const updated = [...questions];
-                                          const arr = Array.isArray(updated[qi].correctAnswer)
-                                            ? [...(updated[qi].correctAnswer as string[])]
-                                            : [String(updated[qi].correctAnswer || "")];
-                                          arr.splice(ai, 1);
-                                          updated[qi].correctAnswer = arr;
-                                          setQuestions(updated);
-                                        }}
-                                        className="shrink-0"
-                                      >
-                                        <Trash2 className="h-3 w-3 text-destructive" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                ))}
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    const updated = [...questions];
-                                    const arr = Array.isArray(updated[qi].correctAnswer)
-                                      ? [...(updated[qi].correctAnswer as string[])]
-                                      : [String(updated[qi].correctAnswer || "")];
-                                    arr.push("");
-                                    updated[qi].correctAnswer = arr;
-                                    setQuestions(updated);
-                                  }}
-                                >
-                                  <Plus className="mr-1 h-3 w-3" /> Add Accepted Answer
-                                </Button>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Checkboxes for selecting correct answer(s) */}
-                          {!layoutConfig.correctAnswerIsText && (
-                            <div className="space-y-2">
-                              {q.options.filter(Boolean).map((opt, oi) => {
-                                const selectedIndices = Array.isArray(q.correctAnswer)
-                                  ? (q.correctAnswer as string[])
-                                  : [];
-                                return (
-                                  <label
-                                    key={oi}
-                                    className="flex items-center gap-2 cursor-pointer"
-                                  >
-                                    <Checkbox
-                                      checked={selectedIndices.includes(String(oi))}
-                                      onCheckedChange={(checked) =>
-                                        toggleCorrectAnswer(qi, oi, !!checked)
-                                      }
-                                    />
-                                    <span className="text-xs text-muted-foreground">{String.fromCharCode(65 + oi)}.</span>
-                                    <span className="text-sm">{opt}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-
-                    {/* Info for essay type */}
-                    {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && (
-                      <>
-                        <Separator />
-                        <p className="text-xs text-muted-foreground italic">
-                          This question type will be graded manually. No options or correct answer needed.
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label>Images (optional)</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Add images to this passage. Total size ≤ 10 MB.
                         </p>
-                      </>
-                    )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openPhraseImagePicker(phraseSec.id)}
+                        >
+                          <ImageIcon className="mr-1 h-3 w-3" /> Choose images
+                        </Button>
+                        {phraseSec.imageFiles.length > 0 && (
+                          <ul className="space-y-2 mt-2">
+                            {phraseSec.imageFiles.map((f, i) => (
+                              <PhraseImageThumbnail
+                                key={`${phraseSec.id}-${i}-${f.name}`}
+                                file={f}
+                                onPreview={setPhrasePreviewUrl}
+                                onRemove={() => removePhraseImage(phraseSec.id, i)}
+                              />
+                            ))}
+                            <p className="text-xs text-muted-foreground">
+                              Total: {(phraseSec.imageFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024).toFixed(2)} MB / 10 MB
+                            </p>
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => addQuestionUnderPhrase(phraseSec.id)}>
+                        <Plus className="mr-1 h-3 w-3" /> Add question under this passage
+                      </Button>
+                    </div>
+                    {phraseSec.questions.map((q, qIdx) => {
+                      const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
+                      const needsAnswer = layoutConfig.showCorrectAnswer && (
+                        Array.isArray(q.correctAnswer)
+                          ? q.correctAnswer.length === 0 || q.correctAnswer.every((a) => !a)
+                          : !q.correctAnswer
+                      );
+                      const qNum = allQuestions.indexOf(q) + 1;
+                      return (
+                        <div key={qIdx} className="mt-4 pl-4 border-l-2 border-primary/30">
+                          <QuestionCard
+                            sectionId={phraseSec.id}
+                            question={q}
+                            questionLabel={`Question ${qNum} (under passage)`}
+                            layoutConfig={layoutConfig}
+                            needsAnswer={!!needsAnswer}
+                            questionTypes={questionTypes}
+                            parts={parts}
+                            getQuestionCountForPart={getQuestionCountForPart}
+                            onRemove={() => removeQuestionUnderPhrase(phraseSec.id, qIdx)}
+                            phraseQuestionIndex={qIdx}
+                            updateQuestion={(field, value) => updateQuestion(phraseSec.id, qIdx, field, value)}
+                            handleQuestionTypeChange={(newTypeId) => handleQuestionTypeChange(phraseSec.id, qIdx, newTypeId)}
+                            updateOption={(oIndex, value) => updateOption(phraseSec.id, qIdx, oIndex, value)}
+                            addOption={() => addOption(phraseSec.id, qIdx)}
+                            removeOption={(oIndex) => removeOption(phraseSec.id, qIdx, oIndex)}
+                            toggleCorrectAnswer={(optionIndex, checked) => toggleCorrectAnswer(phraseSec.id, qIdx, optionIndex, checked)}
+                            setQuestion={(next) => setQuestionAt(phraseSec.id, qIdx, next)}
+                            sections={sections}
+                            setSections={setSections}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })
@@ -1129,6 +1632,23 @@ export default function CreateExamPage() {
           </Button>
         </div>
       </form>
+
+      {/* Full-size image preview for phrase images */}
+      <Dialog open={!!phrasePreviewUrl} onOpenChange={(open) => !open && setPhrasePreviewUrl(null)}>
+        <DialogContent className="max-w-[90vw] w-auto max-h-[90vh] p-4 flex items-center justify-center bg-black/90 border-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Image preview</DialogTitle>
+          </DialogHeader>
+          {phrasePreviewUrl && (
+            <img
+              src={phrasePreviewUrl}
+              alt="Preview"
+              className="max-h-[85vh] max-w-full w-auto object-contain rounded"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
