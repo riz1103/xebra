@@ -5,7 +5,7 @@ import { use, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { ExamQuestion } from "@/types";
+import type { ExamQuestion, SessionQuestion, PhraseBlock } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -582,7 +582,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                   <p className="text-sm whitespace-pre-wrap leading-relaxed">{phraseForBlock.body}</p>
                   {phraseForBlock.imageUrls && phraseForBlock.imageUrls.length > 0 && (
                     <div className="flex flex-col gap-3 pt-2">
-                      {phraseForBlock.imageUrls.map((url, i) => (
+                      {phraseForBlock.imageUrls.map((url: string, i: number) => (
                         <img
                           key={i}
                           src={url}

@@ -42,6 +42,60 @@ export interface CreateQuestionTypePayload {
   config?: Record<string, unknown>;
 }
 
+// ============ Phrases (passage/story blocks above questions) ============
+/** Phrase block as embedded in session questions (id, title, body, imageUrls, usageType) */
+export interface PhraseBlock {
+  id: string;
+  title?: string | null;
+  body: string;
+  imageUrls?: string[];
+  usageType?: string | null;
+}
+
+export interface Phrase {
+  id: string;
+  title?: string | null;
+  body: string;
+  examId?: string | null;
+  bundleId?: string | null;
+  partId?: string | null;
+  usageType?: string | null;
+  imageUrls?: string[];
+  imagePaths?: string[];
+  imageSizes?: number[];
+  metadata?: Record<string, unknown>;
+  status?: "active" | "disabled";
+  createdBy?: string;
+  createdByEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePhrasePayload {
+  body: string;
+  title?: string | null;
+  examId?: string | null;
+  bundleId?: string | null;
+  partId?: string | null;
+  usageType?: string | null;
+  imageUrls?: string[];
+  imageSizes?: number[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdatePhrasePayload {
+  title?: string | null;
+  body?: string;
+  examId?: string | null;
+  bundleId?: string | null;
+  partId?: string | null;
+  usageType?: string | null;
+  metadata?: Record<string, unknown>;
+  status?: "active" | "disabled";
+  imageUrls?: string[];
+  imageSizes?: number[];
+}
+
 // ============ Exam Questions ============
 export interface ExamQuestion {
   id: string;
