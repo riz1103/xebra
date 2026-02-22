@@ -6,6 +6,8 @@ export interface ParsedQuestion {
   options: string[];
   correctAnswer: string;
   points: number;
+  /** Question number from the document (1-based) for passage grouping */
+  questionNumber?: number;
   /** Index into ParseResult.sections when question falls in a section range */
   sectionIndex?: number;
 }
@@ -19,12 +21,24 @@ export interface ParsedSection {
   typeHint?: "true_false" | "multiple_choice" | "identification";
 }
 
+/** A reading passage (e.g. "Read the story below...") that applies to a range of questions */
+export interface ParsedPassage {
+  /** Optional title, e.g. "Read the story below and answer Questions 1-10" */
+  title?: string;
+  /** Passage body text to show above the questions */
+  body: string;
+  /** Question numbers this passage applies to (e.g. [1,2,...,10]) */
+  questionNumbers: number[];
+}
+
 export interface ParseResult {
   questions: ParsedQuestion[];
   rawText: string;
   warnings: string[];
   /** Sections detected from headers; used to create exam parts and assign question types */
   sections: ParsedSection[];
+  /** Reading passages that precede a group of questions */
+  passages?: ParsedPassage[];
 }
 
 // ============ Text Extraction ============
@@ -139,13 +153,21 @@ function extractAnswerKey(
   const textWithoutKey = text.substring(0, keyStartIndex).trim();
   const keySection = text.substring(keyStartIndex);
 
-  // Parse answer key entries: "1. A" or "1) A" or "1 - A" or "1. A."
-  const entryPattern = /(\d{1,3})\s*[.):\-–]\s*([A-Za-z])\b/g;
-  let entryMatch;
-  while ((entryMatch = entryPattern.exec(keySection)) !== null) {
-    const num = parseInt(entryMatch[1]);
-    const letter = entryMatch[2].toUpperCase();
-    answerMap.set(num, letter);
+  // Parse answer key entries: "1. A", "1) A", "11. TRUE", "12. FALSE", etc.
+  // Match TRUE/FALSE first (whole words), then single letters A–J for multiple choice
+  const trueFalsePattern = /(\d{1,3})\s*[.):\-–]\s*(TRUE|FALSE)\b/gi;
+  let match;
+  while ((match = trueFalsePattern.exec(keySection)) !== null) {
+    const num = parseInt(match[1], 10);
+    const value = match[2].toLowerCase() === "true" ? "True" : "False";
+    answerMap.set(num, value);
+  }
+  const letterPattern = /(\d{1,3})\s*[.):\-–]\s*([A-Za-z])\b/g;
+  while ((match = letterPattern.exec(keySection)) !== null) {
+    const num = parseInt(match[1], 10);
+    if (!answerMap.has(num)) {
+      answerMap.set(num, match[2].toUpperCase());
+    }
   }
 
   return { answerMap, textWithoutKey };
@@ -164,45 +186,105 @@ function normalizeText(text: string): string {
     .replace(/ {2,}/g, " ");
 }
 
+/** Pattern for "Read the passage/story and answer Questions 41-50" (mid-doc passage heading) */
+const PASSAGE_HEADING_PATTERN =
+  /^Read\s+(?:the\s+)?(?:story|passage|text)\s+.*?(?:answer\s+)?(?:questions?\s*)?(\d{1,3})\s*[-–]\s*(\d{1,3})/i;
+
 /**
  * Splits text into blocks, each starting with a question number.
- * Supports: 1. / 1) / Q1. / Q1) / Question 1: / #1 / 1 -
+ * Returns blocks, preamble, and any mid-document passages (e.g. "Read the passage and answer Questions 41-50").
+ * When a passage heading is seen, the current question block is closed so the passage is not merged into the previous question's options.
  */
 function splitIntoQuestionBlocks(
   text: string
-): { questionNumber: number; block: string }[] {
+): {
+  blocks: { questionNumber: number; block: string }[];
+  preamble: string;
+  midDocPassages: ParsedPassage[];
+} {
   const lines = text.split("\n");
   const blocks: { questionNumber: number; block: string }[] = [];
+  const midDocPassages: ParsedPassage[] = [];
   let currentBlock: string[] = [];
   let currentNumber = 0;
+  let preambleLines: string[] = [];
+  let seenFirstQuestion = false;
 
-  // Pattern to detect a question-numbered line and capture the number
   const questionStartPattern =
     /^(?:(\d{1,3})[.)]\s|Q(\d{1,3})[.)]\s|Question\s+(\d{1,3})[.:]\s|#(\d{1,3})[.):\s]|(\d{1,3})\s*[-–]\s)/i;
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const trimmed = line.trim();
     if (!trimmed) {
       if (currentBlock.length > 0) currentBlock.push("");
+      else if (!seenFirstQuestion) preambleLines.push("");
       continue;
     }
 
-    const match = trimmed.match(questionStartPattern);
-    if (match) {
-      // Save the previous block
+    const qMatch = trimmed.match(questionStartPattern);
+    const passageMatch = trimmed.match(PASSAGE_HEADING_PATTERN);
+
+    if (passageMatch && seenFirstQuestion && currentBlock.length > 0 && currentNumber > 0) {
+      // End current block (e.g. Q40) so passage text is not merged into its options
+      blocks.push({
+        questionNumber: currentNumber,
+        block: currentBlock.join("\n").trim(),
+      });
+      currentBlock = [];
+      currentNumber = 0;
+      const rangeStart = parseInt(passageMatch[1], 10);
+      const rangeEnd = parseInt(passageMatch[2], 10);
+      const passageBodyLines: string[] = [];
+      const title = trimmed;
+      i++;
+      while (i < lines.length) {
+        const t = lines[i].trim();
+        if (!t) {
+          passageBodyLines.push("");
+          i++;
+          continue;
+        }
+        const nextQ = t.match(questionStartPattern);
+        if (nextQ) {
+          midDocPassages.push({
+            title,
+            body: passageBodyLines.join("\n").trim(),
+            questionNumbers: Array.from({ length: rangeEnd - rangeStart + 1 }, (_, j) => rangeStart + j),
+          });
+          currentNumber = parseInt(nextQ[1] || nextQ[2] || nextQ[3] || nextQ[4] || nextQ[5]);
+          currentBlock = [t];
+          i--; // so next for-iteration re-processes this question line
+          break;
+        }
+        passageBodyLines.push(t);
+        i++;
+      }
+      if (currentBlock.length === 0 && passageBodyLines.length > 0) {
+        midDocPassages.push({
+          title,
+          body: passageBodyLines.join("\n").trim(),
+          questionNumbers: Array.from({ length: rangeEnd - rangeStart + 1 }, (_, j) => rangeStart + j),
+        });
+      }
+      continue;
+    }
+
+    if (qMatch) {
+      if (!seenFirstQuestion) seenFirstQuestion = true;
       if (currentBlock.length > 0 && currentNumber > 0) {
         blocks.push({
           questionNumber: currentNumber,
           block: currentBlock.join("\n").trim(),
         });
       }
-      // Extract question number from whichever capture group matched
       currentNumber = parseInt(
-        match[1] || match[2] || match[3] || match[4] || match[5]
+        qMatch[1] || qMatch[2] || qMatch[3] || qMatch[4] || qMatch[5]
       );
       currentBlock = [trimmed];
     } else {
-      currentBlock.push(trimmed);
+      if (seenFirstQuestion) currentBlock.push(trimmed);
+      else preambleLines.push(trimmed);
     }
   }
 
@@ -213,7 +295,66 @@ function splitIntoQuestionBlocks(
     });
   }
 
-  return blocks;
+  const preamble = preambleLines.join("\n").trim();
+  return { blocks, preamble, midDocPassages };
+}
+
+/**
+ * Extracts a reading passage from the preamble (text before the first question).
+ * Looks for headings like "Read the story below and answer Questions 1-10" and the following paragraph(s).
+ */
+function extractPassageFromPreamble(
+  preamble: string,
+  firstQuestionNumber: number
+): ParsedPassage | null {
+  if (!preamble || preamble.length < 50) return null;
+
+  const lines = preamble.split("\n").map((l) => l.trim());
+  const nonEmpty = lines.filter(Boolean);
+  if (nonEmpty.length === 0) return null;
+
+  const rangePattern =
+    /(?:answer\s+)?(?:questions?\s*)?(\d{1,3})\s*[-–]\s*(\d{1,3})/i;
+  const readStoryPattern =
+    /read\s+(?:the\s+)?(?:story|passage|text)\s+(?:below|above)?/i;
+
+  let title: string | undefined;
+  let rangeStart = firstQuestionNumber;
+  let rangeEnd = firstQuestionNumber;
+  let passageStartIndex = -1; // index in lines where passage body starts (after heading)
+
+  for (let i = 0; i < nonEmpty.length; i++) {
+    const line = nonEmpty[i];
+    const rangeMatch = line.match(rangePattern);
+    const hasReadStory = readStoryPattern.test(line);
+    if (rangeMatch) {
+      rangeStart = parseInt(rangeMatch[1], 10);
+      rangeEnd = parseInt(rangeMatch[2], 10);
+      if (hasReadStory) {
+        title = line;
+        passageStartIndex = i + 1;
+      }
+      break;
+    }
+    if (hasReadStory) {
+      title = line;
+      passageStartIndex = i + 1;
+      break;
+    }
+  }
+
+  const bodyLines =
+    passageStartIndex >= 0 && passageStartIndex < nonEmpty.length
+      ? nonEmpty.slice(passageStartIndex)
+      : nonEmpty;
+  const body = bodyLines.join("\n").trim();
+  if (!body || body.length < 20) return null;
+
+  const questionNumbers = Array.from(
+    { length: rangeEnd - rangeStart + 1 },
+    (_, i) => rangeStart + i
+  );
+  return { title, body, questionNumbers };
 }
 
 /**
@@ -391,10 +532,14 @@ function resolveCorrectAnswer(
   }
 
   // 2. Answer key
-  const keyLetter = answerMap.get(questionNumber);
-  if (keyLetter) {
-    const matched = options.find((o) => o.letter === keyLetter);
-    if (matched) return matched.text;
+  const keyValue = answerMap.get(questionNumber);
+  if (keyValue) {
+    const byLetter = options.find((o) => o.letter === keyValue.toUpperCase());
+    if (byLetter) return byLetter.text;
+    const byText = options.find(
+      (o) => o.text.trim().toLowerCase() === keyValue.trim().toLowerCase()
+    );
+    if (byText) return byText.text;
   }
 
   // 3. Answer line in the block text
@@ -491,8 +636,8 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
   // Detect section headers for part exams (e.g. "True or False (11-20)")
   const headerSections = extractSectionHeaders(textWithoutKey);
 
-  // Split into question blocks
-  const blocks = splitIntoQuestionBlocks(textWithoutKey);
+  // Split into question blocks, preamble, and any mid-document passages
+  const { blocks, preamble, midDocPassages } = splitIntoQuestionBlocks(textWithoutKey);
 
   if (blocks.length === 0) {
     throw new Error(
@@ -508,6 +653,13 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
       .map((b) => b.questionNumber),
     typeHint: h.typeHint,
   }));
+
+  // Extract reading passage from preamble (e.g. "Read the story below and answer Questions 1-10")
+  const passages: ParsedPassage[] = [];
+  const firstQuestionNum = blocks[0]?.questionNumber ?? 1;
+  const preamblePassage = extractPassageFromPreamble(preamble, firstQuestionNum);
+  if (preamblePassage) passages.push(preamblePassage);
+  passages.push(...midDocPassages);
 
   const questions: ParsedQuestion[] = [];
   let skippedCount = 0;
@@ -550,6 +702,7 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
         options: [], // free-text fill-in: render as text input(s), not dropdown
         correctAnswer,
         points: 1,
+        questionNumber,
         ...(sectionIndex >= 0 && { sectionIndex }),
       });
       continue;
@@ -591,6 +744,7 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
       options: sortedOptions.map((o) => o.text),
       correctAnswer,
       points: 1,
+      questionNumber,
       ...(sectionIndex >= 0 && { sectionIndex }),
     });
   }
@@ -614,7 +768,7 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
     );
   }
 
-  return { questions, rawText, warnings, sections };
+  return { questions, rawText, warnings, sections, passages: passages.length > 0 ? passages : undefined };
 }
 
 /**
