@@ -34,6 +34,7 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const defaultTab = searchParams.get("tab") || "login";
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
   const { setUser } = useAuthStore();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
@@ -87,7 +88,7 @@ function LoginContent() {
       if (user) {
         setUser(user);
         toast.success("Welcome to Xevra!");
-        router.push("/dashboard");
+        router.push(redirectTo);
       }
     } catch (error: unknown) {
       toast.error(getAuthErrorMessage(error, "Google sign-in failed. Please try again."));
@@ -108,7 +109,7 @@ function LoginContent() {
       if (user) {
         setUser(user);
         toast.success("Welcome back!");
-        router.push("/dashboard");
+        router.push(redirectTo);
       }
     } catch (error: unknown) {
       toast.error(getAuthErrorMessage(error, "Sign-in failed. Please try again."));
@@ -152,7 +153,7 @@ function LoginContent() {
         if (userData) {
           setUser(userData);
           toast.success("Email verified! Welcome to Xevra.");
-          router.push("/dashboard");
+          router.push(redirectTo);
         }
       } else {
         toast.info("Not verified yet. Click the link in the email we sent you.");

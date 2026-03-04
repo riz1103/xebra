@@ -243,6 +243,12 @@ export interface ExamForExamineeInvitation {
   maxAttempts: number;
   attemptsUsed: number;
   expiresAt: string | FirestoreTimestamp;
+  /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
+  scheduledStartTime?: string | null;
+  /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
+  scheduledEndTime?: string | null;
+  invitationStatus?: ExamInvitationStatus;
+  createdAt?: string;
 }
 
 /** Exam returned by GET /api/exams/for-examinee with invitation status and attempt info */
@@ -252,6 +258,10 @@ export interface ExamForExaminee extends Exam {
   maxAttempts: number;
   attemptsUsed: number;
   expiresAt?: string | FirestoreTimestamp;
+  /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
+  scheduledStartTime?: string | null;
+  /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
+  scheduledEndTime?: string | null;
   invitations?: ExamForExamineeInvitation[];
 }
 
@@ -435,6 +445,10 @@ export interface ExamInvitation {
   /** API may return attemptsUsed instead of currentAttempts */
   attemptsUsed?: number;
   expiresAt: string;
+  /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
+  scheduledStartTime?: string;
+  /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
+  scheduledEndTime?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -445,6 +459,10 @@ export interface CreateExamInvitationPayload {
   examineeEmail: string;
   expiresAt: string;
   maxAttempts: number;
+  /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
+  scheduledStartTime?: string;
+  /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
+  scheduledEndTime?: string;
 }
 
 export interface CreateGroupInvitationPayload {
@@ -452,6 +470,10 @@ export interface CreateGroupInvitationPayload {
   groupId: string;
   expiresAt: string;
   maxAttempts: number;
+  /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
+  scheduledStartTime?: string;
+  /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
+  scheduledEndTime?: string;
 }
 
 export interface CreateBundleInvitationPayload {
@@ -459,6 +481,10 @@ export interface CreateBundleInvitationPayload {
   examineeEmail: string;
   expiresAt: string;
   maxAttempts: number;
+  /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
+  scheduledStartTime?: string;
+  /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
+  scheduledEndTime?: string;
 }
 
 export interface CreateBundleGroupInvitationPayload {
@@ -466,6 +492,10 @@ export interface CreateBundleGroupInvitationPayload {
   groupId: string;
   expiresAt: string;
   maxAttempts: number;
+  /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
+  scheduledStartTime?: string;
+  /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
+  scheduledEndTime?: string;
 }
 
 // ============ Examinee Groups ============

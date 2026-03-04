@@ -11,7 +11,7 @@ import {
   type ExamInvitationFormValues, type GroupInvitationFormValues,
   type BundleInvitationFormValues,
 } from "@/lib/validations";
-import type { CreateBundleGroupInvitationPayload } from "@/types";
+import type { CreateBundleGroupInvitationPayload, CreateExamInvitationPayload, CreateGroupInvitationPayload, CreateBundleInvitationPayload } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,48 +63,102 @@ export default function InvitationsPage() {
   // Default expiry: 7 days from now
   const defaultExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
 
+  // Helper function to convert datetime-local to ISO string
+  const toISOString = (datetimeLocal?: string): string | undefined => {
+    if (!datetimeLocal) return undefined;
+    return new Date(datetimeLocal).toISOString();
+  };
+
   // --- Forms ---
   const examIndividualForm = useForm<ExamInvitationFormValues>({
     resolver: zodResolver(examInvitationSchema),
-    defaultValues: { examId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1 },
+    defaultValues: { examId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" },
   });
 
   const examGroupForm = useForm<GroupInvitationFormValues>({
     resolver: zodResolver(groupInvitationSchema),
-    defaultValues: { examId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1 },
+    defaultValues: { examId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" },
   });
 
   const bundleIndividualForm = useForm<BundleInvitationFormValues>({
     resolver: zodResolver(bundleInvitationSchema),
-    defaultValues: { bundleId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1 },
+    defaultValues: { bundleId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" },
   });
 
   const bundleGroupForm = useForm({
     resolver: zodResolver(bundleGroupInvitationSchema),
-    defaultValues: { bundleId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1 },
+    defaultValues: { bundleId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" },
   });
 
   // --- Mutations ---
   const examIndividualMutation = useMutation({
-    mutationFn: (v: ExamInvitationFormValues) => api.createExamInvitation(v),
+    mutationFn: (v: ExamInvitationFormValues) => {
+      // If scheduledEndTime is provided, use it as expiresAt
+      const expiresAt = v.scheduledEndTime ? new Date(v.scheduledEndTime).toISOString() : new Date(v.expiresAt).toISOString();
+      const payload: CreateExamInvitationPayload = {
+        examId: v.examId,
+        examineeEmail: v.examineeEmail,
+        expiresAt,
+        maxAttempts: v.maxAttempts,
+        scheduledStartTime: toISOString(v.scheduledStartTime),
+        scheduledEndTime: toISOString(v.scheduledEndTime),
+      };
+      return api.createExamInvitation(payload);
+    },
     onSuccess: () => { onMutationSuccess("Invitation sent"); },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const examGroupMutation = useMutation({
-    mutationFn: (v: GroupInvitationFormValues) => api.createGroupInvitation(v),
+    mutationFn: (v: GroupInvitationFormValues) => {
+      // If scheduledEndTime is provided, use it as expiresAt
+      const expiresAt = v.scheduledEndTime ? new Date(v.scheduledEndTime).toISOString() : new Date(v.expiresAt).toISOString();
+      const payload: CreateGroupInvitationPayload = {
+        examId: v.examId,
+        groupId: v.groupId,
+        expiresAt,
+        maxAttempts: v.maxAttempts,
+        scheduledStartTime: toISOString(v.scheduledStartTime),
+        scheduledEndTime: toISOString(v.scheduledEndTime),
+      };
+      return api.createGroupInvitation(payload);
+    },
     onSuccess: () => { onMutationSuccess("Group invitations sent"); },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const bundleIndividualMutation = useMutation({
-    mutationFn: (v: BundleInvitationFormValues) => api.createBundleInvitation(v),
+    mutationFn: (v: BundleInvitationFormValues) => {
+      // If scheduledEndTime is provided, use it as expiresAt
+      const expiresAt = v.scheduledEndTime ? new Date(v.scheduledEndTime).toISOString() : new Date(v.expiresAt).toISOString();
+      const payload: CreateBundleInvitationPayload = {
+        bundleId: v.bundleId,
+        examineeEmail: v.examineeEmail,
+        expiresAt,
+        maxAttempts: v.maxAttempts,
+        scheduledStartTime: toISOString(v.scheduledStartTime),
+        scheduledEndTime: toISOString(v.scheduledEndTime),
+      };
+      return api.createBundleInvitation(payload);
+    },
     onSuccess: () => { onMutationSuccess("Bundle invitations sent"); },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const bundleGroupMutation = useMutation({
-    mutationFn: (v: CreateBundleGroupInvitationPayload) => api.createBundleGroupInvitation(v),
+    mutationFn: (v: CreateBundleGroupInvitationPayload) => {
+      // If scheduledEndTime is provided, use it as expiresAt
+      const expiresAt = v.scheduledEndTime ? new Date(v.scheduledEndTime).toISOString() : new Date(v.expiresAt).toISOString();
+      const payload: CreateBundleGroupInvitationPayload = {
+        bundleId: v.bundleId,
+        groupId: v.groupId,
+        expiresAt,
+        maxAttempts: v.maxAttempts,
+        scheduledStartTime: toISOString(v.scheduledStartTime),
+        scheduledEndTime: toISOString(v.scheduledEndTime),
+      };
+      return api.createBundleGroupInvitation(payload);
+    },
     onSuccess: () => { onMutationSuccess("Bundle group invitations sent"); },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -122,10 +176,10 @@ export default function InvitationsPage() {
     queryClient.invalidateQueries({ queryKey: ["invitations"] });
     toast.success(message);
     setDialogOpen(false);
-    examIndividualForm.reset({ examId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1 });
-    examGroupForm.reset({ examId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1 });
-    bundleIndividualForm.reset({ bundleId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1 });
-    bundleGroupForm.reset({ bundleId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1 });
+    examIndividualForm.reset({ examId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" });
+    examGroupForm.reset({ examId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" });
+    bundleIndividualForm.reset({ bundleId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" });
+    bundleGroupForm.reset({ bundleId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" });
   }
 
   const isPending =
@@ -219,6 +273,12 @@ export default function InvitationsPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Exam: {inv.examTitle || inv.examId} &middot; Attempts: {inv.currentAttempts ?? inv.attemptsUsed ?? 0}/{inv.maxAttempts} &middot; Expires: {formatDate(inv.expiresAt)}
+                    {inv.scheduledStartTime && (
+                      <> &middot; Starts: {formatDate(inv.scheduledStartTime)}</>
+                    )}
+                    {inv.scheduledEndTime && (
+                      <> &middot; Ends: {formatDate(inv.scheduledEndTime)}</>
+                    )}
                   </p>
                 </div>
                 {canCancel(inv) && (
@@ -345,6 +405,36 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...examIndividualForm.register("maxAttempts")} />
                       </div>
                     </div>
+                    <div className="grid gap-4 grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>
+                          Scheduled Start Time (Optional)
+                          <small className="text-xs text-muted-foreground block mt-1">Exam cannot be started before this time</small>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          {...examIndividualForm.register("scheduledStartTime")}
+                          min={new Date().toISOString().slice(0, 16)}
+                        />
+                        {examIndividualForm.formState.errors.scheduledStartTime && (
+                          <p className="text-xs text-destructive">{examIndividualForm.formState.errors.scheduledStartTime.message}</p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Scheduled End Time (Optional)
+                          <small className="text-xs text-muted-foreground block mt-1">Overrides exam duration if set</small>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          {...examIndividualForm.register("scheduledEndTime")}
+                          min={examIndividualForm.watch("scheduledStartTime") || new Date().toISOString().slice(0, 16)}
+                        />
+                        {examIndividualForm.formState.errors.scheduledEndTime && (
+                          <p className="text-xs text-destructive">{examIndividualForm.formState.errors.scheduledEndTime.message}</p>
+                        )}
+                      </div>
+                    </div>
                     <DialogFooter>
                       <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
                       <Button type="submit" disabled={isPending}>
@@ -383,6 +473,36 @@ export default function InvitationsPage() {
                       <div className="space-y-2">
                         <Label>Max Attempts</Label>
                         <Input type="number" min={1} {...examGroupForm.register("maxAttempts")} />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>
+                          Scheduled Start Time (Optional)
+                          <small className="text-xs text-muted-foreground block mt-1">Exam cannot be started before this time</small>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          {...examGroupForm.register("scheduledStartTime")}
+                          min={new Date().toISOString().slice(0, 16)}
+                        />
+                        {examGroupForm.formState.errors.scheduledStartTime && (
+                          <p className="text-xs text-destructive">{examGroupForm.formState.errors.scheduledStartTime.message}</p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Scheduled End Time (Optional)
+                          <small className="text-xs text-muted-foreground block mt-1">Overrides exam duration if set</small>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          {...examGroupForm.register("scheduledEndTime")}
+                          min={examGroupForm.watch("scheduledStartTime") || new Date().toISOString().slice(0, 16)}
+                        />
+                        {examGroupForm.formState.errors.scheduledEndTime && (
+                          <p className="text-xs text-destructive">{examGroupForm.formState.errors.scheduledEndTime.message}</p>
+                        )}
                       </div>
                     </div>
                     <DialogFooter>
@@ -427,6 +547,36 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...bundleIndividualForm.register("maxAttempts")} />
                       </div>
                     </div>
+                    <div className="grid gap-4 grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>
+                          Scheduled Start Time (Optional)
+                          <small className="text-xs text-muted-foreground block mt-1">Exam cannot be started before this time</small>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          {...bundleIndividualForm.register("scheduledStartTime")}
+                          min={new Date().toISOString().slice(0, 16)}
+                        />
+                        {bundleIndividualForm.formState.errors.scheduledStartTime && (
+                          <p className="text-xs text-destructive">{bundleIndividualForm.formState.errors.scheduledStartTime.message}</p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Scheduled End Time (Optional)
+                          <small className="text-xs text-muted-foreground block mt-1">Overrides exam duration if set</small>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          {...bundleIndividualForm.register("scheduledEndTime")}
+                          min={bundleIndividualForm.watch("scheduledStartTime") || new Date().toISOString().slice(0, 16)}
+                        />
+                        {bundleIndividualForm.formState.errors.scheduledEndTime && (
+                          <p className="text-xs text-destructive">{bundleIndividualForm.formState.errors.scheduledEndTime.message}</p>
+                        )}
+                      </div>
+                    </div>
                     <p className="text-xs text-muted-foreground bg-muted rounded-md p-2">
                       This will create one invitation per exam in the bundle. Exams that already have active invitations for this user will be skipped.
                     </p>
@@ -468,6 +618,36 @@ export default function InvitationsPage() {
                       <div className="space-y-2">
                         <Label>Max Attempts</Label>
                         <Input type="number" min={1} {...bundleGroupForm.register("maxAttempts")} />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>
+                          Scheduled Start Time (Optional)
+                          <small className="text-xs text-muted-foreground block mt-1">Exam cannot be started before this time</small>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          {...bundleGroupForm.register("scheduledStartTime")}
+                          min={new Date().toISOString().slice(0, 16)}
+                        />
+                        {bundleGroupForm.formState.errors.scheduledStartTime && (
+                          <p className="text-xs text-destructive">{bundleGroupForm.formState.errors.scheduledStartTime.message}</p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>
+                          Scheduled End Time (Optional)
+                          <small className="text-xs text-muted-foreground block mt-1">Overrides exam duration if set</small>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          {...bundleGroupForm.register("scheduledEndTime")}
+                          min={bundleGroupForm.watch("scheduledStartTime") || new Date().toISOString().slice(0, 16)}
+                        />
+                        {bundleGroupForm.formState.errors.scheduledEndTime && (
+                          <p className="text-xs text-destructive">{bundleGroupForm.formState.errors.scheduledEndTime.message}</p>
+                        )}
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground bg-muted rounded-md p-2">

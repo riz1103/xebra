@@ -104,33 +104,257 @@ export const examBundleSchema = z.object({
 });
 
 // ============ Exam Invitations ============
-export const examInvitationSchema = z.object({
+export const examInvitationSchema = z
+  .object({
   examId: z.string().min(1, "Exam is required"),
   examineeEmail: z.string().email("Please enter a valid email"),
   expiresAt: z.string().min(1, "Expiry date is required"),
   maxAttempts: z.coerce.number().min(1, "Must allow at least 1 attempt"),
-});
+    scheduledStartTime: z.string().optional(),
+    scheduledEndTime: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.scheduledStartTime) {
+        const startTime = new Date(data.scheduledStartTime);
+        return startTime > new Date();
+      }
+      return true;
+    },
+    { message: "Scheduled start time must be in the future", path: ["scheduledStartTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.scheduledEndTime) {
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime > new Date();
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be in the future", path: ["scheduledEndTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.scheduledStartTime && data.scheduledEndTime) {
+        const startTime = new Date(data.scheduledStartTime);
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime > startTime;
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be after scheduled start time", path: ["scheduledEndTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.expiresAt && data.scheduledStartTime) {
+        const expiresAt = new Date(data.expiresAt);
+        const startTime = new Date(data.scheduledStartTime);
+        return startTime < expiresAt;
+      }
+      return true;
+    },
+    { message: "Scheduled start time must be before expiration date", path: ["scheduledStartTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.expiresAt && data.scheduledEndTime) {
+        const expiresAt = new Date(data.expiresAt);
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime <= expiresAt;
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be before or equal to expiration date", path: ["scheduledEndTime"] }
+  );
 
-export const groupInvitationSchema = z.object({
+export const groupInvitationSchema = z
+  .object({
   examId: z.string().min(1, "Exam is required"),
   groupId: z.string().min(1, "Group is required"),
   expiresAt: z.string().min(1, "Expiry date is required"),
   maxAttempts: z.coerce.number().min(1, "Must allow at least 1 attempt"),
-});
+    scheduledStartTime: z.string().optional(),
+    scheduledEndTime: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.scheduledStartTime) {
+        const startTime = new Date(data.scheduledStartTime);
+        return startTime > new Date();
+      }
+      return true;
+    },
+    { message: "Scheduled start time must be in the future", path: ["scheduledStartTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.scheduledEndTime) {
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime > new Date();
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be in the future", path: ["scheduledEndTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.scheduledStartTime && data.scheduledEndTime) {
+        const startTime = new Date(data.scheduledStartTime);
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime > startTime;
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be after scheduled start time", path: ["scheduledEndTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.expiresAt && data.scheduledStartTime) {
+        const expiresAt = new Date(data.expiresAt);
+        const startTime = new Date(data.scheduledStartTime);
+        return startTime < expiresAt;
+      }
+      return true;
+    },
+    { message: "Scheduled start time must be before expiration date", path: ["scheduledStartTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.expiresAt && data.scheduledEndTime) {
+        const expiresAt = new Date(data.expiresAt);
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime <= expiresAt;
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be before or equal to expiration date", path: ["scheduledEndTime"] }
+  );
 
-export const bundleInvitationSchema = z.object({
+export const bundleInvitationSchema = z
+  .object({
   bundleId: z.string().min(1, "Bundle is required"),
   examineeEmail: z.string().email("Please enter a valid email"),
   expiresAt: z.string().min(1, "Expiry date is required"),
   maxAttempts: z.coerce.number().min(1, "Must allow at least 1 attempt"),
-});
+    scheduledStartTime: z.string().optional(),
+    scheduledEndTime: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.scheduledStartTime) {
+        const startTime = new Date(data.scheduledStartTime);
+        return startTime > new Date();
+      }
+      return true;
+    },
+    { message: "Scheduled start time must be in the future", path: ["scheduledStartTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.scheduledEndTime) {
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime > new Date();
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be in the future", path: ["scheduledEndTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.scheduledStartTime && data.scheduledEndTime) {
+        const startTime = new Date(data.scheduledStartTime);
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime > startTime;
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be after scheduled start time", path: ["scheduledEndTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.expiresAt && data.scheduledStartTime) {
+        const expiresAt = new Date(data.expiresAt);
+        const startTime = new Date(data.scheduledStartTime);
+        return startTime < expiresAt;
+      }
+      return true;
+    },
+    { message: "Scheduled start time must be before expiration date", path: ["scheduledStartTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.expiresAt && data.scheduledEndTime) {
+        const expiresAt = new Date(data.expiresAt);
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime <= expiresAt;
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be before or equal to expiration date", path: ["scheduledEndTime"] }
+  );
 
-export const bundleGroupInvitationSchema = z.object({
+export const bundleGroupInvitationSchema = z
+  .object({
   bundleId: z.string().min(1, "Bundle is required"),
   groupId: z.string().min(1, "Group is required"),
   expiresAt: z.string().min(1, "Expiry date is required"),
   maxAttempts: z.coerce.number().min(1, "Must allow at least 1 attempt"),
-});
+    scheduledStartTime: z.string().optional(),
+    scheduledEndTime: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.scheduledStartTime) {
+        const startTime = new Date(data.scheduledStartTime);
+        return startTime > new Date();
+      }
+      return true;
+    },
+    { message: "Scheduled start time must be in the future", path: ["scheduledStartTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.scheduledEndTime) {
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime > new Date();
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be in the future", path: ["scheduledEndTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.scheduledStartTime && data.scheduledEndTime) {
+        const startTime = new Date(data.scheduledStartTime);
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime > startTime;
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be after scheduled start time", path: ["scheduledEndTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.expiresAt && data.scheduledStartTime) {
+        const expiresAt = new Date(data.expiresAt);
+        const startTime = new Date(data.scheduledStartTime);
+        return startTime < expiresAt;
+      }
+      return true;
+    },
+    { message: "Scheduled start time must be before expiration date", path: ["scheduledStartTime"] }
+  )
+  .refine(
+    (data) => {
+      if (data.expiresAt && data.scheduledEndTime) {
+        const expiresAt = new Date(data.expiresAt);
+        const endTime = new Date(data.scheduledEndTime);
+        return endTime <= expiresAt;
+      }
+      return true;
+    },
+    { message: "Scheduled end time must be before or equal to expiration date", path: ["scheduledEndTime"] }
+  );
 
 // ============ Examinee Groups ============
 export const examineeGroupSchema = z.object({
