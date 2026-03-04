@@ -146,8 +146,14 @@ export default function ExamInvitationPage({ params }: { params: Promise<{ examI
   useEffect(() => {
     if (invitationError) {
       let errorMessage = "Failed to load invitation";
-      if (invitationError && typeof invitationError === "object") {
-        const axiosError = invitationError as { response?: { data?: { message?: string; error?: string; success?: boolean } }; message?: string; status?: number };
+      if (invitationError && typeof invitationError === "object" && "response" in invitationError) {
+        const axiosError = invitationError as { 
+          response?: { 
+            status?: number;
+            data?: { message?: string; error?: string; success?: boolean } 
+          }; 
+          message?: string;
+        };
         if (axiosError.response?.status === 403) {
           errorMessage = "This invitation is not for your account. Please use the invitation link sent to your email address, or log in with the correct account.";
         } else if (axiosError.response?.status === 404) {
@@ -161,6 +167,8 @@ export default function ExamInvitationPage({ params }: { params: Promise<{ examI
         }
       } else if (invitationError instanceof Error) {
         errorMessage = invitationError.message;
+      } else if (typeof invitationError === "string") {
+        errorMessage = invitationError;
       }
       setError(errorMessage);
     }

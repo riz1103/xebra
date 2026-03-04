@@ -323,7 +323,7 @@ export default function MyExamsPage() {
       examTitle = sessionWithTitle.examTitle || sessionWithTitle.exam?.title || "Exam";
     } else {
       const resultWithTitle = results.find((r) => r.examId === examId && r.examTitle);
-      if (resultWithTitle) {
+      if (resultWithTitle && resultWithTitle.examTitle) {
         examTitle = resultWithTitle.examTitle;
       }
     }
