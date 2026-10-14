@@ -1,0 +1,16 @@
+---
+description: Location of the Xebra backend API and permission to change it
+alwaysApply: true
+---
+
+# Xebra backend
+
+This repo (`e:\xebra`) is the Next.js frontend. The backend API it calls (`NEXT_PUBLIC_API_BASE_URL`, deployed at `https://xebra-api.netlify.app`) lives at:
+
+**`F:\Project Xebra`** (Express on Netlify Functions, Firestore, its own git repo)
+
+- Backend changes are allowed from this workspace without asking. When a bug or feature needs API work, read and edit the backend directly instead of only describing the change.
+- Key paths: `src/controllers/` (endpoint logic), `src/routes/`, `src/utils/questionVisibility.js` (what examinees can see), `src/public/docs.html` (API docs).
+- When changing an endpoint or response shape, follow the backend's own rule `F:\Project Xebra\.cursor\rules\api-docs-postman.mdc` (keep `docs.html` `ENDPOINTS` in sync).
+- The Grep and Glob tools only search this workspace; for the backend use `rg` in the shell, e.g. `cd -LiteralPath "F:\Project Xebra"; rg -n "pattern" src`. Read and edit files there with absolute paths.
+- Backend changes reach users only after they are committed and deployed to Netlify.

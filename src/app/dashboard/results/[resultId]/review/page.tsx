@@ -618,6 +618,11 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                   />
                 ) : (
                   <>
+                    {correctAnswers.length === 0 && exam?.answerRevealTiming === "after_last_attempt" && (
+                      <p className="mt-4 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                        Correct answers and explanations will be shown once you pass this exam or use up your attempts.
+                      </p>
+                    )}
                     {!isCorrect && correctAnswerLabel && (
                       <div className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/30">
                         <span className="font-medium text-emerald-800 dark:text-emerald-300">

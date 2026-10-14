@@ -203,6 +203,9 @@ export type ExamPartPayload = Omit<ExamPart, "numberOfItems" | "timeLimit"> & {
 /** How an exam's questions were written. Missing on exams created before tagging existed. */
 export type ExamOrigin = "manual" | "ai" | "mixed";
 
+/** "always" = after any submitted attempt; "after_last_attempt" = once the examinee passed or has no retakes left */
+export type AnswerRevealTiming = "always" | "after_last_attempt";
+
 export interface Exam {
   id: string;
   title: string;
@@ -221,6 +224,8 @@ export interface Exam {
   reviewableByExaminee?: boolean;
   /** If true, examinees reviewing their answers can also view each AI question's source material. */
   sourceViewableByExaminee?: boolean;
+  /** When reviewing examinees see correct answers, explanations, and sources; defaults to "always". */
+  answerRevealTiming?: AnswerRevealTiming;
   status: "draft" | "active" | "archived";
   createdBy: string;
   createdByName?: string;
@@ -244,6 +249,7 @@ export interface CreateExamPayload {
   isPublic: boolean;
   reviewableByExaminee?: boolean;
   sourceViewableByExaminee?: boolean;
+  answerRevealTiming?: AnswerRevealTiming;
   origin?: ExamOrigin;
   questions?: CreateExamQuestionPayload[];
 }
@@ -262,6 +268,7 @@ export interface UpdateExamPayload {
   isPublic?: boolean;
   reviewableByExaminee?: boolean;
   sourceViewableByExaminee?: boolean;
+  answerRevealTiming?: AnswerRevealTiming;
   status?: "draft" | "active" | "archived";
 }
 

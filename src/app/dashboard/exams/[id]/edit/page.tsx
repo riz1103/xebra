@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { SourceViewableSwitch } from "@/components/exams/source-viewable-switch";
+import { AnswerRevealSelect } from "@/components/exams/answer-reveal-select";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageLoader } from "@/components/ui/loading";
@@ -95,6 +96,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
       isPublic: false,
       reviewableByExaminee: false,
       sourceViewableByExaminee: false,
+      answerRevealTiming: "always",
     },
   });
 
@@ -113,6 +115,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         isPublic: exam.isPublic,
         reviewableByExaminee: exam.reviewableByExaminee ?? false,
         sourceViewableByExaminee: exam.sourceViewableByExaminee ?? false,
+        answerRevealTiming: exam.answerRevealTiming ?? "always",
       });
       if (exam.parts) {
         setParts(exam.parts);
@@ -510,6 +513,11 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
               onCheckedChange={(v) => form.setValue("sourceViewableByExaminee", v)}
               reviewable={form.watch("reviewableByExaminee") ?? false}
             />
+            <AnswerRevealSelect
+              value={form.watch("answerRevealTiming") ?? "always"}
+              onValueChange={(v) => form.setValue("answerRevealTiming", v)}
+              reviewable={form.watch("reviewableByExaminee") ?? false}
+            />
           </CardContent>
         </Card>
 
@@ -734,6 +742,11 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
             <SourceViewableSwitch
               checked={form.watch("sourceViewableByExaminee") ?? false}
               onCheckedChange={(v) => form.setValue("sourceViewableByExaminee", v)}
+              reviewable={form.watch("reviewableByExaminee") ?? false}
+            />
+            <AnswerRevealSelect
+              value={form.watch("answerRevealTiming") ?? "always"}
+              onValueChange={(v) => form.setValue("answerRevealTiming", v)}
               reviewable={form.watch("reviewableByExaminee") ?? false}
             />
           </CardContent>

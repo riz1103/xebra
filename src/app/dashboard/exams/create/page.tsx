@@ -76,6 +76,7 @@ import {
 } from "@/components/exam-generator/generate-from-material-dialog";
 import { QuestionSource } from "@/components/exam-generator/question-source";
 import { SourceViewableSwitch } from "@/components/exams/source-viewable-switch";
+import { AnswerRevealSelect } from "@/components/exams/answer-reveal-select";
 import { buildExamInstruction } from "@/lib/exam-blueprint";
 import Link from "next/link";
 import { parseBlanks } from "@/lib/question-blanks";
@@ -529,6 +530,7 @@ export default function CreateExamPage() {
       isPublic: false,
       reviewableByExaminee: false,
       sourceViewableByExaminee: false,
+      answerRevealTiming: "always",
     },
   });
 
@@ -1963,6 +1965,11 @@ export default function CreateExamPage() {
             <SourceViewableSwitch
               checked={form.watch("sourceViewableByExaminee") ?? false}
               onCheckedChange={(v) => form.setValue("sourceViewableByExaminee", v)}
+              reviewable={form.watch("reviewableByExaminee") ?? false}
+            />
+            <AnswerRevealSelect
+              value={form.watch("answerRevealTiming") ?? "always"}
+              onValueChange={(v) => form.setValue("answerRevealTiming", v)}
               reviewable={form.watch("reviewableByExaminee") ?? false}
             />
           </CardContent>

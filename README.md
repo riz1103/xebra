@@ -29,7 +29,7 @@ A comprehensive Next.js examination management platform where proctors can creat
 - **Add to an existing exam**: on the Edit Exam page, "Generate from material" writes new questions that avoid repeating the exam's existing ones, and adds them as new parts, into an existing part, or to the exam's questions, with the items per session and time limit adjusted
 - **Origin tag**: exams are tagged *AI generated*, *AI-assisted* (mixed), or *Manual*, shown on the exam list (with a filter) and details page. The backend keeps the tag current as questions are added
 - **Usage budget**: requests use the main model (Gemini Flash) until this month's estimated spend reaches the backend's `AI_PRIMARY_MONTHLY_BUDGET_USD` or a proctor makes `AI_PRIMARY_DAILY_REQUESTS_PER_USER` requests in a day, then switch to the lighter model (Flash-Lite). A request that hits the main model's quota is retried on the lighter model. The generator dialog shows the active model and budget used. The spend cap set in Google AI Studio remains the hard limit
-- **Saved with each question**: the explanation (`explanation`) and AI details (`metadata.ai`: difficulty, thinking skill, topic, source page, essay rubric). The API never returns these to examinees; proctors see them on the exam details and result review pages
+- **Saved with each question**: the explanation (`explanation`) and AI details (`metadata.ai`: difficulty, thinking skill, topic, source page, essay rubric). Proctors see them on the exam details and result review pages. Examinees never get the AI details, but when the exam allows answer review they see the correct answer and explanation for each question after submitting
 
 ### Examinee Experience
 - **My Exams**: View pending invitations, in-progress and completed exams
