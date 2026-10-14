@@ -394,6 +394,32 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     setCurrentIndex(0);
   };
 
+  const partIds = hasParts && questionsByPart ? Object.keys(questionsByPart) : [];
+  const currentPartIdx = currentPart ? partIds.indexOf(currentPart) : -1;
+  const prevPartId = currentPartIdx > 0 ? partIds[currentPartIdx - 1] : null;
+  const nextPartId = currentPartIdx >= 0 && currentPartIdx < partIds.length - 1 ? partIds[currentPartIdx + 1] : null;
+  const isFirstInPart = currentIndex === 0;
+  const isLastInPart = currentIndex >= currentQuestions.length - 1;
+  const canGoPrevious = !isFirstInPart || prevPartId !== null;
+  const canGoNext = !isLastInPart || nextPartId !== null;
+
+  const goPrevious = () => {
+    if (!isFirstInPart) {
+      goToQuestion(currentIndex - 1);
+    } else if (prevPartId && questionsByPart) {
+      setCurrentPart(prevPartId);
+      setCurrentIndex(Math.max(0, questionsByPart[prevPartId].questions.length - 1));
+    }
+  };
+
+  const goNext = () => {
+    if (!isLastInPart) {
+      goToQuestion(currentIndex + 1);
+    } else if (nextPartId) {
+      goToPart(nextPartId);
+    }
+  };
+
   const handleSubmit = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     submitMutation.mutate();
@@ -852,8 +878,8 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
           <div className="flex items-center justify-between mt-4">
             <Button
               variant="outline"
-              onClick={() => goToQuestion(currentIndex - 1)}
-              disabled={currentIndex === 0}
+              onClick={goPrevious}
+              disabled={!canGoPrevious}
             >
               <ChevronLeft className="mr-1 h-4 w-4" /> Previous
             </Button>
@@ -863,8 +889,8 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
               {currentIndex + 1} / {currentQuestions.length}
             </span>
 
-            {currentIndex < currentQuestions.length - 1 ? (
-              <Button onClick={() => goToQuestion(currentIndex + 1)}>
+            {canGoNext ? (
+              <Button onClick={goNext}>
                 Next <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             ) : (

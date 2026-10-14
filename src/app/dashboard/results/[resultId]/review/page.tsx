@@ -247,6 +247,30 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
     setCurrentIndex(0);
   };
 
+  const partIds = questionsByPart ? Object.keys(questionsByPart) : [];
+  const currentPartIdx = currentPart ? partIds.indexOf(currentPart) : -1;
+  const prevPartId = currentPartIdx > 0 ? partIds[currentPartIdx - 1] : null;
+  const nextPartId = currentPartIdx >= 0 && currentPartIdx < partIds.length - 1 ? partIds[currentPartIdx + 1] : null;
+  const isFirstInPart = currentIndex === 0;
+  const isLastInPart = currentIndex >= currentQuestions.length - 1;
+
+  const goPrevious = () => {
+    if (!isFirstInPart) {
+      goToQuestion(currentIndex - 1);
+    } else if (prevPartId && questionsByPart) {
+      setCurrentPart(prevPartId);
+      setCurrentIndex(Math.max(0, questionsByPart[prevPartId].questions.length - 1));
+    }
+  };
+
+  const goNext = () => {
+    if (!isLastInPart) {
+      goToQuestion(currentIndex + 1);
+    } else if (nextPartId) {
+      goToPart(nextPartId);
+    }
+  };
+
   useEffect(() => {
     if (questionsByPart && !currentPart && Object.keys(questionsByPart).length > 0) {
       setCurrentPart(Object.keys(questionsByPart)[0]);
@@ -599,8 +623,8 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
           <div className="flex items-center justify-between gap-2 mt-4">
             <Button
               variant="outline"
-              onClick={() => goToQuestion(currentIndex - 1)}
-              disabled={currentIndex === 0}
+              onClick={goPrevious}
+              disabled={isFirstInPart && !prevPartId}
             >
               <ChevronLeft className="mr-1 h-4 w-4" /> Previous
             </Button>
@@ -626,8 +650,8 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
               </Select>
             </div>
             <Button
-              onClick={() => goToQuestion(currentIndex + 1)}
-              disabled={currentIndex >= currentQuestions.length - 1}
+              onClick={goNext}
+              disabled={isLastInPart && !nextPartId}
             >
               Next <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
