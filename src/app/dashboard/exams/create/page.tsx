@@ -68,44 +68,24 @@ import {
   Layers,
   GripVertical,
   MoreVertical,
+  Sparkles,
 } from "lucide-react";
+import {
+  GenerateFromMaterialDialog,
+  type GeneratedExamApplication,
+} from "@/components/exam-generator/generate-from-material-dialog";
+import { buildExamInstruction } from "@/lib/exam-blueprint";
 import Link from "next/link";
 import { parseBlanks } from "@/lib/question-blanks";
 import type { CreateExamQuestionPayload, ExamPart } from "@/types";
-
-/** Nested phrase under a part (same shape as top-level phrase block) */
-type PartPhrase = {
-  id: string;
-  phrase: { title: string; body: string; usageType?: string };
-  imageFiles: File[];
-  questions: CreateExamQuestionPayload[];
-};
-
-/** One item in the Questions section: standalone question, phrase block, or part block with nested questions and phrases */
-type QuestionSection =
-  | { id: string; type: "standalone"; question: CreateExamQuestionPayload }
-  | {
-      id: string;
-      type: "phrase";
-      phrase: { title: string; body: string; usageType?: string };
-      imageFiles: File[];
-      questions: CreateExamQuestionPayload[];
-    }
-  | {
-      id: string;
-      type: "part";
-      part: ExamPart;
-      questions: CreateExamQuestionPayload[];
-      phrases: PartPhrase[];
-    };
-
-function genSectionId() {
-  return `sec_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function genPartPhraseId() {
-  return `pp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
+import {
+  genPartPhraseId,
+  genSectionId,
+  toExamPartPayload,
+  type PartPhrase,
+  type QuestionSection,
+} from "@/lib/exam-sections";
+import { examOriginFor, saveSectionsToExam, sectionQuestions } from "@/lib/exam-save";
 
 const MAX_PHRASE_IMAGES_BYTES = 10 * 1024 * 1024; // 10MB per phrase
 
@@ -438,6 +418,46 @@ function QuestionCard({
           </p>
         </>
       )}
+      <Separator />
+      <div className="space-y-3">
+        {q.metadata?.ai && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="secondary" className="gap-1 text-[10px]">
+              <Sparkles className="h-2.5 w-2.5" /> AI generated
+            </Badge>
+            {q.metadata.ai.difficulty && (
+              <Badge variant="outline" className="text-[10px] capitalize">{q.metadata.ai.difficulty}</Badge>
+            )}
+            {q.metadata.ai.topic && <Badge variant="outline" className="text-[10px]">{q.metadata.ai.topic}</Badge>}
+            {q.metadata.ai.sourceRef && (
+              <span className="text-[11px] text-muted-foreground">Source: {q.metadata.ai.sourceRef}</span>
+            )}
+          </div>
+        )}
+        <div className="space-y-2">
+          <Label>Explanation (proctors only)</Label>
+          <Textarea
+            value={q.explanation ?? ""}
+            onChange={(e) => updateQuestion("explanation", e.target.value)}
+            placeholder="Why the correct answer is correct. Never shown to examinees during the exam."
+            rows={2}
+            className="resize-y"
+          />
+        </div>
+        {layoutConfig.layout === "essay" && q.metadata?.ai && (
+          <div className="space-y-2">
+            <Label>Grading rubric (proctors only)</Label>
+            <Textarea
+              value={q.metadata.ai.rubric ?? ""}
+              onChange={(e) =>
+                setQuestion({ ...q, metadata: { ...q.metadata, ai: { ...q.metadata!.ai!, rubric: e.target.value } } })
+              }
+              rows={3}
+              className="resize-y"
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -467,6 +487,7 @@ export default function CreateExamPage() {
   const [scanResult, setScanResult] = useState<ParseResult | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [recentDropId, setRecentDropId] = useState<string | null>(null);
   type ConfirmRemove =
@@ -513,25 +534,6 @@ export default function CreateExamPage() {
   const createMutation = useMutation({
     mutationFn: async (payload: { values: ExamFormValues; sections: QuestionSection[] }) => {
       const { values, sections: secs } = payload;
-      const layoutMap = new Map(
-        questionTypes.map((qt) => [qt.id, getLayoutConfig(qt.name)])
-      );
-      const toQuestionPayload = (q: CreateExamQuestionPayload) => {
-        const config = layoutMap.get(q.questionTypeId);
-        if (Array.isArray(q.correctAnswer) && config) {
-          if (config.correctAnswerIsText) {
-            const filtered = (q.correctAnswer as string[]).filter(Boolean);
-            return { ...q, correctAnswer: filtered.length === 1 ? filtered[0] : filtered };
-          }
-          return {
-            ...q,
-            correctAnswer: (q.correctAnswer as string[])
-              .map((idx) => q.options[Number(idx)])
-              .filter(Boolean),
-          };
-        }
-        return q;
-      };
 
       const partsFromSections = secs
         .filter((s): s is QuestionSection & { type: "part" } => s.type === "part")
@@ -541,21 +543,12 @@ export default function CreateExamPage() {
         finalTimeLimit = partsFromSections.reduce((sum, part) => sum + (part.timeLimit || 0), 0);
       }
       let finalPassingCondition = values.passingCondition;
-      let finalParts: ExamPart[] | null =
+      const finalParts =
         partsFromSections.length > 0
-          ? partsFromSections.map((p): ExamPart => ({
-              id: p.id,
-              name: p.name,
-              description: p.description,
-              numberOfItems: p.numberOfItems ?? null,
-              timeLimit: p.timeLimit ?? null,
-              passingCondition: p.passingCondition ?? null,
-            }))
+          ? partsFromSections.map((p) => toExamPartPayload(p, values.timeType, passingConditionType === "per_part"))
           : null;
       if (passingConditionType === "per_part") {
         finalPassingCondition = { type: "percentage" as const, value: 0 };
-      } else if (finalParts) {
-        finalParts = finalParts.map((p) => ({ ...p, passingCondition: null }));
       }
 
       const examRes = await api.createExam({
@@ -564,87 +557,23 @@ export default function CreateExamPage() {
         parts: finalParts,
         passingCondition: finalPassingCondition,
         timeLimit: finalTimeLimit,
+        origin: examOriginFor(sectionQuestions(secs)),
         questions: [], // We add questions (and phrases) below
       });
       const examId = (examRes?.data as { id?: string })?.id;
       if (!examId) throw new Error("Exam created but no ID returned");
 
-      for (const sec of secs) {
-        if (sec.type === "standalone") {
-          await api.createExamQuestion({ ...toQuestionPayload(sec.question), examId });
-        } else if (sec.type === "phrase") {
-          const hasImages = sec.imageFiles.length > 0;
-          let phraseId: string;
-          if (hasImages) {
-            const formData = new FormData();
-            formData.set("body", (sec.phrase.body || "").trim() || "(No content)");
-            const title = (sec.phrase.title || "").trim();
-            if (title) formData.set("title", title);
-            formData.set("examId", examId);
-            formData.set("usageType", sec.phrase.usageType || "passage");
-            sec.imageFiles.forEach((f) => formData.append("images", f));
-            const phraseRes = await api.createPhraseWithFiles(formData);
-            phraseId = (phraseRes?.data as { id?: string })?.id ?? "";
-          } else {
-            const phraseRes = await api.createPhrase({
-              body: (sec.phrase.body || "").trim() || "(No content)",
-              title: (sec.phrase.title || "").trim() || null,
-              examId,
-              usageType: sec.phrase.usageType || "passage",
-            });
-            phraseId = (phraseRes?.data as { id?: string })?.id ?? "";
-          }
-          if (!phraseId) throw new Error("Phrase created but no ID returned");
-          for (const q of sec.questions) {
-            await api.createExamQuestion({
-              ...toQuestionPayload(q),
-              examId,
-              phraseId,
-            });
-          }
-        } else if (sec.type === "part") {
-          for (const q of sec.questions) {
-            await api.createExamQuestion({
-              ...toQuestionPayload(q),
-              examId,
-              partId: sec.part.id,
-            });
-          }
-          for (const partPhrase of sec.phrases) {
-            const hasImages = partPhrase.imageFiles.length > 0;
-            let phraseId: string;
-            if (hasImages) {
-              const formData = new FormData();
-              formData.set("body", (partPhrase.phrase.body || "").trim() || "(No content)");
-              const title = (partPhrase.phrase.title || "").trim();
-              if (title) formData.set("title", title);
-              formData.set("examId", examId);
-              formData.set("partId", sec.part.id);
-              formData.set("usageType", partPhrase.phrase.usageType || "passage");
-              partPhrase.imageFiles.forEach((f) => formData.append("images", f));
-              const phraseRes = await api.createPhraseWithFiles(formData);
-              phraseId = (phraseRes?.data as { id?: string })?.id ?? "";
-            } else {
-              const phraseRes = await api.createPhrase({
-                body: (partPhrase.phrase.body || "").trim() || "(No content)",
-                title: (partPhrase.phrase.title || "").trim() || null,
-                examId,
-                partId: sec.part.id,
-                usageType: partPhrase.phrase.usageType || "passage",
-              });
-              phraseId = (phraseRes?.data as { id?: string })?.id ?? "";
-            }
-            if (!phraseId) throw new Error("Phrase created but no ID returned");
-            for (const q of partPhrase.questions) {
-              await api.createExamQuestion({
-                ...toQuestionPayload(q),
-                examId,
-                partId: sec.part.id,
-                phraseId,
-              });
-            }
-          }
-        }
+      try {
+        await saveSectionsToExam(examId, secs, questionTypes);
+      } catch (err) {
+        // Don't leave a half-filled exam behind; retrying would otherwise create duplicates
+        const removed = await api.deleteExam(examId).then(() => true, () => false);
+        const reason = err instanceof Error ? err.message : "unknown error";
+        throw new Error(
+          removed
+            ? `Couldn't save the questions (${reason}). The exam was not created; your questions are still here.`
+            : `Couldn't save the questions (${reason}). A partial draft "${values.title}" was created; delete it from Exams before retrying.`
+        );
       }
       return { examId };
     },
@@ -1049,15 +978,18 @@ export default function CreateExamPage() {
       const validTypes = [
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/msword",
       ];
-      const validExtensions = [".pdf", ".docx", ".doc"];
+      const validExtensions = [".pdf", ".docx"];
       const hasValidExtension = validExtensions.some((ext) =>
         file.name.toLowerCase().endsWith(ext)
       );
 
       if (!validTypes.includes(file.type) && !hasValidExtension) {
-        toast.error("Please upload a PDF or Word document (.pdf, .docx, .doc)");
+        toast.error(
+          file.name.toLowerCase().endsWith(".doc")
+            ? "Legacy Word (.doc) files aren't supported. Save the file as .docx and try again."
+            : "Please upload a PDF or Word document (.pdf, .docx). For photos or slides, use \"Generate from material\"."
+        );
         return;
       }
 
@@ -1241,6 +1173,37 @@ export default function CreateExamPage() {
     },
     [questionTypes]
   );
+
+  /** Adds AI-generated sections; exam settings are only filled in when the exam has no questions yet. */
+  const handleGeneratedExam = ({ applied, blueprint, analysis }: GeneratedExamApplication) => {
+    const questionCount = applied.sections.reduce((sum, s) => {
+      if (s.type === "standalone") return sum + 1;
+      if (s.type === "phrase") return sum + s.questions.length;
+      return sum + s.questions.length + s.phrases.reduce((n, p) => n + p.questions.length, 0);
+    }, 0);
+    const hadQuestions = sections.length > 0;
+    setSections((prev) => [...prev, ...applied.sections]);
+
+    if (!form.getValues("title")?.trim()) form.setValue("title", blueprint.title.slice(0, 200));
+    if (!form.getValues("description")?.trim()) form.setValue("description", analysis.summary.slice(0, 1000));
+    if (!hadQuestions) {
+      if (!form.getValues("instruction")?.trim()) {
+        form.setValue("instruction", buildExamInstruction(blueprint, applied.timeLimit));
+      }
+      form.setValue("questionOrder", blueprint.questionOrder);
+      form.setValue("timeType", applied.timeType);
+      form.setValue("timeLimit", applied.timeLimit);
+      form.setValue("numberOfItems", applied.numberOfItems ?? undefined);
+      form.setValue("passingCondition", { type: "percentage", value: blueprint.passingPercentage });
+      form.setValue("reviewableByExaminee", blueprint.reviewableByExaminee);
+      setPassingConditionType("whole_exam");
+    }
+    toast.success(
+      hadQuestions
+        ? `Added ${questionCount} generated question(s). Existing exam settings were kept.`
+        : `Added ${questionCount} generated question(s) and filled in the exam settings. Review them before saving.`
+    );
+  };
 
   const clearScanResult = () => {
     setScanResult(null);
@@ -2003,7 +1966,10 @@ export default function CreateExamPage() {
           <CardHeader className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle>Questions</CardTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setGenerateDialogOpen(true)}>
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Generate from material
+                </Button>
                 <Button type="button" variant="default" size="sm" onClick={addQuestion}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" /> Add question
                 </Button>
@@ -2014,8 +1980,11 @@ export default function CreateExamPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={() => setGenerateDialogOpen(true)}>
+                      <Sparkles className="mr-2 h-4 w-4" /> Generate from material (AI)
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => fileInputRef.current?.click()} disabled={isScanning}>
-                      <Upload className="mr-2 h-4 w-4" /> Upload file
+                      <Upload className="mr-2 h-4 w-4" /> Upload exam file
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={addPhrase}>
                       <BookOpen className="mr-2 h-4 w-4" /> Add phrase (passage)
@@ -2039,7 +2008,7 @@ export default function CreateExamPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -2054,8 +2023,14 @@ export default function CreateExamPage() {
               </div>
             </div>
             <CardDescription className="block">
-              Upload a file to auto-scan questions, or add them manually.
+              Generate questions from lectures, book photos, or slides with AI, upload an existing exam file, or add questions manually.
             </CardDescription>
+            <GenerateFromMaterialDialog
+              open={generateDialogOpen}
+              onOpenChange={setGenerateDialogOpen}
+              questionTypes={questionTypes}
+              onApply={handleGeneratedExam}
+            />
           </CardHeader>
           <CardContent className="space-y-6">
             {/* File Upload Status */}

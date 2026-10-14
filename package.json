@@ -34,6 +34,7 @@
     "docx": "^9.5.0",
     "firebase": "^11.2.0",
     "framer-motion": "^11.15.0",
+    "jszip": "^3.10.2",
     "lucide-react": "^0.468.0",
     "mammoth": "^1.11.0",
     "next": "^15.1.0",

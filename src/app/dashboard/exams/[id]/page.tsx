@@ -13,6 +13,9 @@ import { ArrowLeft, Clock, FileText, Users, Settings, CheckCircle, Loader2 } fro
 import Link from "next/link";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
+import { QuestionInsights } from "@/components/exam-generator/question-insights";
+import { ExamOriginBadge } from "@/components/exam-generator/exam-origin-badge";
+import { ShareExamCard } from "@/components/exams/share-exam-card";
 
 export default function ExamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -72,6 +75,7 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
             <Badge variant={exam.status === "active" ? "success" : exam.status === "draft" ? "secondary" : "outline"}>
               {exam.status}
             </Badge>
+            <ExamOriginBadge origin={exam.origin} />
           </div>
           {exam.description && <p className="text-muted-foreground mt-1">{exam.description}</p>}
         </div>
@@ -138,8 +142,11 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
                 {exam.numberOfItems && (
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Number of Items</span>
-                    <span className="font-medium">{exam.numberOfItems}</span>
+                    <span className="text-muted-foreground">Items per Session</span>
+                    <span className="font-medium">
+                      {exam.numberOfItems}
+                      {exam.questions && ` of ${exam.questions.length} (random)`}
+                    </span>
                   </div>
                 )}
                 <Separator />
@@ -180,6 +187,8 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               </CardContent>
             </Card>
+
+            <ShareExamCard exam={exam} />
           </div>
         </TabsContent>
 
@@ -220,6 +229,7 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
                           );
                         })}
                       </div>
+                      <QuestionInsights explanation={q.explanation} metadata={q.metadata} className="mt-3" />
                     </div>
                   ))}
                 </div>

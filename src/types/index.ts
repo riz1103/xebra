@@ -97,6 +97,24 @@ export interface UpdatePhrasePayload {
 }
 
 // ============ Exam Questions ============
+/** AI-generation details stored in question.metadata.ai; never returned to examinees */
+export interface AiQuestionMetadata {
+  generated: true;
+  difficulty?: "easy" | "medium" | "hard";
+  cognitiveLevel?: string;
+  topic?: string;
+  sourceRef?: string;
+  /** Essay grading guide */
+  rubric?: string;
+}
+
+export interface QuestionMetadata {
+  /** Multiple blanks are graded in order (blank 1, blank 2, ...) */
+  orderedBlanks?: boolean;
+  ai?: AiQuestionMetadata;
+  [key: string]: unknown;
+}
+
 export interface ExamQuestion {
   id: string;
   questionTypeId: string;
@@ -109,6 +127,9 @@ export interface ExamQuestion {
   examId: string;
   partId?: string | null; // New: ID of the exam part this question belongs to
   timeLimit?: number;
+  /** Proctor-only: why the answer is correct */
+  explanation?: string;
+  metadata?: QuestionMetadata;
   /** 'active' (default) = included in question pool; 'disabled' = excluded from new sessions */
   status?: "active" | "disabled";
   createdAt: string;
@@ -132,6 +153,8 @@ export interface CreateExamQuestionPayload {
   partId?: string | null; // New: ID of the exam part this question belongs to
   phraseId?: string | null;
   timeLimit?: number;
+  explanation?: string;
+  metadata?: QuestionMetadata;
 }
 
 export interface UpdateExamQuestionPayload {
@@ -143,6 +166,8 @@ export interface UpdateExamQuestionPayload {
   partId?: string | null; // New: ID of the exam part this question belongs to
   phraseId?: string | null;
   timeLimit?: number;
+  explanation?: string;
+  metadata?: QuestionMetadata;
   /** When question has been used in a session, only status can be updated. */
   status?: "active" | "disabled";
 }
@@ -165,9 +190,19 @@ export interface ExamPart {
   } | null;
 }
 
+/** Part as sent to the API: unset numberOfItems means all questions, timeLimit only with timeType 'per_part'. */
+export type ExamPartPayload = Omit<ExamPart, "numberOfItems" | "timeLimit"> & {
+  numberOfItems?: number;
+  timeLimit?: number | null;
+};
+
+/** How an exam's questions were written. Missing on exams created before tagging existed. */
+export type ExamOrigin = "manual" | "ai" | "mixed";
+
 export interface Exam {
   id: string;
   title: string;
+  origin?: ExamOrigin;
   description?: string;
   instruction?: string | null; // New: Exam instructions displayed to examinees
   parts?: ExamPart[] | null; // New: Array of exam parts for multi-part exams
@@ -194,7 +229,7 @@ export interface CreateExamPayload {
   title: string;
   description?: string;
   instruction?: string | null; // New: Exam instructions
-  parts?: ExamPart[] | null; // New: Array of exam parts
+  parts?: ExamPartPayload[] | null; // New: Array of exam parts
   questionOrder: "random" | "fixed";
   timeType: "per_exam" | "per_question" | "per_part"; // Updated: Added 'per_part'
   timeLimit: number;
@@ -202,6 +237,7 @@ export interface CreateExamPayload {
   passingCondition: PassingCondition;
   isPublic: boolean;
   reviewableByExaminee?: boolean;
+  origin?: ExamOrigin;
   questions?: CreateExamQuestionPayload[];
 }
 
@@ -209,11 +245,12 @@ export interface UpdateExamPayload {
   title?: string;
   description?: string;
   instruction?: string | null; // New: Exam instructions
-  parts?: ExamPart[] | null; // New: Array of exam parts
+  parts?: ExamPartPayload[] | null; // New: Array of exam parts
   questionOrder?: "random" | "fixed";
   timeType?: "per_exam" | "per_question" | "per_part"; // Updated: Added 'per_part'
   timeLimit?: number;
-  numberOfItems?: number;
+  /** null = every question is used */
+  numberOfItems?: number | null;
   passingCondition?: PassingCondition;
   isPublic?: boolean;
   reviewableByExaminee?: boolean;

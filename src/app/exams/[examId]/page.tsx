@@ -15,15 +15,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, AlertCircle, CheckCircle2, XCircle, Clock, Play } from "lucide-react";
+import { Loader2, AlertCircle, Clock, Play } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
+import { PublicExamStart } from "./public-exam-start";
 
-export default function ExamInvitationPage({ params }: { params: Promise<{ examId: string }> }) {
+/** Invitation links carry ?invitation=; links without it are shared public-exam links. */
+export default function ExamStartPage({ params }: { params: Promise<{ examId: string }> }) {
   const { examId } = use(params);
+  const invitationId = useSearchParams().get("invitation");
+  return invitationId ? (
+    <ExamInvitationStart examId={examId} invitationId={invitationId} />
+  ) : (
+    <PublicExamStart examId={examId} />
+  );
+}
+
+function ExamInvitationStart({ examId, invitationId }: { examId: string; invitationId: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const invitationId = searchParams.get("invitation");
   const queryClient = useQueryClient();
   const { user, isLoading: authLoading, isAuthenticated } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
@@ -33,9 +42,7 @@ export default function ExamInvitationPage({ params }: { params: Promise<{ examI
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      const redirectUrl = invitationId 
-        ? `/exams/${examId}?invitation=${encodeURIComponent(invitationId)}`
-        : `/exams/${examId}`;
+      const redirectUrl = `/exams/${examId}?invitation=${encodeURIComponent(invitationId)}`;
       router.replace(`/login?redirect=${encodeURIComponent(redirectUrl)}`);
     }
   }, [authLoading, isAuthenticated, router, examId, invitationId]);
@@ -182,23 +189,6 @@ export default function ExamInvitationPage({ params }: { params: Promise<{ examI
             <Loader2 className="h-12 w-12 text-primary mx-auto mb-4 animate-spin" />
             <h2 className="text-lg font-semibold">Loading invitation...</h2>
             <p className="text-sm text-muted-foreground mt-2">Please wait while we verify your invitation.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!invitationId) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Card className="max-w-md">
-          <CardContent className="py-8 text-center">
-            <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-lg font-semibold">Invalid Invitation Link</h2>
-            <p className="text-sm text-muted-foreground mt-2">This invitation link is missing the invitation parameter.</p>
-            <Button className="mt-4" onClick={() => router.push("/dashboard/my-exams")}>
-              Go to My Exams
-            </Button>
           </CardContent>
         </Card>
       </div>

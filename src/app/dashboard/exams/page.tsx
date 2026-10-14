@@ -29,11 +29,13 @@ import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import { Plus, Search, Pencil, Trash2, Eye, Clock, FileText } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import type { Exam } from "@/types";
+import { EXAM_ORIGIN_LABELS, ExamOriginBadge, examOrigin } from "@/components/exam-generator/exam-origin-badge";
+import type { Exam, ExamOrigin } from "@/types";
 
 export default function ExamsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [originFilter, setOriginFilter] = useState<ExamOrigin | "all">("all");
   const [page, setPage] = useState(1);
   const [deleteExam, setDeleteExam] = useState<Exam | null>(null);
   const queryClient = useQueryClient();
@@ -60,8 +62,10 @@ export default function ExamsPage() {
 
   const items = data?.data || [];
   const pagination = data?.pagination;
-  const exams = items.filter((exam) =>
-    exam.title.toLowerCase().includes(search.toLowerCase())
+  const exams = items.filter(
+    (exam) =>
+      exam.title.toLowerCase().includes(search.toLowerCase()) &&
+      (originFilter === "all" || examOrigin(exam.origin) === originFilter)
   );
 
   const statusColors: Record<string, "success" | "secondary" | "outline"> = {
@@ -106,6 +110,17 @@ export default function ExamsPage() {
             <SelectItem value="archived">Archived</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={originFilter} onValueChange={(v) => setOriginFilter(v as ExamOrigin | "all")}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Source" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sources</SelectItem>
+            {(Object.keys(EXAM_ORIGIN_LABELS) as ExamOrigin[]).map((o) => (
+              <SelectItem key={o} value={o}>{EXAM_ORIGIN_LABELS[o]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Exam List */}
@@ -117,9 +132,9 @@ export default function ExamsPage() {
             <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-semibold">No exams found</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {search || statusFilter !== "all" ? "Try adjusting your filters." : "Create your first exam to get started."}
+              {search || statusFilter !== "all" || originFilter !== "all" ? "Try adjusting your filters." : "Create your first exam to get started."}
             </p>
-            {!search && statusFilter === "all" && (
+            {!search && statusFilter === "all" && originFilter === "all" && (
               <Button asChild className="mt-4">
                 <Link href="/dashboard/exams/create"><Plus className="mr-2 h-4 w-4" /> Create Exam</Link>
               </Button>
@@ -138,6 +153,9 @@ export default function ExamsPage() {
                 {exam.description && (
                   <p className="text-xs text-muted-foreground line-clamp-2">{exam.description}</p>
                 )}
+                <div>
+                  <ExamOriginBadge origin={exam.origin} className="text-[10px]" />
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm text-muted-foreground">

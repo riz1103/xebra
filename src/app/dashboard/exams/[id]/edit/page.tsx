@@ -19,10 +19,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageLoader } from "@/components/ui/loading";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Plus, Trash2, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Sparkles, Trash2, Save } from "lucide-react";
 import Link from "next/link";
 import { getLayoutConfig } from "@/lib/question-layout";
 import { parseBlanks } from "@/lib/question-blanks";
+import { toExamPartPayload } from "@/lib/exam-sections";
+import { appendToExam, examContext } from "@/lib/exam-append";
+import {
+  GenerateFromMaterialDialog,
+  type GeneratedExamApplication,
+} from "@/components/exam-generator/generate-from-material-dialog";
 import type { CreateExamQuestionPayload, ExamPart, ExamQuestion } from "@/types";
 
 export default function EditExamPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,6 +38,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
   const [newQuestions, setNewQuestions] = useState<CreateExamQuestionPayload[]>([]);
   const [parts, setParts] = useState<ExamPart[]>([]);
   const [passingConditionType, setPassingConditionType] = useState<"whole_exam" | "per_part">("whole_exam");
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
 
   const { data: examData, isLoading: examLoading, isFetching: examFetching } = useQuery({
     queryKey: ["exam", id],
@@ -152,29 +159,14 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
       // Handle passing condition based on type
       let finalPassingCondition = values.passingCondition;
-      // Normalize parts to ensure all optional fields are null instead of undefined
-      let finalParts: ExamPart[] | null = parts.length > 0
-        ? parts.map((part): ExamPart => ({
-            id: part.id,
-            name: part.name,
-            description: part.description,
-            numberOfItems: part.numberOfItems ?? null,
-            timeLimit: part.timeLimit ?? null,
-            passingCondition: part.passingCondition ?? null,
-          }))
+      // Part-level passing conditions are cleared when passing is judged on the whole exam
+      const finalParts = parts.length > 0
+        ? parts.map((part) => toExamPartPayload(part, values.timeType, passingConditionType === "per_part"))
         : null;
       
       if (passingConditionType === "per_part") {
         // Clear exam-level passing condition when using per-part
         finalPassingCondition = { type: "percentage" as const, value: 0 };
-      } else {
-        // Clear part-level passing conditions when using whole exam
-        if (finalParts) {
-          finalParts = finalParts.map(part => ({
-            ...part,
-            passingCondition: null,
-          }));
-        }
       }
 
       return api.updateExam(id, {
@@ -307,12 +299,39 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
           .filter(Boolean);
       }
     }
-    const payload = { ...q, correctAnswer: finalAnswer };
+    const orderedBlanks = config.correctAnswerIsText && parseBlanks(q.questionText).blankCount > 1;
+    const payload = {
+      ...q,
+      correctAnswer: finalAnswer,
+      ...(orderedBlanks && { metadata: { ...q.metadata, orderedBlanks: true } }),
+    };
     addQuestionMutation.mutate(payload, {
       onSuccess: () => {
         setNewQuestions(newQuestions.filter((_, i) => i !== index));
       },
     });
+  };
+
+  /** Saving reloads the exam and resets this form, so unsaved settings would be lost. */
+  const openGenerateDialog = () => {
+    const partsChanged = JSON.stringify(parts) !== JSON.stringify(exam?.parts ?? []);
+    if (form.formState.isDirty || partsChanged) {
+      toast.error("Save or discard your changes to the exam settings first.");
+      return;
+    }
+    setGenerateDialogOpen(true);
+  };
+
+  const handleGeneratedQuestions = async (
+    { applied, blueprint, placement }: GeneratedExamApplication,
+    onProgress: (done: number, total: number) => void
+  ) => {
+    if (!exam || !placement) return;
+    await appendToExam(examContext(exam), applied, blueprint, placement, questionTypes, onProgress);
+    await queryClient.invalidateQueries({ queryKey: ["exam", id] });
+    queryClient.invalidateQueries({ queryKey: ["phrases", id] });
+    queryClient.invalidateQueries({ queryKey: ["exams"] });
+    toast.success("Generated questions added. Review the exam instructions if the item count or time changed.");
   };
 
   if (examLoading) return <PageLoader />;
@@ -724,9 +743,14 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
             <CardTitle>Questions ({exam.questions?.length || 0})</CardTitle>
             <CardDescription>Manage exam questions</CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={addNewQuestion}>
-            <Plus className="mr-1 h-3 w-3" /> Add Question
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={openGenerateDialog}>
+              <Sparkles className="mr-1 h-3 w-3" /> Generate from material
+            </Button>
+            <Button variant="outline" size="sm" onClick={addNewQuestion}>
+              <Plus className="mr-1 h-3 w-3" /> Add Question
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {examFetching && (
@@ -1015,6 +1039,14 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
           })}
         </CardContent>
       </Card>
+
+      <GenerateFromMaterialDialog
+        open={generateDialogOpen}
+        onOpenChange={setGenerateDialogOpen}
+        questionTypes={questionTypes}
+        existingExam={examContext(exam)}
+        onApply={handleGeneratedQuestions}
+      />
     </div>
   );
 }

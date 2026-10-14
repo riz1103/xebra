@@ -19,6 +19,17 @@ A comprehensive Next.js examination management platform where proctors can creat
 - **Results**: View and analyze exam results with pass rates and scores
 - **Proctor Requests** (Admin): Review and approve/reject proctor applications
 
+### AI Exam Generation ("Generate from material")
+- **Sources**: photos of book pages, handouts, or whiteboards (including phone camera capture), PDFs (text or scanned), PowerPoint (.pptx, including speaker notes), Word (.docx), text files, or pasted text
+- **Reading**: text is extracted locally; photos and scanned pages are transcribed by Gemini (diagrams and tables are described in words)
+- **Analysis**: detects subject, examinee level, language, and topics, then recommends the exam type (quiz, practice, long test, midterm, final, diagnostic) and size
+- **Blueprint**: proctor adjusts exam type, topics, question mix and points, difficulty mix, thinking skills, reading passages, parts, timing, passing score, and question order. The time limit is estimated from the question mix
+- **Question pool**: optionally generate more questions than each session uses (e.g. 100 in the pool, 40 per session). With parts, each part draws its per-session count at random so every examinee gets the same mix; without parts, the exam draws from the whole pool. Time limit and instructions follow the per-session count
+- **Review**: generated questions show the correct answer, explanation, source page, and any validation issues; selected questions are added to the exam editor with exam settings filled in
+- **Add to an existing exam**: on the Edit Exam page, "Generate from material" writes new questions that avoid repeating the exam's existing ones, and adds them as new parts, into an existing part, or to the exam's questions, with the items per session and time limit adjusted
+- **Origin tag**: exams are tagged *AI generated*, *AI-assisted* (mixed), or *Manual*, shown on the exam list (with a filter) and details page. The backend keeps the tag current as questions are added
+- **Saved with each question**: the explanation (`explanation`) and AI details (`metadata.ai`: difficulty, thinking skill, topic, source page, essay rubric). The API never returns these to examinees; proctors see them on the exam details and result review pages
+
 ### Examinee Experience
 - **My Exams**: View pending invitations, in-progress and completed exams
 - **Exam Taking**: Full exam interface with timer, question navigation, flagging, auto-save
@@ -76,6 +87,8 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=xebra-486713.firebasestorage.app
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 NEXT_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
 ```
+
+   To use AI exam generation, enable **Firebase AI Logic** for the project (Firebase console → AI Logic → Get started, or `npx -y firebase-tools@latest init ailogic`) and, for production, set up App Check with reCAPTCHA Enterprise and add `NEXT_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY`. See `env.example` for optional settings.
 
 3. Start the development server:
 ```bash

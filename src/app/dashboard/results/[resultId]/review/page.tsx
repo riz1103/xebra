@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageLoader } from "@/components/ui/loading";
+import { QuestionInsights } from "@/components/exam-generator/question-insights";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -569,6 +570,13 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                       );
                     })}
                   </div>
+                )}
+                {canGrade && (
+                  <QuestionInsights
+                    explanation={currentQuestion.explanation}
+                    metadata={currentQuestion.metadata}
+                    className="mt-4"
+                  />
                 )}
               </CardContent>
             </Card>

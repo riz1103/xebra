@@ -1,5 +1,6 @@
 import type { CreateExamQuestionPayload } from "@/types";
 import { hasBlanks } from "@/lib/question-blanks";
+import { extractPdfText } from "@/lib/source-extract";
 
 export interface ParsedQuestion {
   questionText: string;
@@ -42,29 +43,6 @@ export interface ParseResult {
 }
 
 // ============ Text Extraction ============
-
-async function extractTextFromPdf(file: File): Promise<string> {
-  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-
-  // Set worker source
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const textParts: string[] = [];
-
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((item: any) => (item.str ? String(item.str) : ""))
-      .join(" ");
-    textParts.push(pageText);
-  }
-
-  return textParts.join("\n");
-}
 
 async function extractTextFromWord(file: File): Promise<string> {
   const mammoth = await import("mammoth");
@@ -608,18 +586,22 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
   const fileName = file.name.toLowerCase();
 
   if (fileName.endsWith(".pdf")) {
-    rawText = await extractTextFromPdf(file);
-  } else if (fileName.endsWith(".docx") || fileName.endsWith(".doc")) {
+    rawText = await extractPdfText(file);
+  } else if (fileName.endsWith(".docx")) {
     rawText = await extractTextFromWord(file);
+  } else if (fileName.endsWith(".doc")) {
+    throw new Error(
+      "Legacy Word (.doc) files aren't supported. Open the file in Word and save it as .docx."
+    );
   } else {
     throw new Error(
-      "Unsupported file type. Please upload a PDF or Word document (.pdf, .docx, .doc)."
+      "Unsupported file type. Please upload a PDF or Word document (.pdf, .docx)."
     );
   }
 
   if (!rawText.trim()) {
     throw new Error(
-      "Could not extract any text from the file. The file may be empty or contain only images."
+      "Could not extract any text from the file. It looks like a scanned document — use \"Generate from material\" to read scanned pages and photos."
     );
   }
 
