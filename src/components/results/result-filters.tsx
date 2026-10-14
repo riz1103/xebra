@@ -133,8 +133,8 @@ export function ResultFilters({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1">
+      <div className="grid grid-cols-2 gap-3 md:flex md:flex-wrap md:items-center">
+        <div className="relative col-span-2 md:min-w-[220px] md:flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder={searchPlaceholder}
@@ -144,7 +144,7 @@ export function ResultFilters({
           />
         </div>
         <Select value={value.examId} onValueChange={(v) => set("examId", v)}>
-          <SelectTrigger className="w-52"><SelectValue placeholder="Filter by exam" /></SelectTrigger>
+          <SelectTrigger className="col-span-2 md:w-52"><SelectValue placeholder="Filter by exam" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All exams</SelectItem>
             {exams.map((e) => (
@@ -153,7 +153,7 @@ export function ResultFilters({
           </SelectContent>
         </Select>
         <Select value={value.status} onValueChange={(v) => set("status", v as ResultFilterState["status"])}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="md:w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
             <SelectItem value="passed">Passed</SelectItem>
@@ -161,7 +161,7 @@ export function ResultFilters({
           </SelectContent>
         </Select>
         <Select value={value.sort} onValueChange={(v) => set("sort", v as ResultSortKey)}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="md:w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
             {sortKeys.map((key) => (
               <SelectItem key={key} value={key}>{SORTS[key].label}</SelectItem>
@@ -169,34 +169,34 @@ export function ResultFilters({
           </SelectContent>
         </Select>
       </div>
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <label className="flex items-center gap-2 text-muted-foreground">
+      <div className="grid grid-cols-2 items-center gap-3 text-sm md:flex md:flex-wrap">
+        <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground md:flex-row md:items-center md:gap-2 md:text-sm">
           From
           <Input
             type="date"
             value={value.from}
             max={value.to || undefined}
             onChange={(e) => set("from", e.target.value)}
-            className="w-40"
+            className="min-w-0 md:w-40"
           />
         </label>
-        <label className="flex items-center gap-2 text-muted-foreground">
+        <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground md:flex-row md:items-center md:gap-2 md:text-sm">
           To
           <Input
             type="date"
             value={value.to}
             min={value.from || undefined}
             onChange={(e) => set("to", e.target.value)}
-            className="w-40"
+            className="min-w-0 md:w-40"
           />
         </label>
         {filtered && (
-          <Button variant="ghost" size="sm" onClick={() => onChange(DEFAULT_RESULT_FILTERS)}>
+          <Button variant="ghost" size="sm" onClick={() => onChange(DEFAULT_RESULT_FILTERS)} className="justify-self-start">
             <X className="mr-1 h-4 w-4" /> Clear filters
           </Button>
         )}
         {total !== undefined && (
-          <span className="ml-auto text-muted-foreground">
+          <span className="col-start-2 justify-self-end text-muted-foreground md:ml-auto">
             {total} {total === 1 ? "result" : "results"}
           </span>
         )}

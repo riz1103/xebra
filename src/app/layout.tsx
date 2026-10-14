@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/providers/theme-provider";
@@ -24,6 +24,16 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#14151c" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -41,7 +51,7 @@ export default function RootLayout({
           <QueryProvider>
             <AuthProvider>
               {children}
-              <Toaster richColors position="top-right" />
+              <Toaster richColors position="top-right" closeButton mobileOffset={{ top: 64 }} />
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>

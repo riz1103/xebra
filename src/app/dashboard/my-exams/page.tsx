@@ -152,10 +152,10 @@ function PendingExamCard({
 
   return (
     <Card className="transition-shadow hover:shadow-md">
-      <CardContent className="flex items-center justify-between py-5">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold">{exam.title || "Exam"}</h3>
+      <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h3 className="font-semibold break-words">{exam.title || "Exam"}</h3>
             {scheduledStartTime && (
               <Badge variant="secondary" className="text-xs">
                 <Calendar className="h-3 w-3 mr-1" />
@@ -189,7 +189,7 @@ function PendingExamCard({
             </span>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-stretch gap-1 sm:items-end">
           {exam.status !== "active" && (
             <span className="text-xs text-muted-foreground">
               This exam is not available to start
@@ -211,6 +211,7 @@ function PendingExamCard({
               !exam.invitationId ||
               !canStart
             }
+            className="w-full sm:w-auto"
           >
             {startSessionMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -387,14 +388,14 @@ export default function MyExamsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">My Exams</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My Exams</h1>
         <p className="text-muted-foreground">
           View your invitations, exams in progress, and completed attempts.
         </p>
       </div>
 
       <Tabs defaultValue="pending">
-        <TabsList>
+        <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="pending">Pending ({pendingExams.length})</TabsTrigger>
           <TabsTrigger value="in-progress">
             In Progress ({inProgressSessions.length + inProgressExams.length})
@@ -452,10 +453,10 @@ export default function MyExamsPage() {
                   key={session.id}
                   className="transition-shadow hover:shadow-md border-amber-200 dark:border-amber-800"
                 >
-                  <CardContent className="flex items-center justify-between py-5">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">
+                  <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold break-words">
                           {session.examTitle || session.exam?.title || "Exam"}
                         </h3>
                         <Badge variant="warning">In Progress</Badge>
@@ -467,7 +468,7 @@ export default function MyExamsPage() {
                         />
                       </div>
                     </div>
-                    <Button onClick={() => router.push(`/exam/${session.id}`)}>
+                    <Button onClick={() => router.push(`/exam/${session.id}`)} className="w-full sm:w-auto">
                       <RotateCcw className="mr-2 h-4 w-4" /> Resume
                     </Button>
                   </CardContent>
@@ -480,10 +481,10 @@ export default function MyExamsPage() {
                     key={`retry-${exam.id}-${exam.invitationId}`}
                     className="transition-shadow hover:shadow-md border-amber-100 dark:border-amber-900/30"
                   >
-                    <CardContent className="flex items-center justify-between py-5">
-                      <div>
-                        <h3 className="font-semibold">{exam.title || "Exam"}</h3>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                    <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <h3 className="font-semibold break-words">{exam.title || "Exam"}</h3>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
                           {expiresAt && (
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
@@ -507,6 +508,7 @@ export default function MyExamsPage() {
                           exam.status !== "active"
                         }
                         variant="secondary"
+                        className="w-full sm:w-auto"
                       >
                         {startSessionMutation.isPending ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -562,7 +564,7 @@ export default function MyExamsPage() {
                           ? `/dashboard/my-results/${latestResult.id}`
                           : "/dashboard/my-results"
                       }
-                      className="flex items-center justify-between gap-4"
+                      className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div
@@ -604,7 +606,7 @@ export default function MyExamsPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="shrink-0 flex items-center gap-1 text-sm text-primary hover:underline">
+                      <div className="shrink-0 flex items-center gap-1 pl-[3.75rem] text-sm text-primary hover:underline sm:pl-0">
                         <BarChart3 className="h-4 w-4" />
                         View latest result
                       </div>

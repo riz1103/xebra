@@ -181,7 +181,7 @@ function QuestionCard({
 }) {
   return (
     <div
-      className={`rounded-lg border p-5 space-y-5 ${
+      className={`rounded-lg border p-3 space-y-4 sm:p-5 sm:space-y-5 ${
         needsAnswer ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20" : ""
       }`}
     >
@@ -320,7 +320,7 @@ function QuestionCard({
                       </p>
                       {answers.map((ans, ai) => (
                         <div key={ai} className="flex items-center gap-2">
-                          <Label className="shrink-0 text-xs w-24">Blank {ai + 1}</Label>
+                          <Label className="shrink-0 text-xs w-16 sm:w-24">Blank {ai + 1}</Label>
                           <Input
                             value={ans}
                             onChange={(e) => {
@@ -1794,12 +1794,12 @@ export default function CreateExamPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
+      <div className="flex items-start gap-2 sm:items-center sm:gap-4">
+        <Button variant="ghost" size="icon" asChild className="shrink-0" aria-label="Back to exams">
           <Link href="/dashboard/exams"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Create Exam</h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Create Exam</h1>
           <p className="text-muted-foreground">Set up a new examination with questions.</p>
         </div>
       </div>
@@ -2227,7 +2227,7 @@ export default function CreateExamPage() {
                         <span className="text-xs text-primary/70 whitespace-nowrap">Drop here for standalone question</span>
                       )}
                     </div>
-                    <div className={`rounded-lg border p-4 space-y-4 ${sec.type === "standalone" ? "border-l-4 border-l-primary/50 bg-muted/20" : ""}`}>
+                    <div className={`rounded-lg border p-3 space-y-4 sm:p-4 ${sec.type === "standalone" ? "border-l-4 border-l-primary/50 bg-muted/20" : ""}`}>
                       {sec.type === "standalone" ? (
                         (() => {
                           const q = sec.question;
@@ -2260,7 +2260,7 @@ export default function CreateExamPage() {
                                 </Button>
                               </div>
                               {!isCollapsed && (
-                                <div className="pl-10 mt-2">
+                                <div className="sm:pl-10 mt-2">
                                   <QuestionCard
                                     sectionId={sec.id}
                                     question={q}
@@ -2338,7 +2338,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                               </div>
                               {!isCollapsed && (
                         <>
-                          <div className="grid gap-4 sm:grid-cols-2 pl-10">
+                          <div className="grid gap-4 sm:grid-cols-2 sm:pl-10">
                             <div className="space-y-2 sm:col-span-2">
                               <Label>Part name *</Label>
                               <Input
@@ -2431,7 +2431,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                               </div>
                             )}
                           </div>
-                          <div className="pl-10 space-y-4">
+                          <div className="sm:pl-10 space-y-4">
                             <div className="flex items-center gap-2 flex-wrap">
                               <Button type="button" variant="outline" size="sm" onClick={() => addQuestionUnderPart(partSec.id)}>
                                 <Plus className="mr-1 h-3 w-3" /> Add question
@@ -2454,7 +2454,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                               return (
                                 <div key={`q-${qIdx}`} className="space-y-1">
                                   <QuestionDropZone dropTarget={{ t: "part-questions", sectionId: partSec.id, partSectionId: partSec.id, questionIndex: qIdx }} />
-                                  <div className="pl-4 border-l-2 border-primary/20">
+                                  <div className="pl-2 sm:pl-4 border-l-2 border-primary/20">
                                   <div className="flex items-center gap-2">
                                     <span
                                       className="cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground shrink-0"
@@ -2473,7 +2473,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                     </Button>
                                   </div>
                                   {!isQCollapsed && (
-                                    <div className="pl-10 mt-2">
+                                    <div className="sm:pl-10 mt-2">
                                       <QuestionCard
                                     sectionId={partSec.id}
                                     question={q}
@@ -2602,7 +2602,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                   </div>
                                   {!phraseCollapsed && (
                                     <>
-                                      <div className="grid gap-2 sm:grid-cols-2 pl-9">
+                                      <div className="grid gap-2 sm:grid-cols-2 sm:pl-9">
                                         <div className="space-y-1 sm:col-span-2">
                                           <Label className="text-xs">Title (optional)</Label>
                                           <Input
@@ -2652,7 +2652,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                           )}
                                         </div>
                                       </div>
-                                      <div className="pl-9 space-y-2">
+                                      <div className="sm:pl-9 space-y-2">
                                         <Button type="button" variant="outline" size="sm" onClick={() => addQuestionUnderPartPhrase(partSec.id, partPhrase.id)}>
                                           <Plus className="mr-1 h-3 w-3" /> Add question under this passage
                                         </Button>
@@ -2671,7 +2671,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                         return (
                                           <div key={qIdx} className="mt-2 space-y-1">
                                             <QuestionDropZone dropTarget={{ t: "part-phrase-questions", partSectionId: partSec.id, phraseId: partPhrase.id, questionIndex: qIdx }} />
-                                            <div className="mt-2 pl-4 border-l-2 border-primary/20">
+                                            <div className="mt-2 pl-2 sm:pl-4 border-l-2 border-primary/20">
                                             <div className="flex items-center gap-2">
                                               <span
                                                 className="cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground shrink-0"
@@ -2690,7 +2690,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                               </Button>
                                             </div>
                                             {!isQCollapsed && (
-                                              <div className="pl-10 mt-2">
+                                              <div className="sm:pl-10 mt-2">
                                                 <QuestionCard
                                                   sectionId={partSec.id}
                                               question={q}
@@ -2925,7 +2925,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                     return (
                                       <div key={qIdx} className="mt-2">
                                         <QuestionDropZone dropTarget={{ t: "phrase-questions", sectionId: phraseSec.id, questionIndex: qIdx }} />
-                                        <div className="mt-2 pl-4 border-l-2 border-primary/30">
+                                        <div className="mt-2 pl-2 sm:pl-4 border-l-2 border-primary/30">
                                         <div className="flex items-center gap-2">
                                           <span
                                             className="cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground shrink-0"
@@ -2944,7 +2944,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                           </Button>
                                         </div>
                                         {!isQCollapsed && (
-                                          <div className="pl-10 mt-2">
+                                          <div className="sm:pl-10 mt-2">
                                             <QuestionCard
                                               sectionId={phraseSec.id}
                                               question={q}
@@ -3017,7 +3017,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
           </CardContent>
         </Card>
 
-        <div className="flex justify-end gap-3">
+        <div className="sticky bottom-0 z-20 -mx-4 grid grid-cols-2 gap-3 border-t bg-background/95 px-4 py-3 pb-safe backdrop-blur sm:static sm:mx-0 sm:flex sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
           <Button type="button" variant="outline" asChild>
             <Link href="/dashboard/exams">Cancel</Link>
           </Button>

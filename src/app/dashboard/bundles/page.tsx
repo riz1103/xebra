@@ -123,12 +123,12 @@ export default function BundlesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Exam Bundles</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Exam Bundles</h1>
           <p className="text-muted-foreground">Group multiple exams into bundles for batch invitations.</p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" /> Create Bundle
         </Button>
       </div>
@@ -149,9 +149,9 @@ export default function BundlesPage() {
           {bundles.map((bundle) => (
             <Card key={bundle.id} className="transition-shadow hover:shadow-md">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Package className="h-4 w-4 text-primary" />
-                  {bundle.name}
+                <CardTitle className="text-base flex items-center gap-2 leading-snug">
+                  <Package className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="min-w-0 break-words">{bundle.name}</span>
                 </CardTitle>
                 <CardDescription className="line-clamp-2">{bundle.description}</CardDescription>
               </CardHeader>
@@ -164,10 +164,10 @@ export default function BundlesPage() {
                   <span className="text-xs text-muted-foreground">{formatDate(bundle.createdAt)}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => openEdit(bundle)} className="flex-1">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(bundle)} className="h-9 flex-1 sm:h-8">
                     Edit
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setDeleteBundle(bundle)} className="text-destructive hover:text-destructive">
+                  <Button variant="outline" size="sm" onClick={() => setDeleteBundle(bundle)} className="h-9 text-destructive hover:text-destructive sm:h-8" aria-label="Delete bundle">
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
@@ -206,10 +206,10 @@ export default function BundlesPage() {
                 <Label>Include Exams</Label>
                 <div className="max-h-48 overflow-y-auto rounded-md border p-2 space-y-2">
                   {exams.map((exam) => (
-                    <label key={exam.id} className="flex items-center gap-2 cursor-pointer rounded p-1.5 hover:bg-muted/50">
+                    <label key={exam.id} className="flex items-center gap-2 cursor-pointer rounded p-2 hover:bg-muted/50 sm:p-1.5">
                       <Checkbox checked={selectedExamIds.includes(exam.id)} onCheckedChange={() => toggleExam(exam.id)} />
-                      <span className="text-sm">{exam.title}</span>
-                      <Badge variant="outline" className="ml-auto text-[10px]">{exam.status}</Badge>
+                      <span className="min-w-0 break-words text-sm">{exam.title}</span>
+                      <Badge variant="outline" className="ml-auto shrink-0 text-[10px]">{exam.status}</Badge>
                     </label>
                   ))}
                 </div>

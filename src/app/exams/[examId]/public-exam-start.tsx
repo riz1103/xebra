@@ -17,7 +17,7 @@ function apiErrorMessage(err: unknown, fallback: string): { status?: number; mes
 
 function CenteredCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-dvh items-center justify-center p-4">
       <Card className="w-full max-w-lg">{children}</Card>
     </div>
   );
@@ -158,9 +158,9 @@ export function PublicExamStart({ examId }: { examId: string }) {
           </p>
         </div>
       </CardContent>
-      <CardFooter className="justify-end gap-2">
-        <Button variant="outline" onClick={() => router.push("/dashboard/my-exams")}>Cancel</Button>
-        <Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
+      <CardFooter className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+        <Button variant="outline" className="h-11 sm:h-9" onClick={() => router.push("/dashboard/my-exams")}>Cancel</Button>
+        <Button className="h-11 sm:h-9" onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
           {startMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
           Start Exam
         </Button>

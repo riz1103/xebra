@@ -38,9 +38,9 @@ export function ShareExamCard({ exam }: { exam: Pick<Exam, "id" | "isPublic" | "
       <CardContent className="space-y-3 text-sm">
         {exam.isPublic ? (
           <>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" />
-              <Button type="button" variant="outline" onClick={copy} disabled={!origin}>
+              <Button type="button" variant="outline" onClick={copy} disabled={!origin} className="shrink-0">
                 {copied ? <Check className="mr-1 h-4 w-4" /> : <Copy className="mr-1 h-4 w-4" />}
                 {copied ? "Copied" : "Copy link"}
               </Button>

@@ -353,12 +353,12 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
+      <div className="flex items-start gap-2 sm:items-center sm:gap-4">
+        <Button variant="ghost" size="icon" asChild className="shrink-0" aria-label="Back to exam">
           <Link href={`/dashboard/exams/${id}`}><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Edit Exam</h1>
+        <div className="min-w-0 break-words">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Edit Exam</h1>
           <p className="text-muted-foreground">Update &quot;{exam.title}&quot;</p>
         </div>
       </div>
@@ -523,7 +523,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
         {/* Exam Parts */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>Exam Parts</CardTitle>
               <CardDescription>
@@ -543,8 +543,8 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
               parts.map((part, index) => {
                 const questionCount = getQuestionCountForPart(part.id);
                 return (
-                  <div key={index} className="rounded-lg border p-4 space-y-4">
-                    <div className="flex items-center justify-between">
+                  <div key={index} className="rounded-lg border p-3 space-y-4 sm:p-4">
+                    <div className="flex items-center justify-between gap-2">
                       <h4 className="font-medium text-sm">Part {index + 1}</h4>
                       <Button
                         type="button"
@@ -752,7 +752,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
           </CardContent>
         </Card>
 
-        <div className="flex justify-end gap-3">
+        <div className="sticky bottom-0 z-20 -mx-4 grid grid-cols-2 gap-3 border-t bg-background/95 px-4 py-3 pb-safe backdrop-blur sm:static sm:mx-0 sm:flex sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
           <Button type="button" variant="outline" asChild>
             <Link href={`/dashboard/exams/${id}`}>Cancel</Link>
           </Button>
@@ -765,12 +765,12 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
       {/* Existing Questions */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Questions ({exam.questions?.length || 0})</CardTitle>
             <CardDescription>Manage exam questions</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <Button variant="outline" size="sm" onClick={openGenerateDialog}>
               <Sparkles className="mr-1 h-3 w-3" /> Generate with AI
             </Button>
@@ -792,13 +792,13 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
             const nextStatus = status === "active" ? "disabled" : "active";
             const isUpdatingStatus = updateQuestionStatusMutation.isPending;
             return (
-              <div key={q.id} className="flex items-start gap-3 rounded-lg border p-3">
+              <div key={q.id} className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border p-3 sm:flex-nowrap">
                 <span className="text-sm font-medium text-muted-foreground mt-0.5">Q{i + 1}.</span>
-                <div className="flex-1 text-sm">
-                  <p>{q.questionText}</p>
+                <div className="min-w-0 flex-1 text-sm">
+                  <p className="break-words">{q.questionText}</p>
                   <p className="text-xs text-muted-foreground mt-1">{q.options.length} options &middot; {q.points} pts</p>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex w-full items-center justify-end gap-1 shrink-0 sm:w-auto">
                   <Badge variant={status === "active" ? "default" : "secondary"} className="text-xs">
                     {status === "active" ? "Active" : "Disabled"}
                   </Badge>
@@ -824,7 +824,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
           {newQuestions.map((q, qi) => {
             const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
             return (
-              <div key={qi} className="rounded-lg border-2 border-dashed border-primary/30 p-4 space-y-3">
+              <div key={qi} className="rounded-lg border-2 border-dashed border-primary/30 p-3 space-y-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium text-primary">New Question</h4>
                   <div className="flex gap-2">
@@ -964,7 +964,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                             </p>
                             {answers.map((ans, ai) => (
                               <div key={ai} className="flex items-center gap-2">
-                                <Label className="shrink-0 text-xs w-24">Blank {ai + 1}</Label>
+                                <Label className="shrink-0 text-xs w-16 sm:w-24">Blank {ai + 1}</Label>
                                 <Input
                                   value={ans}
                                   onChange={(e) => {

@@ -23,11 +23,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { PageLoader } from "@/components/ui/loading";
 import { toast } from "sonner";
 import {
   Clock, ChevronLeft, ChevronRight, Flag, CheckCircle,
-  AlertTriangle, Send, Loader2, Info,
+  AlertTriangle, Send, Loader2, Info, LayoutGrid,
 } from "lucide-react";
 import { cn, formatDuration } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -56,6 +57,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [navigatorOpen, setNavigatorOpen] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -470,12 +472,58 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const timerColor =
     currentPartTimeRemaining < 60 ? "text-red-500" : currentPartTimeRemaining < 300 ? "text-amber-500" : "text-foreground";
 
+  const renderQuestionButtons = (sizeClass: string, onPick?: () => void) =>
+    currentQuestions.map((q, i) => {
+      const isAnswered = answers[q.id] !== null && answers[q.id] !== undefined;
+      const isCurrent = i === currentIndex;
+      const isFlagged = flagged.has(q.id);
+      return (
+        <button
+          key={q.id}
+          type="button"
+          onClick={() => {
+            goToQuestion(i);
+            onPick?.();
+          }}
+          aria-label={`Question ${i + 1}${isAnswered ? ", answered" : ""}${isFlagged ? ", flagged" : ""}`}
+          className={cn(
+            "relative flex items-center justify-center rounded-md text-xs font-medium transition-all",
+            sizeClass,
+            isCurrent
+              ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2"
+              : isAnswered
+              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
+              : "bg-muted text-muted-foreground hover:bg-muted/80"
+          )}
+        >
+          {i + 1}
+          {isFlagged && (
+            <Flag className="absolute -top-1 -right-1 h-3 w-3 text-amber-500 fill-amber-500" />
+          )}
+        </button>
+      );
+    });
+
+  const navigatorLegend = (
+    <div className="mt-4 flex items-center gap-3 text-[10px] text-muted-foreground">
+      <span className="flex items-center gap-1">
+        <span className="h-3 w-3 rounded bg-emerald-100 dark:bg-emerald-900/30" /> Answered
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="h-3 w-3 rounded bg-muted" /> Unanswered
+      </span>
+      <span className="flex items-center gap-1">
+        <Flag className="h-3 w-3 text-amber-500 fill-amber-500" /> Flagged
+      </span>
+    </div>
+  );
+
   if (authLoading || isLoading) return <PageLoader />;
   if (!authLoading && !isAuthenticated) return <PageLoader />;
   if (error || !session) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Card className="max-w-md">
+      <div className="flex min-h-dvh items-center justify-center p-4">
+        <Card className="w-full max-w-md">
           <CardContent className="py-8 text-center">
             <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
             <h2 className="text-lg font-semibold">Session Not Found</h2>
@@ -489,8 +537,8 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   if (session.status === "completed") {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Card className="max-w-md">
+      <div className="flex min-h-dvh items-center justify-center p-4">
+        <Card className="w-full max-w-md">
           <CardContent className="py-8 text-center">
             <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-4" />
             <h2 className="text-lg font-semibold">Exam Completed</h2>
@@ -506,7 +554,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   if (showInstructions && session.exam) {
     return (
       <Dialog open={showInstructions} onOpenChange={() => {}}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Info className="h-5 w-5" />
@@ -540,7 +588,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
             )}
           </div>
           <DialogFooter>
-            <Button onClick={() => setShowInstructions(false)} className="w-full">
+            <Button onClick={() => setShowInstructions(false)} className="h-11 w-full sm:h-9">
               Start Exam
             </Button>
           </DialogFooter>
@@ -550,19 +598,19 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       {/* Top Bar */}
-      <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <Image src="/xevra-logo.png" alt="Xevra" width={32} height={32} className="rounded-lg" />
-            <span className="text-sm font-semibold hidden sm:inline">{session.exam?.title || "Exam"}</span>
+      <div className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-2 px-3 sm:px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <Image src="/xevra-logo.png" alt="Xevra" width={32} height={32} className="rounded-lg shrink-0" />
+            <span className="text-sm font-semibold hidden truncate sm:inline">{session.exam?.title || "Exam"}</span>
           </div>
-          <div className={cn("flex items-center gap-2 font-mono text-lg font-bold", timerColor)}>
-            <Clock className="h-5 w-5" />
+          <div className={cn("flex items-center gap-1.5 font-mono text-base font-bold tabular-nums sm:gap-2 sm:text-lg", timerColor)}>
+            <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
             {formatDuration(currentPartTimeRemaining)}
             {hasParts && currentPart && partTimeLimits && (
-              <span className="text-xs font-normal ml-2">
+              <span className="hidden text-xs font-normal ml-2 sm:inline">
                 ({questionsByPart?.[currentPart]?.part.name})
               </span>
             )}
@@ -570,6 +618,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
           <Button
             variant="destructive"
             size="sm"
+            className="h-9 shrink-0 sm:h-8"
             onClick={() => setShowSubmitDialog(true)}
           >
             <Send className="mr-1 h-3 w-3" /> Submit
@@ -578,7 +627,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       </div>
 
       {/* Progress */}
-      <div className="mx-auto max-w-5xl px-4 py-3">
+      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-4">
         <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
           <span>{answeredCount} of {currentQuestions.length} answered</span>
           <span>{Math.round(progressPercentage)}%</span>
@@ -588,7 +637,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
       {/* Part Navigation Tabs */}
       {hasParts && questionsByPart && (
-        <div className="mx-auto max-w-5xl px-4">
+        <div className="mx-auto max-w-5xl px-3 sm:px-4">
           <Tabs value={currentPart || ""} onValueChange={goToPart}>
             <TabsList className="w-full justify-start">
               {Object.entries(questionsByPart).map(([partId, partData]) => {
@@ -614,7 +663,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         </div>
       )}
 
-      <div className="mx-auto max-w-5xl px-4 py-4 flex gap-6">
+      <div className="mx-auto max-w-5xl px-3 py-4 flex gap-6 sm:px-4">
         {/* Question Navigator (sidebar) */}
         <div className="hidden lg:block w-64 shrink-0">
           <Card className="sticky top-24">
@@ -623,45 +672,34 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-5 gap-2">
-                {currentQuestions.map((q, i) => {
-                  const isAnswered = answers[q.id] !== null && answers[q.id] !== undefined;
-                  const isCurrent = i === currentIndex;
-                  const isFlagged = flagged.has(q.id);
-                  return (
-                    <button
-                      key={q.id}
-                      onClick={() => goToQuestion(i)}
-                      className={cn(
-                        "relative flex h-9 w-9 items-center justify-center rounded-md text-xs font-medium transition-all",
-                        isCurrent
-                          ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2"
-                          : isAnswered
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      )}
-                    >
-                      {i + 1}
-                      {isFlagged && (
-                        <Flag className="absolute -top-1 -right-1 h-3 w-3 text-amber-500 fill-amber-500" />
-                      )}
-                    </button>
-                  );
-                })}
+                {renderQuestionButtons("h-9 w-9")}
               </div>
-              <div className="mt-4 flex items-center gap-3 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span className="h-3 w-3 rounded bg-emerald-100 dark:bg-emerald-900/30" /> Answered
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-3 w-3 rounded bg-muted" /> Unanswered
-                </span>
-              </div>
+              {navigatorLegend}
             </CardContent>
           </Card>
         </div>
 
+        {/* Mobile question navigator */}
+        <Sheet open={navigatorOpen} onOpenChange={setNavigatorOpen}>
+          <SheetContent side="bottom" className="gap-3 p-4 lg:hidden">
+            <div className="pr-8">
+              <SheetTitle>Questions</SheetTitle>
+              <SheetDescription>
+                {answeredCount} of {currentQuestions.length} answered
+                {flagged.size > 0 && ` · ${flagged.size} flagged`}
+              </SheetDescription>
+            </div>
+            <div className="overflow-y-auto p-1">
+              <div className="grid grid-cols-6 gap-2 sm:grid-cols-10">
+                {renderQuestionButtons("h-11 w-full text-sm", () => setNavigatorOpen(false))}
+              </div>
+            </div>
+            {navigatorLegend}
+          </SheetContent>
+        </Sheet>
+
         {/* Question Content */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 pb-24 lg:pb-0">
           {currentQuestion ? (
             <>
             {shouldShowPhraseBlock && phraseForBlock && (
@@ -690,29 +728,33 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
             )}
             <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <Badge variant="outline" className="text-xs">
-                  Question {currentIndex + 1} of {currentQuestions.length}
-                  {hasParts && currentPart && questionsByPart && (
-                    <span className="ml-2">
-                      ({questionsByPart[currentPart]?.part.name})
-                    </span>
-                  )}
+              <div className="flex items-center justify-between gap-2">
+                <Badge variant="outline" className="text-xs min-w-0">
+                  <span className="truncate">
+                    Question {currentIndex + 1} of {currentQuestions.length}
+                    {hasParts && currentPart && questionsByPart && (
+                      <span className="ml-2">
+                        ({questionsByPart[currentPart]?.part.name})
+                      </span>
+                    )}
+                  </span>
                 </Badge>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
                     <Badge variant="secondary" className="text-xs">{currentQuestion.points} pts</Badge>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => toggleFlag(currentQuestion.id)}
-                      className={flagged.has(currentQuestion.id) ? "text-amber-500" : "text-muted-foreground"}
+                      className={cn("h-9 w-9 p-0 sm:h-8 sm:w-auto sm:px-3", flagged.has(currentQuestion.id) ? "text-amber-500" : "text-muted-foreground")}
+                      aria-label={flagged.has(currentQuestion.id) ? "Unflag question" : "Flag question for review"}
+                      aria-pressed={flagged.has(currentQuestion.id)}
                     >
                       <Flag className={cn("h-4 w-4", flagged.has(currentQuestion.id) && "fill-amber-500")} />
                     </Button>
                   </div>
                 </div>
                 {!isFillInTheBlank && (
-                  <CardTitle className="text-lg mt-3 leading-relaxed">{currentQuestion.questionText}</CardTitle>
+                  <CardTitle className="text-base sm:text-lg mt-3 leading-relaxed break-words">{currentQuestion.questionText}</CardTitle>
                 )}
                 {isMultipleAnswer && !isFillInTheBlank && (
                   <p className="text-xs text-muted-foreground mt-1">Select all that apply</p>
@@ -722,7 +764,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                 {isFillInTheBlank ? (
                   // Fill in the blank: stem with one input/dropdown per blank
                   <div className="space-y-3">
-                    <p className="text-lg leading-relaxed flex flex-wrap items-baseline gap-x-1 gap-y-2">
+                    <p className="text-base sm:text-lg leading-relaxed flex flex-wrap items-baseline gap-x-1 gap-y-2">
                       {blankResult.segments.map((seg, i) => (
                         <span key={i}>
                           {seg}
@@ -818,7 +860,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                           <span className="text-sm font-medium text-muted-foreground mr-2">
                             {String.fromCharCode(65 + i)}.
                           </span>
-                          <span className="text-sm">{option}</span>
+                          <span className="min-w-0 break-words text-[15px] sm:text-sm">{option}</span>
                         </label>
                       );
                     })}
@@ -855,7 +897,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                               <span className="text-sm font-medium text-muted-foreground mr-2">
                                 {String.fromCharCode(65 + i)}.
                               </span>
-                              <span className="text-sm">{option}</span>
+                              <span className="min-w-0 break-words text-[15px] sm:text-sm">{option}</span>
                             </label>
                           );
                         })}
@@ -875,29 +917,38 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
           )}
 
           {/* Navigation */}
-          <div className="flex items-center justify-between mt-4">
-            <Button
-              variant="outline"
-              onClick={goPrevious}
-              disabled={!canGoPrevious}
-            >
-              <ChevronLeft className="mr-1 h-4 w-4" /> Previous
-            </Button>
-
-            {/* Mobile question indicator */}
-            <span className="text-sm text-muted-foreground lg:hidden">
-              {currentIndex + 1} / {currentQuestions.length}
-            </span>
-
-            {canGoNext ? (
-              <Button onClick={goNext}>
-                Next <ChevronRight className="ml-1 h-4 w-4" />
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-3 pt-2 pb-safe backdrop-blur lg:static lg:mt-4 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+            <div className="mx-auto flex max-w-5xl items-center justify-between gap-2">
+              <Button
+                variant="outline"
+                onClick={goPrevious}
+                disabled={!canGoPrevious}
+                className="h-11 flex-1 lg:h-9 lg:flex-none"
+              >
+                <ChevronLeft className="mr-1 h-4 w-4" /> <span className="max-[359px]:hidden">Previous</span>
               </Button>
-            ) : (
-              <Button onClick={() => setShowSubmitDialog(true)} variant="default">
-                <Send className="mr-1 h-4 w-4" /> Finish & Submit
+
+              {/* Mobile question indicator */}
+              <Button
+                variant="ghost"
+                onClick={() => setNavigatorOpen(true)}
+                className="h-11 shrink-0 gap-1.5 px-3 text-sm text-muted-foreground lg:hidden"
+                aria-label="Show all questions"
+              >
+                <LayoutGrid className="h-4 w-4" />
+                <span className="tabular-nums">{currentIndex + 1}/{currentQuestions.length}</span>
               </Button>
-            )}
+
+              {canGoNext ? (
+                <Button onClick={goNext} className="h-11 flex-1 lg:h-9 lg:flex-none">
+                  Next <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              ) : (
+                <Button onClick={() => setShowSubmitDialog(true)} variant="default" className="h-11 flex-1 lg:h-9 lg:flex-none">
+                  <Send className="mr-1 h-4 w-4" /> Finish<span className="max-sm:hidden">&nbsp;&amp; Submit</span>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>

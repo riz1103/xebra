@@ -351,21 +351,24 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
     <div className="min-h-screen bg-background">
       {/* Top Bar */}
       <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" asChild>
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-2 px-3 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <Button variant="ghost" size="icon" asChild className="shrink-0" aria-label="Back">
               <Link href={backHref}>
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
-            <Image src="/xevra-logo.png" alt="Xevra" width={32} height={32} className="rounded-lg" />
-            <span className="text-sm font-semibold hidden sm:inline">
+            <Image src="/xevra-logo.png" alt="Xevra" width={32} height={32} className="rounded-lg shrink-0" />
+            <span className="text-sm font-semibold truncate sm:hidden">
+              {result.examTitle || exam?.title || "Exam"}
+            </span>
+            <span className="text-sm font-semibold hidden truncate sm:inline">
               Review: {result.examTitle || exam?.title || "Exam"}
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {canGrade && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="hidden text-xs sm:inline-flex">
                 Proctor review
               </Badge>
             )}
@@ -376,7 +379,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                 disabled={updateResultMutation.isPending}
               >
                 {updateResultMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save &amp; update score
+                Save<span className="max-sm:hidden">&nbsp;&amp; update score</span>
               </Button>
             )}
           </div>
@@ -384,7 +387,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
       </div>
 
       {/* Progress */}
-      <div className="mx-auto max-w-5xl px-4 py-3">
+      <div className="mx-auto max-w-5xl px-3 py-3 sm:px-4">
         <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
           <span>
             {correctCount} of {totalQuestions} correct
@@ -396,7 +399,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
 
       {/* Part Tabs */}
       {hasParts && questionsByPart && (
-        <div className="mx-auto max-w-5xl px-4">
+        <div className="mx-auto max-w-5xl px-3 sm:px-4">
           <Tabs value={currentPart || ""} onValueChange={goToPart}>
             <TabsList className="w-full justify-start">
               {Object.entries(questionsByPart).map(([partId, partData]) => {
@@ -417,7 +420,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
         </div>
       )}
 
-      <div className="mx-auto max-w-5xl px-4 py-4 flex gap-6">
+      <div className="mx-auto max-w-5xl px-3 py-4 flex gap-6 sm:px-4">
         {/* Question Navigator - jump to any question, correct/incorrect visible */}
         <div className="hidden md:block w-[15.5rem] shrink-0">
           <Card className="sticky top-24">
@@ -481,7 +484,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                       </span>
                     )}
                   </Badge>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary" className="text-xs">
                       {currentQuestion.points} pts
                     </Badge>
@@ -522,7 +525,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                     )}
                   </div>
                 </div>
-                <CardTitle className="text-lg mt-3 leading-relaxed">
+                <CardTitle className="text-base sm:text-lg mt-3 leading-relaxed break-words">
                   {currentQuestion.questionText}
                 </CardTitle>
                 {isMultipleAnswer && (
@@ -655,10 +658,13 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
           <div className="flex items-center justify-between gap-2 mt-4">
             <Button
               variant="outline"
+              className="h-10 sm:h-9"
               onClick={goPrevious}
               disabled={isFirstInPart && !prevPartId}
+              aria-label="Previous question"
             >
-              <ChevronLeft className="mr-1 h-4 w-4" /> Previous
+              <ChevronLeft className="h-4 w-4 sm:mr-1" />
+              <span className="max-[359px]:hidden">Previous</span>
             </Button>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground hidden sm:inline">
@@ -668,7 +674,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                 value={String(currentIndex + 1)}
                 onValueChange={(v) => goToQuestion(Number(v) - 1)}
               >
-                <SelectTrigger className="w-[7rem] md:hidden h-9 text-xs">
+                <SelectTrigger className="w-[6.5rem] md:hidden h-10 text-xs">
                   <SelectValue placeholder="Jump" />
                 </SelectTrigger>
                 <SelectContent>
@@ -682,10 +688,13 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
               </Select>
             </div>
             <Button
+              className="h-10 sm:h-9"
               onClick={goNext}
               disabled={isLastInPart && !nextPartId}
+              aria-label="Next question"
             >
-              Next <ChevronRight className="ml-1 h-4 w-4" />
+              <span className="max-[359px]:hidden">Next</span>
+              <ChevronRight className="h-4 w-4 sm:ml-1" />
             </Button>
           </div>
         </div>

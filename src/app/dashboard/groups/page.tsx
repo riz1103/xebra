@@ -177,12 +177,12 @@ export default function GroupsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Examinee Groups</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Examinee Groups</h1>
           <p className="text-muted-foreground">Organize examinees into groups for bulk invitations.</p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" /> Create Group
         </Button>
       </div>
@@ -203,16 +203,16 @@ export default function GroupsPage() {
           {groups.map((group) => (
             <Card key={group.id} className="transition-shadow hover:shadow-md">
               <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    {group.name}
+                <div className="flex items-start justify-between gap-2">
+                  <CardTitle className="text-base flex min-w-0 items-center gap-2 leading-snug">
+                    <Users className="h-4 w-4 shrink-0 text-primary" />
+                    <span className="break-words">{group.name}</span>
                   </CardTitle>
-                  <div className="flex items-center gap-1 -mt-1 -mr-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(group)}>
+                  <div className="flex shrink-0 items-center gap-1 -mt-1 -mr-2">
+                    <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" onClick={() => openEdit(group)} aria-label="Edit group">
                       <Search className="h-3.5 w-3.5 text-muted-foreground" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteGroup(group)}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive sm:h-8 sm:w-8" onClick={() => setDeleteGroup(group)} aria-label="Delete group">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -247,9 +247,9 @@ export default function GroupsPage() {
       <Dialog open={viewMembersDialogOpen} onOpenChange={setViewMembersDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              {selectedGroup?.name} - Members
+            <DialogTitle className="flex items-center gap-2 leading-snug">
+              <Users className="h-5 w-5 shrink-0" />
+              <span className="break-words">{selectedGroup?.name} - Members</span>
             </DialogTitle>
             <DialogDescription>
               {members.length} member{members.length !== 1 ? "s" : ""} in this group.
@@ -283,7 +283,7 @@ export default function GroupsPage() {
               </p>
             </div>
           ) : (
-            <ScrollArea className="max-h-80">
+            <ScrollArea className="max-h-[50dvh] sm:max-h-80">
               <div className="space-y-1">
                 {filteredMembers.map((member) => (
                   <div
@@ -305,13 +305,14 @@ export default function GroupsPage() {
                         {member.email}
                       </p>
                     </div>
-                    <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
+                    <Badge variant="outline" className="hidden text-[10px] shrink-0 capitalize sm:inline-flex">
                       {member.role}
                     </Badge>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      className="h-9 w-9 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10 sm:h-8 sm:w-8"
+                      aria-label="Remove member"
                       disabled={removeMemberMutation.isPending && removingMemberId === (member.id || member.uid)}
                       onClick={() => {
                         const memberId = member.id || member.uid;
@@ -335,7 +336,7 @@ export default function GroupsPage() {
 
           <Separator />
 
-          <div className="flex justify-between">
+          <div className="flex justify-between gap-2">
             <Button
               variant="outline"
               size="sm"

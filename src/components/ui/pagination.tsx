@@ -31,7 +31,7 @@ export function Pagination({ pagination, onPageChange, className, compact }: Pag
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center justify-between gap-4",
+        "flex flex-col items-center gap-3 sm:flex-row sm:flex-wrap sm:justify-between sm:gap-4",
         className
       )}
     >
@@ -43,6 +43,7 @@ export function Pagination({ pagination, onPageChange, className, compact }: Pag
         <Button
           variant="outline"
           size="sm"
+          className="h-9 sm:h-8"
           onClick={() => onPageChange(page - 1)}
           disabled={!hasPrev}
           aria-label="Previous page"
@@ -58,6 +59,7 @@ export function Pagination({ pagination, onPageChange, className, compact }: Pag
         <Button
           variant="outline"
           size="sm"
+          className="h-9 sm:h-8"
           onClick={() => onPageChange(page + 1)}
           disabled={!hasNext}
           aria-label="Next page"

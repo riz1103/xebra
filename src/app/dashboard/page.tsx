@@ -76,12 +76,12 @@ function ProctorDashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Dashboard</h1>
           <p className="text-muted-foreground">Manage your examinations and monitor results.</p>
         </div>
-        <Button asChild>
+        <Button asChild className="w-full sm:w-auto">
           <Link href="/dashboard/exams/create">
             <Plus className="mr-2 h-4 w-4" /> Create Exam
           </Link>
@@ -89,19 +89,19 @@ function ProctorDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {stats.map((stat) => (
           <Link key={stat.label} href={stat.href}>
             <Card className="transition-shadow hover:shadow-md cursor-pointer">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
+              <CardHeader className="flex flex-row items-start justify-between gap-1 pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground leading-tight sm:text-sm">{stat.label}</CardTitle>
+                <stat.icon className={`h-4 w-4 shrink-0 ${stat.color}`} />
               </CardHeader>
               <CardContent>
                 {isLoading ? (
                   <Skeleton className="h-8 w-16" />
                 ) : (
-                  <div className="text-2xl font-bold">{stat.value}</div>
+                  <div className="text-xl font-bold sm:text-2xl">{stat.value}</div>
                 )}
               </CardContent>
             </Card>
@@ -159,15 +159,16 @@ function ProctorDashboard() {
                   <Link
                     key={exam.id}
                     href={`/dashboard/exams/${exam.id}`}
-                    className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                    className="flex items-center justify-between gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
                   >
-                    <div>
-                      <p className="text-sm font-medium">{exam.title}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{exam.title}</p>
                       <p className="text-xs text-muted-foreground">
                         {exam.questionCount || 0} questions &middot; {exam.timeLimit} min
                       </p>
                     </div>
                     <Badge
+                      className="shrink-0"
                       variant={
                         exam.status === "active" ? "success" : exam.status === "draft" ? "secondary" : "outline"
                       }
@@ -212,36 +213,36 @@ function ExamineeDashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">My Dashboard</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My Dashboard</h1>
         <p className="text-muted-foreground">View your upcoming exams and results.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Exams</CardTitle>
+          <CardHeader className="flex flex-row items-start justify-between gap-1 pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground leading-tight sm:text-sm">Pending Exams</CardTitle>
             <Mail className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{pendingInvitations.length}</div>}
+            {isLoading ? <Skeleton className="h-8 w-16" /> : <div className="text-xl font-bold sm:text-2xl">{pendingInvitations.length}</div>}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">In Progress</CardTitle>
+          <CardHeader className="flex flex-row items-start justify-between gap-1 pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground leading-tight sm:text-sm">In Progress</CardTitle>
             <Clock className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{inProgressSessions.length}</div>}
+            {isLoading ? <Skeleton className="h-8 w-16" /> : <div className="text-xl font-bold sm:text-2xl">{inProgressSessions.length}</div>}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle>
+          <CardHeader className="flex flex-row items-start justify-between gap-1 pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground leading-tight sm:text-sm">Completed</CardTitle>
             <CheckCircle className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{results.length}</div>}
+            {isLoading ? <Skeleton className="h-8 w-16" /> : <div className="text-xl font-bold sm:text-2xl">{results.length}</div>}
           </CardContent>
         </Card>
       </div>
@@ -262,14 +263,14 @@ function ExamineeDashboard() {
           ) : (
             <div className="space-y-3">
               {pendingInvitations.map((inv) => (
-                <div key={inv.id} className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="font-medium">{inv.examTitle || "Exam"}</p>
+                <div key={inv.id} className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-medium break-words">{inv.examTitle || "Exam"}</p>
                     <p className="text-xs text-muted-foreground">
                       Expires: {new Date(inv.expiresAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <Button asChild size="sm">
+                  <Button asChild size="sm" className="w-full sm:w-auto">
                     <Link href={`/dashboard/my-exams?start=${inv.id}`}>
                       Start Exam <ArrowRight className="ml-1 h-3 w-3" />
                     </Link>
@@ -299,15 +300,15 @@ function ExamineeDashboard() {
                 <Link
                   key={result.id}
                   href={`/dashboard/my-results/${result.id}`}
-                  className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                 >
-                  <div>
-                    <p className="font-medium">{result.examTitle || "Exam"}</p>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{result.examTitle || "Exam"}</p>
                     <p className="text-xs text-muted-foreground">
                       Score: {result.score}/{result.totalPoints}
                     </p>
                   </div>
-                  <Badge variant={result.passed ? "success" : "destructive"}>
+                  <Badge variant={result.passed ? "success" : "destructive"} className="shrink-0">
                     {result.passed ? "Passed" : "Failed"} - {result.percentage}%
                   </Badge>
                 </Link>

@@ -65,13 +65,13 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
           <span>{isUpdatingStatus ? "Updating status…" : "Exam details reloading…"}</span>
         </div>
       )}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-3 sm:flex-nowrap sm:items-center">
+        <Button variant="ghost" size="icon" asChild className="shrink-0" aria-label="Back to exams">
           <Link href="/dashboard/exams"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">{exam.title}</h1>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 className="text-2xl font-bold tracking-tight break-words sm:text-3xl">{exam.title}</h1>
             <Badge variant={exam.status === "active" ? "success" : exam.status === "draft" ? "secondary" : "outline"}>
               {exam.status}
             </Badge>
@@ -79,7 +79,7 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
           </div>
           {exam.description && <p className="text-muted-foreground mt-1">{exam.description}</p>}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0 [&>*]:flex-1 sm:[&>*]:flex-none">
           {exam.status === "draft" && (
             <Button onClick={() => updateMutation.mutate("active")} size="sm" disabled={isUpdatingStatus}>
               {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -194,7 +194,7 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
 
         <TabsContent value="questions">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
               <CardTitle className="text-base">Exam Questions</CardTitle>
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/dashboard/exams/${exam.id}/edit`}>
@@ -210,9 +210,9 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
               ) : (
                 <div className="space-y-4">
                   {exam.questions.map((q, i) => (
-                    <div key={q.id} className="rounded-lg border p-4">
+                    <div key={q.id} className="rounded-lg border p-3 sm:p-4">
                       <div className="flex items-start justify-between mb-2">
-                        <span className="text-sm font-medium">Q{i + 1}. {q.questionText}</span>
+                        <span className="min-w-0 break-words text-sm font-medium">Q{i + 1}. {q.questionText}</span>
                         <Badge variant="outline" className="text-xs shrink-0 ml-2">{q.points} pts</Badge>
                       </div>
                       <div className="grid gap-1.5 mt-3">
@@ -222,9 +222,9 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
                             : q.correctAnswer === opt;
                           return (
                             <div key={oi} className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${isCorrect ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" : ""}`}>
-                              <span className="text-xs text-muted-foreground w-5">{String.fromCharCode(65 + oi)}.</span>
-                              <span>{opt}</span>
-                              {isCorrect && <CheckCircle className="h-3 w-3 ml-auto" />}
+                              <span className="text-xs text-muted-foreground w-5 shrink-0">{String.fromCharCode(65 + oi)}.</span>
+                              <span className="min-w-0 break-words">{opt}</span>
+                              {isCorrect && <CheckCircle className="h-3 w-3 ml-auto shrink-0" />}
                             </div>
                           );
                         })}

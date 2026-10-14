@@ -73,34 +73,32 @@ export default function ResultsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Exam Results</h1>
-          <p className="text-muted-foreground">View and analyze examination results.</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Exam Results</h1>
+        <p className="text-muted-foreground">View and analyze examination results.</p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Results</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground leading-tight sm:text-sm">Total Results</CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{totalResults}</div></CardContent>
+          <CardContent><div className="text-xl sm:text-2xl font-bold">{totalResults}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pass Rate</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground leading-tight sm:text-sm">Pass Rate</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">{passRate}%</div>
+            <div className="text-xl sm:text-2xl font-bold text-emerald-600">{passRate}%</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Average Score</CardTitle>
+            <CardTitle className="text-xs font-medium text-muted-foreground leading-tight sm:text-sm">Average Score</CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{avgPercentage}%</div></CardContent>
+          <CardContent><div className="text-xl sm:text-2xl font-bold">{avgPercentage}%</div></CardContent>
         </Card>
       </div>
 
@@ -132,7 +130,7 @@ export default function ResultsPage() {
         <div className={cn("space-y-3 transition-opacity", isFetching && "opacity-60")}>
           {results.map((result) => (
             <Card key={result.id} className="transition-shadow hover:shadow-md cursor-pointer" onClick={() => setSelectedResult(result)}>
-              <CardContent className="flex items-center gap-4 py-4">
+              <CardContent className="flex items-center gap-3 py-4 sm:gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-sm truncate">{result.examineeName || "Examinee"}</p>
@@ -140,7 +138,7 @@ export default function ResultsPage() {
                       {result.passed ? "Passed" : "Failed"}
                     </Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                     {result.examTitle || "Exam"} &middot; {formatDate(result.submittedAt || result.createdAt)}
                   </p>
                 </div>
@@ -151,10 +149,10 @@ export default function ResultsPage() {
                       {result.score}/{result.totalPoints} pts
                     </p>
                   </div>
-                  <div className="w-24">
+                  <div className="hidden w-24 sm:block">
                     <Progress value={result.percentage} className="h-2" />
                   </div>
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSelectedResult(result); }}>
+                  <Button variant="ghost" size="icon" className="hidden sm:inline-flex" aria-label="View result" onClick={(e) => { e.stopPropagation(); setSelectedResult(result); }}>
                     <Eye className="h-4 w-4" />
                   </Button>
                 </div>
@@ -195,7 +193,7 @@ export default function ResultsPage() {
 
             return (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div className="rounded-lg border p-3 text-center">
                     <p className="text-2xl font-bold">{percentageSafe}%</p>
                     <p className="text-xs text-muted-foreground">Score</p>
@@ -213,9 +211,9 @@ export default function ResultsPage() {
                     <span className="font-medium">{displayResult.examineeName || "N/A"}</span>
                   </div>
                   {displayResult.examineeEmail && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Email</span>
-                      <span className="font-medium">{displayResult.examineeEmail}</span>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-muted-foreground shrink-0">Email</span>
+                      <span className="font-medium min-w-0 break-all text-right">{displayResult.examineeEmail}</span>
                     </div>
                   )}
                   <div className="flex justify-between">

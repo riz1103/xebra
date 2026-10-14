@@ -15,15 +15,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Moon, Sun, User } from "lucide-react";
+import { LogOut, Menu, Moon, Sun, User } from "lucide-react";
 import { useTheme } from "next-themes";
+import Image from "next/image";
+import Link from "next/link";
+import { useState } from "react";
 import { getInitials } from "@/lib/utils";
+import { MobileNav } from "@/components/layout/sidebar";
 
 export function Header() {
   const { user, logout } = useAuthStore();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -45,18 +50,32 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b bg-background px-6">
-      <div className="flex items-center gap-4">
-        <h2 className="text-lg font-semibold">
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-4 lg:h-16 lg:px-6">
+      <div className="flex min-w-0 items-center gap-2 lg:gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0 lg:hidden"
+          onClick={() => setMobileNavOpen(true)}
+          aria-label="Open navigation menu"
+        >
+          <Menu className="!size-5" />
+        </Button>
+        <Link href="/dashboard" className="shrink-0 lg:hidden" aria-label="Dashboard">
+          <Image src="/xevra-logo.png" alt="Xevra" width={28} height={28} className="rounded-md" />
+        </Link>
+        <h2 className="hidden truncate text-base font-semibold sm:block lg:text-lg">
           Welcome back, {user?.name || user?.displayName || "User"}
         </h2>
       </div>
+      <MobileNav open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-3">
         {/* Theme toggle */}
         <Button
           variant="ghost"
           size="icon"
+          className="h-10 w-10 sm:h-9 sm:w-9"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
           <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -67,7 +86,7 @@ export function Header() {
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+            <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0 sm:h-9 sm:w-9" aria-label="Account menu">
               <Avatar className="h-9 w-9">
                 <AvatarImage src={user?.picture || user?.photoURL} alt={user?.name} />
                 <AvatarFallback>
@@ -76,11 +95,11 @@ export function Header() {
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end" forceMount>
+          <DropdownMenuContent className="w-60" align="end" forceMount>
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">{user?.name || user?.displayName}</p>
-                <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                <p className="truncate text-sm font-medium leading-none">{user?.name || user?.displayName}</p>
+                <p className="truncate text-xs leading-none text-muted-foreground">{user?.email}</p>
                 <Badge variant={roleColors[user?.role || "examinee"]} className="mt-1 w-fit text-[10px]">
                   {user?.role?.toUpperCase()}
                 </Badge>

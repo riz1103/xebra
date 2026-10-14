@@ -83,7 +83,7 @@ export default function MyResultsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">My Results</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My Results</h1>
         <p className="text-muted-foreground">View your exam performance and scores.</p>
       </div>
 
@@ -104,30 +104,30 @@ export default function MyResultsPage() {
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2 leading-tight sm:text-sm [&>svg]:hidden sm:[&>svg]:block">
               <Target className="h-4 w-4" /> {examIdFilter ? "Attempts" : "Total Exams"}
             </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{totalCount}</div></CardContent>
+          <CardContent><div className="text-xl sm:text-2xl font-bold">{totalCount}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2 leading-tight sm:text-sm [&>svg]:hidden sm:[&>svg]:block">
               <Trophy className="h-4 w-4" /> Passed
             </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold text-emerald-600">{passedCount}</div></CardContent>
+          <CardContent><div className="text-xl sm:text-2xl font-bold text-emerald-600">{passedCount}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2 leading-tight sm:text-sm [&>svg]:hidden sm:[&>svg]:block">
               <BarChart3 className="h-4 w-4" /> Average Score
             </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-2xl font-bold">{avgScore}%</div></CardContent>
+          <CardContent><div className="text-xl sm:text-2xl font-bold">{avgScore}%</div></CardContent>
         </Card>
       </div>
 
@@ -170,8 +170,8 @@ export default function MyResultsPage() {
           {results.map((result) => (
             <Link key={result.id} href={`/dashboard/my-results/${result.id}`} className="block">
               <Card className="transition-shadow hover:shadow-md cursor-pointer">
-                <CardContent className="flex items-center gap-4 py-5">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold ${
+                <CardContent className="flex items-center gap-3 py-4 sm:gap-4 sm:py-5">
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold sm:text-lg ${
                   result.passed
                     ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                     : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
@@ -211,7 +211,7 @@ export default function MyResultsPage() {
                     <p className="text-xs text-muted-foreground mt-1 italic">Feedback: {result.feedback}</p>
                   )}
                 </div>
-                <div className="w-20 shrink-0">
+                <div className="hidden w-20 shrink-0 sm:block">
                   <Progress value={result.percentage} className="h-2" />
                 </div>
               </CardContent>

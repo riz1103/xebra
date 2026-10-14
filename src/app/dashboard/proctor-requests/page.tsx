@@ -77,7 +77,7 @@ export default function ProctorRequestsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Proctor Requests</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Proctor Requests</h1>
         <p className="text-muted-foreground">Review and manage requests from users who want to become proctors.</p>
       </div>
 
@@ -99,10 +99,10 @@ export default function ProctorRequestsPage() {
               <h2 className="text-lg font-semibold">Pending Requests ({pendingRequests.length})</h2>
               {pendingRequests.map((req) => (
                 <Card key={req.id}>
-                  <CardContent className="flex items-start gap-4 py-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium">{req.userName || req.userEmail || "User"}</p>
+                  <CardContent className="flex flex-col gap-4 py-4 sm:flex-row sm:items-start">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <p className="font-medium break-all">{req.userName || req.userEmail || "User"}</p>
                         <Badge variant={statusColors[req.status]}>{req.status}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{req.reason}</p>
@@ -111,11 +111,11 @@ export default function ProctorRequestsPage() {
                       )}
                       <p className="text-xs text-muted-foreground mt-2">Submitted: {formatDate(req.createdAt)}</p>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      <Button size="sm" onClick={() => openReview(req, "approve")} className="bg-emerald-600 hover:bg-emerald-700">
+                    <div className="grid grid-cols-2 gap-2 shrink-0 sm:flex">
+                      <Button size="sm" onClick={() => openReview(req, "approve")} className="h-9 bg-emerald-600 hover:bg-emerald-700 sm:h-8">
                         <Check className="mr-1 h-3 w-3" /> Approve
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => openReview(req, "reject")}>
+                      <Button size="sm" variant="destructive" onClick={() => openReview(req, "reject")} className="h-9 sm:h-8">
                         <X className="mr-1 h-3 w-3" /> Reject
                       </Button>
                     </div>
@@ -131,16 +131,16 @@ export default function ProctorRequestsPage() {
               <h2 className="text-lg font-semibold">Reviewed ({reviewedRequests.length})</h2>
               {reviewedRequests.map((req) => (
                 <Card key={req.id} className="opacity-75">
-                  <CardContent className="flex items-center gap-4 py-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm">{req.userName || req.userEmail || "User"}</p>
+                  <CardContent className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-sm break-all">{req.userName || req.userEmail || "User"}</p>
                         <Badge variant={statusColors[req.status]}>{req.status}</Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">{req.reason}</p>
                       {req.reviewNotes && <p className="text-xs text-muted-foreground mt-1">Notes: {req.reviewNotes}</p>}
                     </div>
-                    <span className="text-xs text-muted-foreground">{formatDate(req.reviewedAt || req.updatedAt)}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{formatDate(req.reviewedAt || req.updatedAt)}</span>
                   </CardContent>
                 </Card>
               ))}

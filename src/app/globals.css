@@ -134,14 +134,40 @@
   --sidebar-border: oklch(0.3 0.015 265);
 }
 
+/* Card and dialog padding: tighter on phones so nested content keeps usable width */
+:root {
+  --card-pad: 1rem;
+}
+@media (min-width: 40rem) {
+  :root {
+    --card-pad: 1.5rem;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
   }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Bottom padding that clears the iPhone home indicator */
+@utility pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
 /* Custom scrollbar */

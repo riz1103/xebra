@@ -34,11 +34,11 @@ export default function DashboardLayout({
   return (
     <TooltipProvider>
       <NavigationLoadingProvider>
-        <div className="flex min-h-screen">
+        <div className="flex min-h-dvh">
           <Sidebar />
-          <div className="flex min-h-screen flex-1 flex-col">
+          <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
             <Header />
-            <main className="flex-1 p-6">{children}</main>
+            <main className="min-w-0 flex-1 p-4 pb-8 sm:p-6">{children}</main>
           </div>
         </div>
       </NavigationLoadingProvider>

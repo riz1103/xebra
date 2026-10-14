@@ -76,12 +76,12 @@ export default function ExamsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Exams</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Exams</h1>
           <p className="text-muted-foreground">Create and manage your examinations.</p>
         </div>
-        <Button asChild>
+        <Button asChild className="w-full sm:w-auto">
           <Link href="/dashboard/exams/create">
             <Plus className="mr-2 h-4 w-4" /> Create Exam
           </Link>
@@ -89,8 +89,8 @@ export default function ExamsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center sm:gap-4">
+        <div className="relative col-span-2 sm:flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search exams..."
@@ -100,7 +100,7 @@ export default function ExamsPage() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="sm:w-40">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -111,7 +111,7 @@ export default function ExamsPage() {
           </SelectContent>
         </Select>
         <Select value={originFilter} onValueChange={(v) => setOriginFilter(v as ExamOrigin | "all")}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="sm:w-40">
             <SelectValue placeholder="Source" />
           </SelectTrigger>
           <SelectContent>
@@ -146,9 +146,9 @@ export default function ExamsPage() {
           {exams.map((exam) => (
             <Card key={exam.id} className="group transition-shadow hover:shadow-md">
               <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-base line-clamp-1">{exam.title}</CardTitle>
-                  <Badge variant={statusColors[exam.status] || "outline"}>{exam.status}</Badge>
+                <div className="flex items-start justify-between gap-2">
+                  <CardTitle className="text-base line-clamp-2 leading-snug">{exam.title}</CardTitle>
+                  <Badge variant={statusColors[exam.status] || "outline"} className="shrink-0">{exam.status}</Badge>
                 </div>
                 {exam.description && (
                   <p className="text-xs text-muted-foreground line-clamp-2">{exam.description}</p>
@@ -175,12 +175,12 @@ export default function ExamsPage() {
                   </div>
                 </div>
                 <div className="mt-4 flex items-center gap-2">
-                  <Button variant="outline" size="sm" asChild className="flex-1">
+                  <Button variant="outline" size="sm" asChild className="h-9 flex-1 sm:h-8">
                     <Link href={`/dashboard/exams/${exam.id}`}>
                       <Eye className="mr-1 h-3 w-3" /> View
                     </Link>
                   </Button>
-                  <Button variant="outline" size="sm" asChild>
+                  <Button variant="outline" size="sm" asChild className="h-9 sm:h-8" aria-label="Edit exam">
                     <Link href={`/dashboard/exams/${exam.id}/edit`}>
                       <Pencil className="h-3 w-3" />
                     </Link>
@@ -189,7 +189,8 @@ export default function ExamsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => setDeleteExam(exam)}
-                    className="text-destructive hover:text-destructive"
+                    className="h-9 text-destructive hover:text-destructive sm:h-8"
+                    aria-label="Delete exam"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>

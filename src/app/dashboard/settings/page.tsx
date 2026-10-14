@@ -14,7 +14,7 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Settings</h1>
         <p className="text-muted-foreground">Manage your account settings.</p>
       </div>
 
@@ -42,7 +42,7 @@ export default function SettingsPage() {
               <Mail className="h-4 w-4 text-muted-foreground" />
               <div>
                 <p className="text-xs text-muted-foreground">Email</p>
-                <p className="text-sm font-medium">{user?.email}</p>
+                <p className="text-sm font-medium break-all">{user?.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -56,7 +56,7 @@ export default function SettingsPage() {
               <User className="h-4 w-4 text-muted-foreground" />
               <div>
                 <p className="text-xs text-muted-foreground">User ID</p>
-                <p className="text-sm font-mono text-muted-foreground">{user?.uid || user?.id}</p>
+                <p className="text-sm font-mono text-muted-foreground break-all">{user?.uid || user?.id}</p>
               </div>
             </div>
             {user?.createdAt && (

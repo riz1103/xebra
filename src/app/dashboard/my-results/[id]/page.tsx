@@ -47,14 +47,14 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
+      <div className="flex items-start gap-2 sm:items-center sm:gap-4">
+        <Button variant="ghost" size="icon" asChild className="shrink-0" aria-label="Back to results">
           <Link href="/dashboard/my-results">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">{result.examTitle || "Exam Result"}</h1>
+        <div className="min-w-0 break-words">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{result.examTitle || "Exam Result"}</h1>
           <p className="text-muted-foreground">
             Submitted {formatDate(result.submittedAt || result.createdAt)}
           </p>
@@ -92,7 +92,7 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
             </p>
           </div>
 
-          <div className="mt-6 px-8">
+          <div className="mt-6 px-2 sm:px-8">
             <Progress
               value={result.percentage}
               className={`h-3 ${result.passed ? "[&>div]:bg-emerald-500" : "[&>div]:bg-red-500"}`}
@@ -109,9 +109,9 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Exam</span>
-            <span className="font-medium">{result.examTitle || "N/A"}</span>
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground shrink-0">Exam</span>
+            <span className="font-medium min-w-0 break-words text-right">{result.examTitle || "N/A"}</span>
           </div>
           <Separator />
           <div className="flex justify-between">
@@ -290,7 +290,7 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
       )}
 
       <div className="flex justify-center">
-        <Button variant="outline" asChild>
+        <Button variant="outline" asChild className="w-full sm:w-auto">
           <Link href="/dashboard/my-results">
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to All Results
           </Link>

@@ -183,8 +183,8 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
 
   if (authLoading || (invitationLoading && !invitationError && !error)) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Card className="max-w-md">
+      <div className="flex min-h-dvh items-center justify-center p-4">
+        <Card className="w-full max-w-md">
           <CardContent className="py-8 text-center">
             <Loader2 className="h-12 w-12 text-primary mx-auto mb-4 animate-spin" />
             <h2 className="text-lg font-semibold">Loading invitation...</h2>
@@ -197,13 +197,13 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Card className="max-w-md">
+      <div className="flex min-h-dvh items-center justify-center p-4">
+        <Card className="w-full max-w-md">
           <CardContent className="py-8 text-center">
             <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
             <h2 className="text-lg font-semibold">Cannot Start Exam</h2>
             <p className="text-sm text-muted-foreground mt-2">{error}</p>
-            <div className="mt-4 flex gap-2 justify-center">
+            <div className="mt-4 flex flex-col-reverse gap-2 justify-center sm:flex-row">
               <Button variant="outline" onClick={() => router.push("/dashboard/my-exams")}>
                 Go to My Exams
               </Button>
@@ -228,8 +228,8 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
 
   if (createSessionMutation.isPending) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Card className="max-w-md">
+      <div className="flex min-h-dvh items-center justify-center p-4">
+        <Card className="w-full max-w-md">
           <CardContent className="py-8 text-center">
             <Loader2 className="h-12 w-12 text-primary mx-auto mb-4 animate-spin" />
             <h2 className="text-lg font-semibold">Starting Exam...</h2>
@@ -285,7 +285,7 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
                       <Clock className="h-3 w-3" />
                       Expires:
                     </span>
-                    <span className="font-medium">{expiresAt ? formatDate(expiresAt.toISOString()) : "N/A"}</span>
+                    <span className="font-medium text-right">{expiresAt ? formatDate(expiresAt.toISOString()) : "N/A"}</span>
                   </div>
                 )}
                 {scheduledEndTime && (
@@ -294,13 +294,13 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
                       <Clock className="h-3 w-3" />
                       Must end by:
                     </span>
-                    <span className="font-medium">{scheduledEndTime ? formatDate(scheduledEndTime.toISOString()) : "N/A"}</span>
+                    <span className="font-medium text-right">{scheduledEndTime ? formatDate(scheduledEndTime.toISOString()) : "N/A"}</span>
                   </div>
                 )}
               </div>
               <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3">
                 <p className="text-sm text-amber-900 dark:text-amber-200 font-medium flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
+                  <AlertCircle className="h-4 w-4 shrink-0" />
                   Important: The timer will start as soon as you click &quot;Start Exam&quot;
                 </p>
               </div>
@@ -325,8 +325,8 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        <div className="flex min-h-screen items-center justify-center">
-          <Card className="max-w-md">
+        <div className="flex min-h-dvh items-center justify-center p-4">
+          <Card className="w-full max-w-md">
             <CardContent className="py-8 text-center">
               <Loader2 className="h-12 w-12 text-primary mx-auto mb-4 animate-spin" />
               <h2 className="text-lg font-semibold">Preparing Exam</h2>
@@ -340,8 +340,8 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
 
   // Default loading state
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Card className="max-w-md">
+    <div className="flex min-h-dvh items-center justify-center p-4">
+      <Card className="w-full max-w-md">
         <CardContent className="py-8 text-center">
           <Loader2 className="h-12 w-12 text-primary mx-auto mb-4 animate-spin" />
           <h2 className="text-lg font-semibold">Preparing Exam</h2>

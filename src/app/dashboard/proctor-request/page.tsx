@@ -47,7 +47,7 @@ export default function ProctorRequestPage() {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
         <CheckCircle className="h-16 w-16 text-emerald-500 mx-auto mb-4" />
-        <h1 className="text-3xl font-bold">You&apos;re already a {user?.role}!</h1>
+        <h1 className="text-2xl font-bold sm:text-3xl">You&apos;re already a {user?.role}!</h1>
         <p className="text-muted-foreground mt-2">You have full access to create and manage exams.</p>
       </div>
     );
@@ -56,7 +56,7 @@ export default function ProctorRequestPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Become a Proctor</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Become a Proctor</h1>
         <p className="text-muted-foreground">
           Submit a request to become a proctor and start creating exams.
         </p>

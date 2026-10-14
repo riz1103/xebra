@@ -219,23 +219,23 @@ export default function InvitationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Invitations</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Invitations</h1>
           <p className="text-muted-foreground">Invite examinees to take exams or exam bundles.</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button onClick={() => setDialogOpen(true)} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" /> Send Invitation
         </Button>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className="relative flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search invitations..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="sm:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
@@ -260,10 +260,10 @@ export default function InvitationsPage() {
         <div className="space-y-3">
           {invitations.map((inv) => (
             <Card key={inv.id}>
-              <CardContent className="flex items-center justify-between py-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-sm">{inv.examineeEmail}</p>
+              <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-sm break-all">{inv.examineeEmail}</p>
                     <Badge variant={statusColors[inv.status] || "outline"} className="text-xs">{inv.status}</Badge>
                     {inv.bundleId && (
                       <Badge variant="outline" className="text-xs">
@@ -287,7 +287,7 @@ export default function InvitationsPage() {
                     size="sm"
                     onClick={() => setCancelTarget(inv)}
                     disabled={cancelMutation.isPending}
-                    className="text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+                    className="w-full shrink-0 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive sm:w-auto"
                   >
                     {cancelMutation.isPending && cancelTarget?.id === inv.id ? (
                       <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -344,7 +344,7 @@ export default function InvitationsPage() {
               <button
                 type="button"
                 onClick={() => setInviteTarget("exam")}
-                className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                className={`flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all sm:p-4 ${
                   inviteTarget === "exam"
                     ? "border-primary bg-primary/5"
                     : "border-border hover:border-muted-foreground/30"
@@ -356,7 +356,7 @@ export default function InvitationsPage() {
               <button
                 type="button"
                 onClick={() => setInviteTarget("bundle")}
-                className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                className={`flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all sm:p-4 ${
                   inviteTarget === "bundle"
                     ? "border-primary bg-primary/5"
                     : "border-border hover:border-muted-foreground/30"
@@ -395,7 +395,7 @@ export default function InvitationsPage() {
                       <Input type="email" placeholder="user@example.com" {...examIndividualForm.register("examineeEmail")} />
                       {examIndividualForm.formState.errors.examineeEmail && <p className="text-xs text-destructive">{examIndividualForm.formState.errors.examineeEmail.message}</p>}
                     </div>
-                    <div className="grid gap-4 grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Expires At *</Label>
                         <Input type="datetime-local" {...examIndividualForm.register("expiresAt")} />
@@ -405,7 +405,7 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...examIndividualForm.register("maxAttempts")} />
                       </div>
                     </div>
-                    <div className="grid gap-4 grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>
                           Scheduled Start Time (Optional)
@@ -465,7 +465,7 @@ export default function InvitationsPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="grid gap-4 grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Expires At *</Label>
                         <Input type="datetime-local" {...examGroupForm.register("expiresAt")} />
@@ -475,7 +475,7 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...examGroupForm.register("maxAttempts")} />
                       </div>
                     </div>
-                    <div className="grid gap-4 grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>
                           Scheduled Start Time (Optional)
@@ -537,7 +537,7 @@ export default function InvitationsPage() {
                       <Input type="email" placeholder="user@example.com" {...bundleIndividualForm.register("examineeEmail")} />
                       {bundleIndividualForm.formState.errors.examineeEmail && <p className="text-xs text-destructive">{bundleIndividualForm.formState.errors.examineeEmail.message}</p>}
                     </div>
-                    <div className="grid gap-4 grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Expires At *</Label>
                         <Input type="datetime-local" {...bundleIndividualForm.register("expiresAt")} />
@@ -547,7 +547,7 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...bundleIndividualForm.register("maxAttempts")} />
                       </div>
                     </div>
-                    <div className="grid gap-4 grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>
                           Scheduled Start Time (Optional)
@@ -610,7 +610,7 @@ export default function InvitationsPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="grid gap-4 grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Expires At *</Label>
                         <Input type="datetime-local" {...bundleGroupForm.register("expiresAt")} />
@@ -620,7 +620,7 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...bundleGroupForm.register("maxAttempts")} />
                       </div>
                     </div>
-                    <div className="grid gap-4 grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>
                           Scheduled Start Time (Optional)
