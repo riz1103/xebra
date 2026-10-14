@@ -591,6 +591,35 @@ export interface ApiResponse<T = unknown> {
 }
 
 // ============ Pagination ============
+export type AiTier = "primary" | "fallback";
+
+export interface AiUsageStatus {
+  tier: AiTier;
+  reason: "monthly_budget" | "daily_user_limit" | null;
+  month: {
+    period: string;
+    primaryCostUsd: number;
+    fallbackCostUsd: number;
+    totalCostUsd: number;
+    primaryRequests: number;
+    fallbackRequests: number;
+    primaryBudgetUsd: number;
+    monthlyCapUsd: number;
+  };
+  user: {
+    day: string;
+    primaryRequestsToday: number;
+    fallbackRequestsToday: number;
+    primaryDailyLimit: number;
+  };
+}
+
+export interface RecordAiUsagePayload {
+  tier: AiTier;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export type ExamResultScope = "mine" | "managed";
 export type ExamResultSortBy = "date" | "score" | "examTitle" | "examineeName";
 export type SortOrder = "asc" | "desc";

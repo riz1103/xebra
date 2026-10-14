@@ -28,6 +28,7 @@ A comprehensive Next.js examination management platform where proctors can creat
 - **Review**: generated questions show the correct answer, explanation, source page, and any validation issues; selected questions are added to the exam editor with exam settings filled in
 - **Add to an existing exam**: on the Edit Exam page, "Generate from material" writes new questions that avoid repeating the exam's existing ones, and adds them as new parts, into an existing part, or to the exam's questions, with the items per session and time limit adjusted
 - **Origin tag**: exams are tagged *AI generated*, *AI-assisted* (mixed), or *Manual*, shown on the exam list (with a filter) and details page. The backend keeps the tag current as questions are added
+- **Usage budget**: requests use the main model (Gemini Flash) until this month's estimated spend reaches the backend's `AI_PRIMARY_MONTHLY_BUDGET_USD` or a proctor makes `AI_PRIMARY_DAILY_REQUESTS_PER_USER` requests in a day, then switch to the lighter model (Flash-Lite). A request that hits the main model's quota is retried on the lighter model. The generator dialog shows the active model and budget used. The spend cap set in Google AI Studio remains the hard limit
 - **Saved with each question**: the explanation (`explanation`) and AI details (`metadata.ai`: difficulty, thinking skill, topic, source page, essay rubric). The API never returns these to examinees; proctors see them on the exam details and result review pages
 
 ### Examinee Experience
@@ -88,7 +89,7 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 NEXT_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
 ```
 
-   To use AI exam generation, enable **Firebase AI Logic** for the project (Firebase console → AI Logic → Get started, or `npx -y firebase-tools@latest init ailogic`) and, for production, set up App Check with reCAPTCHA Enterprise and add `NEXT_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY`. See `env.example` for optional settings.
+   To use AI exam generation, enable **Firebase AI Logic** for the project (Firebase console → AI Logic → Get started, or `npx -y firebase-tools@latest init ailogic`) and, for production, set up App Check with reCAPTCHA Enterprise and add `NEXT_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY`. The Gemini free tier allows only a few runs a day, so for regular use link a billing account to the project in Google AI Studio and set a monthly spend cap there (Dashboard → Spend). Keep the backend's `AI_PRIMARY_MONTHLY_BUDGET_USD` below that cap so the lighter model still has room. See `env.example` for optional settings.
 
 3. Start the development server:
 ```bash

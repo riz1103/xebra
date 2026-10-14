@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dialog";
 import { SourceStep } from "./source-step";
 import { BlueprintStep } from "./blueprint-step";
+import { AiUsageNotice } from "./ai-usage-notice";
 import { ReviewStep } from "./review-step";
 import { AppendSettings } from "./append-settings";
 
@@ -274,6 +275,8 @@ export function GenerateFromMaterialDialog({
             ))}
           </ol>
         </DialogHeader>
+
+        <AiUsageNotice active={open} />
 
         <div className="-mx-6 min-h-0 flex-1 space-y-4 overflow-y-auto px-6">
           {error && (

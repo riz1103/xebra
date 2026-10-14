@@ -39,6 +39,8 @@ import type {
   AddGroupMembersPayload,
   ProctorRequest,
   CreateProctorRequestPayload,
+  AiUsageStatus,
+  RecordAiUsagePayload,
 } from "@/types";
 
 /** List response with optional pagination metadata from API */
@@ -517,6 +519,17 @@ class ApiClient {
 
   async deleteProctorRequest(id: string) {
     const { data } = await this.client.delete<ApiResponse>(`/api/proctor-requests/${id}`);
+    return data;
+  }
+
+  // ============ AI Usage ============
+  async getAiUsage() {
+    const { data } = await this.client.get<ApiResponse<AiUsageStatus>>("/api/ai-usage");
+    return data;
+  }
+
+  async recordAiUsage(payload: RecordAiUsagePayload) {
+    const { data } = await this.client.post<ApiResponse<AiUsageStatus>>("/api/ai-usage", payload);
     return data;
   }
 }

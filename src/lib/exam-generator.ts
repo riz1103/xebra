@@ -7,7 +7,7 @@
  */
 
 import { Schema, type Part } from "firebase/ai";
-import { getJsonModel } from "@/lib/ai";
+import { generateJson } from "@/lib/ai";
 import {
   EXAM_PURPOSES,
   LAYOUT_DESCRIPTIONS,
@@ -163,7 +163,6 @@ export async function transcribeSources(
   }
   if (current.length > 0) batches.push(current);
 
-  const model = getJsonModel(transcriptionSchema, { temperature: 0, maxOutputTokens: 32768 });
   onProgress?.(0, batches.length, "Reading photos and scanned pages…");
 
   const results = await runWithConcurrency(
@@ -173,8 +172,8 @@ export async function transcribeSources(
         parts.push({ text: `Reference: ${job.ref}` });
         job.images.forEach((img) => parts.push(imagePart(img)));
       }
-      const res = await model.generateContent(parts);
-      return JSON.parse(res.response.text()) as { pages: { ref: string; text: string }[] };
+      const text = await generateJson(transcriptionSchema, parts, { temperature: 0, maxOutputTokens: 32768 });
+      return JSON.parse(text) as { pages: { ref: string; text: string }[] };
     }),
     CONCURRENCY,
     (done) => onProgress?.(done, batches.length, "Reading photos and scanned pages…")
@@ -292,9 +291,8 @@ Guidelines:
 Material:
 ${text}`;
 
-  const model = getJsonModel(analysisSchema, { temperature: 0.2, maxOutputTokens: 8192 });
-  const res = await model.generateContent(prompt);
-  const analysis = JSON.parse(res.response.text()) as MaterialAnalysis;
+  const response = await generateJson(analysisSchema, prompt, { temperature: 0.2, maxOutputTokens: 8192 });
+  const analysis = JSON.parse(response) as MaterialAnalysis;
   analysis.topics = (analysis.topics ?? [])
     .filter((t) => t.name?.trim())
     .sort((a, b) => b.importance - a.importance);
@@ -662,16 +660,15 @@ export async function generateExam(
   const batches = planBatches(bp);
   if (batches.length === 0) throw new Error("Set at least one question to generate.");
 
-  const questionModel = getJsonModel(questionBatchSchema, { temperature: 0.5, maxOutputTokens: 32768 });
-  const passageModel = getJsonModel(passageBatchSchema, { temperature: 0.5, maxOutputTokens: 32768 });
+  const batchOptions = { temperature: 0.5, maxOutputTokens: 32768 };
   onProgress?.(0, batches.length, "Writing questions…");
 
   const results = await runWithConcurrency(
     batches.map((batch) => async () => {
       if (batch.kind === "questions") {
         const material = selectMaterial(corpus, batch.topics, analysis);
-        const res = await questionModel.generateContent(questionBatchPrompt(bp, batch, material, existing));
-        const parsed = JSON.parse(res.response.text()) as { questions: RawQuestion[] };
+        const text = await generateJson(questionBatchSchema, questionBatchPrompt(bp, batch, material, existing), batchOptions);
+        const parsed = JSON.parse(text) as { questions: RawQuestion[] };
         return {
           questions: (parsed.questions ?? [])
             .slice(0, batch.count)
@@ -681,8 +678,8 @@ export async function generateExam(
         };
       }
       const material = formatCorpus(corpus).text;
-      const res = await passageModel.generateContent(passageBatchPrompt(bp, batch, material));
-      const parsed = JSON.parse(res.response.text()) as {
+      const text = await generateJson(passageBatchSchema, passageBatchPrompt(bp, batch, material), batchOptions);
+      const parsed = JSON.parse(text) as {
         passages: { title: string; body: string; sourceRef: string; questions: RawQuestion[] }[];
       };
       const passages: GeneratedPassage[] = [];

@@ -32,8 +32,14 @@ import {
 import { cn, formatDuration } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { parseBlanks } from "@/lib/question-blanks";
+import { getQuestionLayout } from "@/lib/question-layout";
+import { Textarea } from "@/components/ui/textarea";
 
 const UNASSIGNED_PART_ID = "__unassigned";
+const TEXT_SAVE_DELAY_MS = 800;
+/** Answer boxes need visible borders on white backgrounds, especially on phone screens */
+const ANSWER_FIELD_CLASS =
+  "border-2 border-foreground/30 bg-background text-base shadow-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 dark:border-foreground/25 dark:bg-muted/40";
 
 export default function ExamPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
@@ -116,6 +122,17 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     }
     return byPart;
   }, [rawQuestionsByPart, sessionQuestions, selectedQuestionIds, questions]);
+
+  const { data: questionTypesData } = useQuery({
+    queryKey: ["question-types", "exam-layouts"],
+    queryFn: () => api.getQuestionTypes({ size: 100 }),
+    staleTime: 10 * 60_000,
+    enabled: !authLoading && isAuthenticated,
+  });
+  const layoutByTypeId = useMemo(
+    () => new Map((questionTypesData?.data ?? []).map((t) => [t.id, getQuestionLayout(t.name)])),
+    [questionTypesData]
+  );
   
   const partTimeLimits = session?.partTimeLimits || null;
   const hasParts = questionsByPart !== null && Object.keys(questionsByPart).length > 0;
@@ -269,6 +286,28 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     onError: (err: Error) => toast.error("Failed to save answer: " + err.message),
   });
 
+  // Typed answers (identification without blanks, essays) save after a pause instead of on every keystroke
+  const pendingTextSave = useRef<{ timer: NodeJS.Timeout; questionId: string; answer: string | null } | null>(null);
+
+  const { mutate: saveAnswer } = answerMutation;
+  const flushTextAnswer = useCallback(() => {
+    const pending = pendingTextSave.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingTextSave.current = null;
+    saveAnswer({ questionId: pending.questionId, answer: pending.answer });
+  }, [saveAnswer]);
+
+  const handleTextAnswer = (questionId: string, value: string) => {
+    const answer = value.trim() ? value : null;
+    setAnswers((prev) => ({ ...prev, [questionId]: answer }));
+    if (pendingTextSave.current && pendingTextSave.current.questionId !== questionId) flushTextAnswer();
+    if (pendingTextSave.current) clearTimeout(pendingTextSave.current.timer);
+    pendingTextSave.current = { timer: setTimeout(flushTextAnswer, TEXT_SAVE_DELAY_MS), questionId, answer };
+  };
+
+  useEffect(() => () => flushTextAnswer(), [flushTextAnswer]);
+
   const saveMutation = useMutation({
     mutationFn: (payload: { currentQuestionIndex: number; answers: Record<string, string | string[] | null> }) =>
       api.updateExamSession(sessionId, payload),
@@ -388,6 +427,13 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const blankCount = blankResult.blankCount;
   const isFillInTheBlank = blankCount > 0;
   const hasOptionsForBlank = isFillInTheBlank && currentQuestion?.options?.length > 0;
+  const currentLayout = currentQuestion ? layoutByTypeId.get(currentQuestion.questionTypeId) : undefined;
+  // Questions without choices or blanks (direct identification, essay) still need somewhere to type
+  const isTextAnswer =
+    !!currentQuestion &&
+    !isFillInTheBlank &&
+    (currentLayout === "identification" || currentLayout === "essay" || (currentQuestion.options?.length ?? 0) === 0);
+  const isEssay = currentLayout === "essay";
   
   // Get current part time remaining
   const currentPartTimeRemaining = hasParts && currentPart && partTimeRemaining[currentPart] !== undefined
@@ -676,8 +722,11 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                             ) : (
                               <Input
                                 type="text"
-                                placeholder="______"
-                                className="inline-flex w-32 h-9 mx-0.5 align-baseline"
+                                placeholder="Type answer"
+                                aria-label={`Blank ${i + 1}`}
+                                autoComplete="off"
+                                autoCapitalize="off"
+                                className={cn("inline-flex w-40 max-w-full h-10 mx-0.5 align-baseline", ANSWER_FIELD_CLASS)}
                                 value={
                                   blankCount === 1
                                     ? (answers[currentQuestion.id] as string) ?? ""
@@ -690,6 +739,35 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                         </span>
                       ))}
                     </p>
+                  </div>
+                ) : isTextAnswer ? (
+                  <div className="space-y-2">
+                    <Label htmlFor={`answer-${currentQuestion.id}`} className="text-sm text-muted-foreground">
+                      {isEssay ? "Write your answer" : "Type your answer"}
+                    </Label>
+                    {isEssay ? (
+                      <Textarea
+                        id={`answer-${currentQuestion.id}`}
+                        rows={8}
+                        placeholder="Write your answer here..."
+                        className={cn("min-h-[180px]", ANSWER_FIELD_CLASS)}
+                        value={(answers[currentQuestion.id] as string) ?? ""}
+                        onChange={(e) => handleTextAnswer(currentQuestion.id, e.target.value)}
+                        onBlur={flushTextAnswer}
+                      />
+                    ) : (
+                      <Input
+                        id={`answer-${currentQuestion.id}`}
+                        type="text"
+                        placeholder="Type your answer here"
+                        autoComplete="off"
+                        autoCapitalize="off"
+                        className={cn("h-11", ANSWER_FIELD_CLASS)}
+                        value={(answers[currentQuestion.id] as string) ?? ""}
+                        onChange={(e) => handleTextAnswer(currentQuestion.id, e.target.value)}
+                        onBlur={flushTextAnswer}
+                      />
+                    )}
                   </div>
                 ) : isMultipleAnswer ? (
                   // Multiple answer (checkboxes)
