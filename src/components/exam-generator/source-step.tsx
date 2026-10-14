@@ -4,8 +4,15 @@ import { useRef, useState } from "react";
 import { Camera, FileText, ImageIcon, Loader2, Presentation, Trash2, Type, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SOURCE_ACCEPT, type ExtractedSource, type SourceKind } from "@/lib/source-extract";
+
+const DESCRIPTION_EXAMPLES = [
+  "Grade 6 English exam about phrases and clauses",
+  "Grade 9 Science quiz on the periodic table, 20 items",
+  "College Accounting long test on adjusting entries with 2 essay questions",
+];
 
 const KIND_ICONS: Record<SourceKind, typeof FileText> = {
   image: ImageIcon,
@@ -25,12 +32,16 @@ function describeSource(source: ExtractedSource): string {
 }
 
 export function SourceStep({
+  description,
+  onDescriptionChange,
   sources,
   extracting,
   onAddFiles,
   onAddText,
   onRemove,
 }: {
+  description: string;
+  onDescriptionChange: (description: string) => void;
   sources: ExtractedSource[];
   extracting: boolean;
   onAddFiles: (files: File[]) => void;
@@ -51,6 +62,43 @@ export function SourceStep({
 
   return (
     <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="exam-description">Describe the exam</Label>
+        <Textarea
+          id="exam-description"
+          value={description}
+          onChange={(e) => onDescriptionChange(e.target.value)}
+          placeholder="e.g. Grade 6 English exam about phrases and clauses, 30 items"
+          rows={3}
+          maxLength={2000}
+        />
+        <p className="text-xs text-muted-foreground">
+          {sources.length > 0
+            ? "The AI writes questions from your material and uses this description to pick the level, focus, and size."
+            : "Mention the grade or level, subject, and topics. Add material below to base the questions on your own lessons, or leave it empty to generate from the topics alone."}
+        </p>
+        {!description.trim() && (
+          <div className="flex flex-wrap gap-1.5">
+            {DESCRIPTION_EXAMPLES.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => onDescriptionChange(example)}
+                className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        Material (optional)
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
       <div
         onDragOver={(e) => {
           e.preventDefault();

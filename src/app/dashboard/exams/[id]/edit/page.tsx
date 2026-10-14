@@ -772,7 +772,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={openGenerateDialog}>
-              <Sparkles className="mr-1 h-3 w-3" /> Generate from material
+              <Sparkles className="mr-1 h-3 w-3" /> Generate with AI
             </Button>
             <Button variant="outline" size="sm" onClick={addNewQuestion}>
               <Plus className="mr-1 h-3 w-3" /> Add Question

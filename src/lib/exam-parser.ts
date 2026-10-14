@@ -601,7 +601,7 @@ export async function parseExamFile(file: File): Promise<ParseResult> {
 
   if (!rawText.trim()) {
     throw new Error(
-      "Could not extract any text from the file. It looks like a scanned document — use \"Generate from material\" to read scanned pages and photos."
+      "Could not extract any text from the file. It looks like a scanned document — use \"Generate with AI\" to read scanned pages and photos."
     );
   }
 

@@ -992,7 +992,7 @@ export default function CreateExamPage() {
         toast.error(
           file.name.toLowerCase().endsWith(".doc")
             ? "Legacy Word (.doc) files aren't supported. Save the file as .docx and try again."
-            : "Please upload a PDF or Word document (.pdf, .docx). For photos or slides, use \"Generate from material\"."
+            : "Please upload a PDF or Word document (.pdf, .docx). For photos or slides, use \"Generate with AI\"."
         );
         return;
       }
@@ -1982,7 +1982,7 @@ export default function CreateExamPage() {
               <CardTitle>Questions</CardTitle>
               <div className="flex flex-wrap items-center gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => setGenerateDialogOpen(true)}>
-                  <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Generate from material
+                  <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Generate with AI
                 </Button>
                 <Button type="button" variant="default" size="sm" onClick={addQuestion}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" /> Add question
@@ -1995,7 +1995,7 @@ export default function CreateExamPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuItem onClick={() => setGenerateDialogOpen(true)}>
-                      <Sparkles className="mr-2 h-4 w-4" /> Generate from material (AI)
+                      <Sparkles className="mr-2 h-4 w-4" /> Generate with AI
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => fileInputRef.current?.click()} disabled={isScanning}>
                       <Upload className="mr-2 h-4 w-4" /> Upload exam file
@@ -2037,7 +2037,7 @@ export default function CreateExamPage() {
               </div>
             </div>
             <CardDescription className="block">
-              Generate questions from lectures, book photos, or slides with AI, upload an existing exam file, or add questions manually.
+              Generate questions with AI from a short description (e.g. &quot;Grade 6 English exam about phrases and clauses&quot;) or from lectures, book photos, or slides, upload an existing exam file, or add questions manually.
             </CardDescription>
             <GenerateFromMaterialDialog
               open={generateDialogOpen}

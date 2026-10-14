@@ -2,6 +2,7 @@
  * AI exam generation pipeline (Firebase AI Logic / Gemini):
  *   1. transcribeSources – read photos and scanned pages into text
  *   2. analyzeMaterial   – detect subject, level, topics and recommend an exam blueprint
+ *      planFromPrompt    – same output from a short description when there is no material
  *   3. generateExam      – write questions in batches that follow the blueprint
  *   4. generatedToSections – convert the result into the exam editor's sections
  */
@@ -211,14 +212,18 @@ export interface MaterialTopic {
   name: string;
   importance: number;
   refs: string[];
+  /** Concepts and skills to test; set when the exam is planned from a description */
+  keyPoints?: string[];
 }
 
 export interface MaterialAnalysis {
   title: string;
   subject: string;
   educationLevel: EducationLevel;
+  /** Specific examinee group, e.g. "Grade 6 students" */
+  audience?: string;
   language: string;
-  contentType: "lecture_notes" | "textbook" | "slides" | "existing_exam" | "reading_material" | "mixed";
+  contentType: "lecture_notes" | "textbook" | "slides" | "existing_exam" | "reading_material" | "mixed" | "description";
   summary: string;
   topics: MaterialTopic[];
   hasReadingPassages: boolean;
@@ -227,13 +232,18 @@ export interface MaterialAnalysis {
   recommendedItemCount: number;
   recommendedLayouts: QuestionLayout[];
   rationale: string;
+  /** The teacher's description of the exam they want */
+  request?: string;
 }
+
+const AUDIENCE_DESCRIPTION = "Specific examinee group if known, e.g. 'Grade 6 students', 'First-year nursing students'";
 
 const analysisSchema = Schema.object({
   properties: {
     title: Schema.string({ description: "Suggested exam title, e.g. 'Cell Biology Long Test'" }),
     subject: Schema.string(),
     educationLevel: Schema.enumString({ enum: EDUCATION_LEVELS }),
+    audience: Schema.string({ description: AUDIENCE_DESCRIPTION }),
     language: Schema.string({ description: "Main language of the material, e.g. 'English', 'Filipino'" }),
     contentType: Schema.enumString({
       enum: ["lecture_notes", "textbook", "slides", "existing_exam", "reading_material", "mixed"],
@@ -257,6 +267,7 @@ const analysisSchema = Schema.object({
     recommendedLayouts: Schema.array({ items: Schema.enumString({ enum: QUESTION_LAYOUTS }) }),
     rationale: Schema.string({ description: "1-2 sentences explaining the recommended exam type and size" }),
   },
+  optionalProperties: ["audience"],
 });
 
 function purposeGuide(): string {
@@ -266,8 +277,36 @@ function purposeGuide(): string {
   }).join("\n");
 }
 
+const LEVEL_GUIDE = `Examinee levels: Kindergarten to Grade 6 → elementary; Grades 7-10 → junior_high; Grades 11-12 → senior_high; college or university courses → college; board, licensure, or certification review → professional; otherwise general.`;
+
+function requestBlock(request: string | undefined, intro: string): string {
+  const trimmed = request?.trim();
+  return trimmed ? `\n${intro}\n"""\n${trimmed}\n"""\n` : "";
+}
+
+function normalizeAnalysis(analysis: MaterialAnalysis): MaterialAnalysis {
+  analysis.topics = (analysis.topics ?? [])
+    .filter((t) => t.name?.trim())
+    .map((t) => ({
+      ...t,
+      name: t.name.trim(),
+      refs: t.refs ?? [],
+      ...(t.keyPoints && { keyPoints: t.keyPoints.map((k) => k.trim()).filter(Boolean) }),
+    }))
+    .sort((a, b) => b.importance - a.importance);
+  analysis.recommendedLayouts = (analysis.recommendedLayouts ?? []).filter((l) => QUESTION_LAYOUTS.includes(l));
+  if (!EXAM_PURPOSES.includes(analysis.recommendedPurpose)) analysis.recommendedPurpose = "quiz";
+  if (!Number.isFinite(analysis.recommendedItemCount) || analysis.recommendedItemCount < 1) {
+    analysis.recommendedItemCount = PURPOSE_PRESETS[analysis.recommendedPurpose].itemRange[0];
+  }
+  if (!EDUCATION_LEVELS.includes(analysis.educationLevel)) analysis.educationLevel = "general";
+  analysis.audience = analysis.audience?.trim() || undefined;
+  return analysis;
+}
+
 export async function analyzeMaterial(
-  sources: ExtractedSource[]
+  sources: ExtractedSource[],
+  request?: string
 ): Promise<{ analysis: MaterialAnalysis; warnings: string[] }> {
   const corpus = buildCorpus(sources);
   if (corpus.length === 0) throw new Error("No readable text was found in the material.");
@@ -277,11 +316,16 @@ export async function analyzeMaterial(
     : [];
 
   const prompt = `You are an experienced teacher and assessment designer. Analyze the study material below and recommend the exam that best fits it.
-
+${requestBlock(
+  request,
+  "The teacher described the exam they want. Follow it for the exam type, size, question types, examinee level, and which parts of the material to focus on, as far as the material supports it:"
+)}
 Exam purposes:
 ${purposeGuide()}
 
 Question layouts: ${QUESTION_LAYOUTS.join(", ")}.
+
+${LEVEL_GUIDE}
 
 Guidelines:
 - A single short lesson or a few slides suits a quiz; a full chapter or unit suits a long_test; several chapters suit a midterm or final.
@@ -294,17 +338,74 @@ Material:
 ${text}`;
 
   const response = await generateJson(analysisSchema, prompt, { temperature: 0.2, maxOutputTokens: 8192 });
-  const analysis = JSON.parse(response) as MaterialAnalysis;
-  analysis.topics = (analysis.topics ?? [])
-    .filter((t) => t.name?.trim())
-    .sort((a, b) => b.importance - a.importance);
-  analysis.recommendedLayouts = (analysis.recommendedLayouts ?? []).filter((l) => QUESTION_LAYOUTS.includes(l));
-  if (!EXAM_PURPOSES.includes(analysis.recommendedPurpose)) analysis.recommendedPurpose = "quiz";
-  if (!Number.isFinite(analysis.recommendedItemCount) || analysis.recommendedItemCount < 1) {
-    analysis.recommendedItemCount = PURPOSE_PRESETS[analysis.recommendedPurpose].itemRange[0];
-  }
-  if (!EDUCATION_LEVELS.includes(analysis.educationLevel)) analysis.educationLevel = "general";
+  const analysis = normalizeAnalysis(JSON.parse(response) as MaterialAnalysis);
+  if (request?.trim()) analysis.request = request.trim();
   return { analysis, warnings };
+}
+
+const promptPlanSchema = Schema.object({
+  properties: {
+    title: Schema.string({ description: "Exam title, e.g. 'Grade 6 English: Phrases and Clauses Quiz'" }),
+    subject: Schema.string(),
+    educationLevel: Schema.enumString({ enum: EDUCATION_LEVELS }),
+    audience: Schema.string({ description: AUDIENCE_DESCRIPTION }),
+    language: Schema.string({ description: "Language the exam is written in, e.g. 'English', 'Filipino'" }),
+    summary: Schema.string({ description: "2-3 sentences describing what the exam covers, suitable as its description" }),
+    topics: Schema.array({
+      items: Schema.object({
+        properties: {
+          name: Schema.string(),
+          importance: Schema.integer({ description: "1 (minor) to 5 (central)" }),
+          keyPoints: Schema.array({
+            items: Schema.string(),
+            description: "3-6 specific concepts, rules, skills, or facts examinees should know for this topic",
+          }),
+        },
+      }),
+    }),
+    hasReadingPassages: Schema.boolean({
+      description: "True if reading-comprehension passages written by the AI suit this exam",
+    }),
+    recommendedPurpose: Schema.enumString({ enum: EXAM_PURPOSES }),
+    recommendedItemCount: Schema.integer(),
+    recommendedLayouts: Schema.array({ items: Schema.enumString({ enum: QUESTION_LAYOUTS }) }),
+    rationale: Schema.string({ description: "1-2 sentences explaining the recommended exam type and size" }),
+  },
+});
+
+/** Plans an exam from a short description such as "Grade 6 English exam about phrases and clauses". */
+export async function planFromPrompt(request: string): Promise<{ analysis: MaterialAnalysis; warnings: string[] }> {
+  const trimmed = request.trim();
+  if (!trimmed) throw new Error("Describe the exam you want to generate.");
+
+  const prompt = `You are an experienced teacher and curriculum designer. A teacher described the exam they need. There is no study material: plan the exam from the description and from what is normally taught at that level.
+${requestBlock(trimmed, "Teacher's description:")}
+Exam purposes:
+${purposeGuide()}
+
+Question layouts: ${QUESTION_LAYOUTS.join(", ")}.
+
+${LEVEL_GUIDE}
+
+Guidelines:
+- Infer the subject, examinee level, audience, and language from the description. The language is the one the description asks for; for a language subject (e.g. English, Filipino) use that language; otherwise the language the description is written in.
+- Stay within the scope the teacher asked for. Keep every topic they name, and split broad topics into subtopics instead of adding unrelated ones. If the description only names a subject, choose the core topics of that subject at that level.
+- List 2-10 topics, ordered by importance. For each, give 3-6 keyPoints: the specific concepts, rules, definitions, skills, or facts examinees at this level are expected to know, each a short, accurate sentence. Questions will be written from these, so match the depth of a typical curriculum for the level.
+- If the description states an exam type, item count, or question types, follow it exactly. Otherwise a narrow topic suits a quiz, a unit suits a long_test, and a whole term suits a midterm or final.
+- Recommend layouts that fit the topics: terms and definitions suit identification; rules and facts suit true_false and multiple_choice; explanations and arguments suit essay. For young examinees, prefer multiple_choice, true_false, and short identification.
+- Set hasReadingPassages to true only when reading comprehension fits the subject (language, literature, reading) or the description asks for passages.`;
+
+  const response = await generateJson(promptPlanSchema, prompt, { temperature: 0.3, maxOutputTokens: 8192 });
+  const plan = JSON.parse(response) as Omit<MaterialAnalysis, "contentType" | "containsExistingQuestions" | "request">;
+  const analysis = normalizeAnalysis({
+    ...plan,
+    topics: (plan.topics ?? []).map((t) => ({ ...t, refs: [] })),
+    contentType: "description",
+    containsExistingQuestions: false,
+    request: trimmed,
+  });
+  if (analysis.topics.length === 0) throw new Error("The AI couldn't work out topics from that description. Add more detail and try again.");
+  return { analysis, warnings: [] };
 }
 
 // ============ 3. Generation ============
@@ -442,23 +543,58 @@ function layoutRules(layout: QuestionLayout, choices: number, points: number): s
   }
 }
 
-function blueprintContext(bp: ExamBlueprint): string {
+function blueprintContext(bp: ExamBlueprint, analysis: MaterialAnalysis): string {
+  const level = EDUCATION_LEVEL_LABELS[bp.educationLevel];
+  // The audience only applies while the proctor keeps the level the AI detected
+  const audience = analysis.audience && bp.educationLevel === analysis.educationLevel ? ` (${analysis.audience})` : "";
   return [
     `Exam: ${PURPOSE_PRESETS[bp.purpose].label} — "${bp.title}"`,
     `Subject: ${bp.subject}`,
-    `Examinee level: ${EDUCATION_LEVEL_LABELS[bp.educationLevel]}`,
+    `Examinee level: ${level}${audience}`,
     `Language: write every question, option, and answer in ${bp.language}.`,
     `Thinking skills to target: ${bp.cognitiveFocus.map((c) => COGNITIVE_LEVEL_LABELS[c]).join(", ")}.`,
   ].join("\n");
 }
 
-const GENERAL_RULES = `General rules:
-- Base every question only on the material. Do not use outside facts.
-- sourceRef must be one of the reference labels from the material, copied exactly.
-- Write questions that stand alone: never mention "the text", "the lecture", "the slide", or page numbers.
+const SHARED_RULES = `- Write questions that stand alone: never mention "the text", "the lecture", "the slide", or page numbers.
 - Do not repeat a fact across questions, and don't let one question reveal another's answer.
 - Do not use underscores except for blanks in identification questions.
 - Keep wording clear and unambiguous, appropriate for the examinee level.`;
+
+const MATERIAL_RULES = `General rules:
+- Base every question only on the material. Do not use outside facts.
+- sourceRef must be one of the reference labels from the material, copied exactly.
+${SHARED_RULES}`;
+
+const TOPIC_RULES = `General rules:
+- There is no study material. Write from accurate, well-established knowledge of the topics, at the depth normally taught at the examinee level. The topic guide sets the scope; closely related details a teacher at this level would expect are fine.
+- Every question must have exactly one defensible answer (or exactly the marked answers). Avoid facts that are disputed, outdated, or differ between textbooks or regions.
+- For skills (grammar, computation, problem solving), mostly write items that apply the skill to fresh example sentences or problems rather than items that only ask for definitions.
+- Use examples, names, and situations familiar to the examinees.
+- sourceRef must be the name of the topic the question tests, copied exactly from the topic guide.
+${SHARED_RULES}`;
+
+function teacherNotes(bp: ExamBlueprint, analysis: MaterialAnalysis): string {
+  const notes: string[] = [];
+  if (analysis.request) {
+    notes.push(
+      `The teacher's original request (the counts and question types above take precedence over any it mentions): ${analysis.request}`
+    );
+  }
+  if (bp.additionalInstructions.trim()) notes.push(`Additional instructions from the teacher: ${bp.additionalInstructions.trim()}`);
+  return notes.length > 0 ? `\n${notes.join("\n")}\n` : "";
+}
+
+/** Reference for description-based exams: the planned topics and their key points. */
+function topicGuide(analysis: MaterialAnalysis, topics: string[]): string {
+  const selected = topics.length > 0 ? analysis.topics.filter((t) => topics.includes(t.name)) : analysis.topics;
+  return (selected.length > 0 ? selected : analysis.topics)
+    .map((t) => {
+      const points = (t.keyPoints ?? []).map((k) => `  - ${k}`).join("\n");
+      return points ? `${t.name}:\n${points}` : t.name;
+    })
+    .join("\n");
+}
 
 function selectMaterial(corpus: MaterialPage[], topics: string[], analysis: MaterialAnalysis): string {
   const full = formatCorpus(corpus).text;
@@ -482,41 +618,57 @@ function avoidBlock(existing: string[]): string {
   return `\nThe exam already contains these questions. Do not repeat them or test the same fact the same way:\n${list}\n`;
 }
 
+/** What the questions are written from: uploaded material, or the topic guide of a description-based plan. */
+type Reference = { kind: "material"; text: string } | { kind: "topics"; text: string };
+
+function referenceBlock(reference: Reference): string {
+  return reference.kind === "material" ? `Material:\n${reference.text}` : `Topic guide:\n${reference.text}`;
+}
+
 function questionBatchPrompt(
   bp: ExamBlueprint,
+  analysis: MaterialAnalysis,
   batch: Extract<Batch, { kind: "questions" }>,
-  material: string,
+  reference: Reference,
   existing: string[]
 ): string {
   const split = splitByDifficulty(batch.count, bp.difficultyMix);
   return `You are an experienced teacher writing exam questions.
-${blueprintContext(bp)}
+${blueprintContext(bp, analysis)}
 
 Write exactly ${batch.count} ${LAYOUT_LABELS[batch.layout]} questions: ${split.easy} easy, ${split.medium} medium, ${split.hard} hard.
 ${batch.topics.length > 0 ? `Cover these topics, spreading questions across them by importance: ${batch.topics.join("; ")}.` : ""}
 
 ${LAYOUT_LABELS[batch.layout]} rules: ${layoutRules(batch.layout, bp.choicesPerQuestion, bp.pointsPerLayout[batch.layout])}
 
-${GENERAL_RULES}
-${bp.additionalInstructions.trim() ? `\nAdditional instructions from the teacher: ${bp.additionalInstructions.trim()}\n` : ""}${avoidBlock(existing)}
-Material:
-${material}`;
+${reference.kind === "material" ? MATERIAL_RULES : TOPIC_RULES}
+${teacherNotes(bp, analysis)}${avoidBlock(existing)}
+${referenceBlock(reference)}`;
 }
 
-function passageBatchPrompt(bp: ExamBlueprint, batch: Extract<Batch, { kind: "passages" }>, material: string): string {
+function passageBatchPrompt(
+  bp: ExamBlueprint,
+  analysis: MaterialAnalysis,
+  batch: Extract<Batch, { kind: "passages" }>,
+  reference: Reference
+): string {
+  const task =
+    reference.kind === "material"
+      ? `Choose ${batch.passageCount} passage(s) from the material, each 120-400 words, quoted or lightly adapted so it reads well on its own. Give each a short title.
+For each passage, write exactly ${batch.questionsPerPassage} Multiple Choice questions answerable from that passage alone, mixing literal, inferential, and vocabulary-in-context questions.`
+      : `Write ${batch.passageCount} original passage(s) suited to the examinees, each 120-400 words: a story, article, or informational text that reads well on its own and relates to the topics. Give each a short title. Set sourceRef to an empty string.
+For each passage, write exactly ${batch.questionsPerPassage} Multiple Choice questions answerable from that passage alone, mixing literal, inferential, and vocabulary-in-context questions. Where it fits, also ask questions that apply the topics to the passage (for example, a language feature used in it).`;
   return `You are an experienced teacher writing a reading-comprehension section.
-${blueprintContext(bp)}
+${blueprintContext(bp, analysis)}
 
-Choose ${batch.passageCount} passage(s) from the material, each 120-400 words, quoted or lightly adapted so it reads well on its own. Give each a short title.
-For each passage, write exactly ${batch.questionsPerPassage} Multiple Choice questions answerable from that passage alone, mixing literal, inferential, and vocabulary-in-context questions.
+${task}
 
 Multiple Choice rules: ${layoutRules("multiple_choice", bp.choicesPerQuestion, bp.pointsPerLayout.multiple_choice)}
 
-${GENERAL_RULES}
+${reference.kind === "material" ? MATERIAL_RULES : TOPIC_RULES}
 - In this section, questions may refer to "the passage".
-${bp.additionalInstructions.trim() ? `\nAdditional instructions from the teacher: ${bp.additionalInstructions.trim()}\n` : ""}
-Material:
-${material}`;
+${teacherNotes(bp, analysis)}
+${referenceBlock(reference)}`;
 }
 
 const NO_SHUFFLE_PATTERN = /\b(all|none|both|neither) of the (above|following)\b|\bboth [a-h] and [a-h]\b|\b[a-h] and [a-h] only\b/i;
@@ -606,7 +758,9 @@ function normalizeQuestion(
     }
   }
 
-  const rawRef = (raw.sourceRef ?? "").trim();
+  // Without material (description-based exams) the model cites a topic name, not a page
+  const grounded = pages.size > 0;
+  const rawRef = grounded ? (raw.sourceRef ?? "").trim() : "";
   const page = resolveSourcePage(rawRef, pages);
   if (rawRef && !page) issues.push("The cited source page couldn't be matched to the material.");
 
@@ -621,7 +775,7 @@ function normalizeQuestion(
     explanation: (raw.explanation ?? "").trim(),
     difficulty: DIFFICULTIES.includes(raw.difficulty) ? raw.difficulty : "medium",
     cognitiveLevel: COGNITIVE_LEVELS.includes(raw.cognitiveLevel) ? raw.cognitiveLevel : "remember",
-    topic: (raw.topic ?? "").trim(),
+    topic: (raw.topic ?? "").trim() || (grounded ? "" : (raw.sourceRef ?? "").trim()),
     sourceRef: page?.ref ?? rawRef,
     sourceExcerpt: page ? sourceExcerpt(page.text) : "",
     sourceId: page?.sourceId,
@@ -685,9 +839,16 @@ export async function generateExam(
 ): Promise<GenerationResult> {
   const existing = options.existingQuestions ?? [];
   const corpus = buildCorpus(sources);
+  const grounded = corpus.length > 0;
+  if (!grounded && analysis.topics.length === 0) throw new Error("Add material or describe the exam first.");
   const pagesByRef = new Map(corpus.map((p) => [p.ref, p]));
   const batches = planBatches(bp);
   if (batches.length === 0) throw new Error("Set at least one question to generate.");
+
+  const referenceFor = (topics: string[]): Reference =>
+    grounded
+      ? { kind: "material", text: selectMaterial(corpus, topics, analysis) }
+      : { kind: "topics", text: topicGuide(analysis, topics.length > 0 ? topics : bp.topics) };
 
   const batchOptions = { temperature: 0.5, maxOutputTokens: 32768 };
   onProgress?.(0, batches.length, "Writing questions…");
@@ -695,8 +856,8 @@ export async function generateExam(
   const results = await runWithConcurrency(
     batches.map((batch) => async () => {
       if (batch.kind === "questions") {
-        const material = selectMaterial(corpus, batch.topics, analysis);
-        const text = await generateJson(questionBatchSchema, questionBatchPrompt(bp, batch, material, existing), batchOptions);
+        const prompt = questionBatchPrompt(bp, analysis, batch, referenceFor(batch.topics), existing);
+        const text = await generateJson(questionBatchSchema, prompt, batchOptions);
         const parsed = JSON.parse(text) as { questions: RawQuestion[] };
         return {
           questions: (parsed.questions ?? [])
@@ -706,8 +867,10 @@ export async function generateExam(
           passages: [] as GeneratedPassage[],
         };
       }
-      const material = formatCorpus(corpus).text;
-      const text = await generateJson(passageBatchSchema, passageBatchPrompt(bp, batch, material), batchOptions);
+      const reference: Reference = grounded
+        ? { kind: "material", text: formatCorpus(corpus).text }
+        : { kind: "topics", text: topicGuide(analysis, bp.topics) };
+      const text = await generateJson(passageBatchSchema, passageBatchPrompt(bp, analysis, batch, reference), batchOptions);
       const parsed = JSON.parse(text) as {
         passages: { title: string; body: string; sourceRef: string; questions: RawQuestion[] }[];
       };
@@ -715,7 +878,12 @@ export async function generateExam(
       const questions: GeneratedQuestion[] = [];
       for (const p of (parsed.passages ?? []).slice(0, batch.passageCount)) {
         if (!p.body?.trim()) continue;
-        const passage = { id: genQuestionId(), title: (p.title ?? "").trim(), body: p.body.trim(), sourceRef: (p.sourceRef ?? "").trim() };
+        const passage = {
+          id: genQuestionId(),
+          title: (p.title ?? "").trim(),
+          body: p.body.trim(),
+          sourceRef: grounded ? (p.sourceRef ?? "").trim() : "",
+        };
         passages.push(passage);
         (p.questions ?? [])
           .slice(0, batch.questionsPerPassage)
@@ -728,7 +896,9 @@ export async function generateExam(
     (done) => onProgress?.(done, batches.length, "Writing questions…")
   );
 
-  const warnings: string[] = [];
+  const warnings: string[] = grounded
+    ? []
+    : ["These questions come from the AI's general knowledge, not uploaded material. Check facts and answer keys before publishing."];
   const allQuestions: GeneratedQuestion[] = [];
   const passages: GeneratedPassage[] = [];
   const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");

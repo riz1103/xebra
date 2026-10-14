@@ -20,6 +20,7 @@ import {
   generateExam,
   generatedToSections,
   missingLayouts,
+  planFromPrompt,
   transcribeSources,
   type AppliedExam,
   type GenerationResult,
@@ -54,9 +55,12 @@ import { AppendSettings } from "./append-settings";
 
 type Step = "sources" | "analyzing" | "blueprint" | "generating" | "review" | "saving";
 
+/** Short descriptions like "math" give the AI too little to plan an exam from. */
+const MIN_DESCRIPTION_CHARS = 8;
+
 function stepLabels(append: boolean): { steps: Step[]; label: string }[] {
   return [
-    { steps: ["sources", "analyzing"], label: "Material" },
+    { steps: ["sources", "analyzing"], label: "Topic & material" },
     { steps: ["blueprint", "generating"], label: append ? "Question settings" : "Exam settings" },
     { steps: ["review", "saving"], label: "Review" },
   ];
@@ -99,6 +103,7 @@ export function GenerateFromMaterialDialog({
   const queryClient = useQueryClient();
   const isAdmin = useAuthStore((s) => s.user?.role === "admin");
   const [step, setStep] = useState<Step>("sources");
+  const [description, setDescription] = useState("");
   const [sources, setSources] = useState<ExtractedSource[]>([]);
   const [pendingFiles, setPendingFiles] = useState(0);
   const [progress, setProgress] = useState({ done: 0, total: 1, label: "" });
@@ -127,6 +132,7 @@ export function GenerateFromMaterialDialog({
 
   const reset = () => {
     setStep("sources");
+    setDescription("");
     setSources([]);
     setAnalysis(null);
     setBlueprint(null);
@@ -152,16 +158,30 @@ export function GenerateFromMaterialDialog({
     }
   };
 
+  const trimmedDescription = description.trim();
+  const fromDescription = sources.length === 0;
+  const canAnalyze =
+    pendingFiles === 0 && (sources.length > 0 || trimmedDescription.length >= MIN_DESCRIPTION_CHARS);
+
   const analyze = async () => {
     setError(null);
     setStep("analyzing");
     try {
-      const transcribed = await transcribeSources(sources, (done, total, label) => setProgress({ done, total, label }));
-      setSources(transcribed.sources);
-      setProgress({ done: 0, total: 1, label: "Analyzing subject, topics, and level…" });
-      const { analysis: a, warnings: analysisWarnings } = await analyzeMaterial(transcribed.sources);
+      let a: MaterialAnalysis;
+      let stepWarnings: string[];
+      if (fromDescription) {
+        setProgress({ done: 0, total: 1, label: "Planning topics and level from your description…" });
+        ({ analysis: a, warnings: stepWarnings } = await planFromPrompt(trimmedDescription));
+      } else {
+        const transcribed = await transcribeSources(sources, (done, total, label) => setProgress({ done, total, label }));
+        setSources(transcribed.sources);
+        setProgress({ done: 0, total: 1, label: "Analyzing subject, topics, and level…" });
+        const analyzed = await analyzeMaterial(transcribed.sources, trimmedDescription);
+        a = analyzed.analysis;
+        stepWarnings = [...transcribed.warnings, ...analyzed.warnings];
+      }
       setAnalysis(a);
-      setWarnings([...transcribed.warnings, ...analysisWarnings]);
+      setWarnings(stepWarnings);
       setBlueprint(
         buildBlueprint({
           purpose: a.recommendedPurpose,
@@ -261,12 +281,12 @@ export function GenerateFromMaterialDialog({
       <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" /> {append ? "Add questions from material" : "Generate exam from material"}
+            <Sparkles className="h-5 w-5 text-primary" /> {append ? "Add questions with AI" : "Generate exam with AI"}
           </DialogTitle>
           <DialogDescription>
             {append
-              ? "Upload lectures, book pages, or slides. The AI writes new questions from them and avoids repeating the exam's existing questions."
-              : "Upload lectures, book pages, or slides. The AI reads them, recommends the exam type and settings, then writes the questions."}
+              ? "Describe the topics, upload lectures, book pages, or slides, or both. The AI writes new questions and avoids repeating the exam's existing ones."
+              : "Describe the exam you need, upload lectures, book pages, or slides, or both. The AI recommends the exam type and settings, then writes the questions."}
           </DialogDescription>
           <ol className="flex items-center gap-2 pt-2 text-xs">
             {STEP_LABELS.map((s, i) => (
@@ -302,6 +322,8 @@ export function GenerateFromMaterialDialog({
 
           {step === "sources" && (
             <SourceStep
+              description={description}
+              onDescriptionChange={setDescription}
               sources={sources}
               extracting={pendingFiles > 0}
               onAddFiles={addFiles}
@@ -371,15 +393,15 @@ export function GenerateFromMaterialDialog({
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button type="button" onClick={analyze} disabled={sources.length === 0 || pendingFiles > 0}>
-                  <Sparkles className="mr-1.5 h-4 w-4" /> Analyze material
+                <Button type="button" onClick={analyze} disabled={!canAnalyze}>
+                  <Sparkles className="mr-1.5 h-4 w-4" /> {fromDescription ? "Plan exam" : "Analyze material"}
                 </Button>
               </>
             )}
             {step === "blueprint" && (
               <>
                 <Button type="button" variant="outline" onClick={() => setStep("sources")}>
-                  <ArrowLeft className="mr-1.5 h-4 w-4" /> Material
+                  <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
                 </Button>
                 <Button type="button" onClick={generate} disabled={requestedCount === 0 || missing.length > 0}>
                   <Sparkles className="mr-1.5 h-4 w-4" /> Generate {requestedCount} questions

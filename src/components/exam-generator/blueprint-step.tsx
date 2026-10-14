@@ -43,6 +43,7 @@ const CONTENT_TYPE_LABELS: Record<MaterialAnalysis["contentType"], string> = {
   existing_exam: "Existing exam",
   reading_material: "Reading material",
   mixed: "Mixed material",
+  description: "From your description",
 };
 
 function toInt(value: string, min: number, max: number): number {
@@ -83,6 +84,7 @@ export function BlueprintStep({
   const perSession = itemsPerSession(bp);
   const countMax = pool ? MAX_POOL_PER_LAYOUT : 100;
   const passageTotal = passageQuestionTotal(bp);
+  const fromDescription = analysis.contentType === "description";
 
   return (
     <div className="space-y-6">
@@ -91,10 +93,16 @@ export function BlueprintStep({
         <div className="flex flex-wrap items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium">{analysis.subject}</span>
-          <Badge variant="secondary">{EDUCATION_LEVEL_LABELS[analysis.educationLevel]}</Badge>
+          <Badge variant="secondary">{analysis.audience || EDUCATION_LEVEL_LABELS[analysis.educationLevel]}</Badge>
           <Badge variant="secondary">{CONTENT_TYPE_LABELS[analysis.contentType] ?? analysis.contentType}</Badge>
           <Badge variant="secondary">{analysis.language}</Badge>
         </div>
+        {analysis.request && (
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Your request: </span>
+            {analysis.request}
+          </p>
+        )}
         <p className="text-sm text-muted-foreground">{analysis.summary}</p>
         <p className="text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Recommendation: </span>
@@ -183,22 +191,36 @@ export function BlueprintStep({
               {bp.topics.length === analysis.topics.length ? "Clear" : "Select all"}
             </Button>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className={`grid gap-2 ${fromDescription ? "" : "sm:grid-cols-2"}`}>
             {analysis.topics.map((topic) => (
-              <label key={topic.name} className="flex items-center gap-2 text-sm cursor-pointer">
+              <label key={topic.name} className="flex items-start gap-2 text-sm cursor-pointer">
                 <Checkbox
+                  className="mt-0.5"
                   checked={bp.topics.includes(topic.name)}
                   onCheckedChange={(checked) =>
                     set("topics", checked ? [...bp.topics, topic.name] : bp.topics.filter((t) => t !== topic.name))
                   }
                 />
-                <span className="flex-1 truncate">{topic.name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{topic.name}</span>
+                  {topic.keyPoints && topic.keyPoints.length > 0 && (
+                    <span className="block text-xs text-muted-foreground">{topic.keyPoints.join(" · ")}</span>
+                  )}
+                </span>
                 <span className="text-xs text-muted-foreground" title="Importance">{"●".repeat(Math.max(1, Math.min(5, topic.importance)))}</span>
               </label>
             ))}
           </div>
           {bp.topics.length === 0 && (
-            <p className="text-xs text-muted-foreground">No topics selected: questions will cover the whole material.</p>
+            <p className="text-xs text-muted-foreground">
+              No topics selected: questions will cover {fromDescription ? "all the topics above" : "the whole material"}.
+            </p>
+          )}
+          {fromDescription && (
+            <p className="text-xs text-muted-foreground">
+              Questions are written from these topics and key points. To add or narrow topics, go back and refine your
+              description, or use the extra instructions below.
+            </p>
           )}
         </div>
       )}
@@ -280,9 +302,11 @@ export function BlueprintStep({
             <div>
               <Label>Reading comprehension passages</Label>
               <p className="text-xs text-muted-foreground">
-                {analysis.hasReadingPassages
-                  ? "The material has prose that works well for passages."
-                  : "The material doesn't appear to have much prose for passages."}
+                {fromDescription
+                  ? "The AI writes original passages that suit the examinees and topics."
+                  : analysis.hasReadingPassages
+                    ? "The material has prose that works well for passages."
+                    : "The material doesn't appear to have much prose for passages."}
               </p>
             </div>
             <Switch

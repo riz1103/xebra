@@ -60,7 +60,7 @@ export async function buildExamImportTemplateDocx(): Promise<Buffer> {
     }),
 
     heading("1. File format & numbering"),
-    body("Supported formats: Word (.docx) or PDF with selectable text. For photos, scanned pages, or slides, use \"Generate from material\" instead."),
+    body("Supported formats: Word (.docx) or PDF with selectable text. For photos, scanned pages, or slides, use \"Generate with AI\" instead."),
     body(
       "Number every question. Supported patterns: 1. or 1) or Q1. or Question 1: or #1 or 1 -"
     ),
