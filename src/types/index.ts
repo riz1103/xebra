@@ -370,7 +370,9 @@ export interface ExamSession {
         description: string;
         timeLimit?: number | null; // Only when exam timeType is 'per_part'
       };
-      questions: SessionQuestion[];
+      /** Missing when the backend returns the stored session shape (questionIds only) */
+      questions?: SessionQuestion[];
+      questionIds?: string[];
     };
   } | null;
   partTimeLimits?: {
@@ -589,6 +591,34 @@ export interface ApiResponse<T = unknown> {
 }
 
 // ============ Pagination ============
+export type ExamResultScope = "mine" | "managed";
+export type ExamResultSortBy = "date" | "score" | "examTitle" | "examineeName";
+export type SortOrder = "asc" | "desc";
+
+export interface ExamResultListParams {
+  /** "mine" = caller's own results; "managed" = all (admin) or results for the proctor's exams */
+  scope?: ExamResultScope;
+  examId?: string;
+  examineeId?: string;
+  search?: string;
+  status?: "passed" | "failed";
+  /** ISO date-time, inclusive */
+  from?: string;
+  /** ISO date-time, inclusive */
+  to?: string;
+  sortBy?: ExamResultSortBy;
+  sortOrder?: SortOrder;
+  page?: number;
+  size?: number;
+}
+
+export interface ExamResultSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  averagePercentage: number;
+}
+
 export interface PaginationMeta {
   page: number;
   size: number;

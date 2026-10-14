@@ -249,7 +249,7 @@ export default function MyExamsPage() {
 
   const { data: resultsData } = useQuery({
     queryKey: ["my-results-for-exams"],
-    queryFn: () => api.getExamResults({ page: 1, size: 500 }),
+    queryFn: () => api.getExamResults({ scope: "mine", page: 1, size: 500 }),
   });
 
   const allExams = forExamineeData?.data || [];

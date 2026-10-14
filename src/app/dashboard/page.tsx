@@ -47,8 +47,8 @@ function ProctorDashboard() {
   });
 
   const { data: resultsData, isLoading: resultsLoading } = useQuery({
-    queryKey: ["results", 1],
-    queryFn: () => api.getExamResults({ page: 1, size: DEFAULT_PAGE_SIZE }),
+    queryKey: ["results", "managed", "recent"],
+    queryFn: () => api.getExamResults({ scope: "managed", page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
   const exams = examsData?.data || [];
@@ -192,8 +192,8 @@ function ExamineeDashboard() {
   });
 
   const { data: resultsData, isLoading: resLoading } = useQuery({
-    queryKey: ["my-results", 1],
-    queryFn: () => api.getExamResults({ page: 1, size: DEFAULT_PAGE_SIZE }),
+    queryKey: ["my-results", "recent"],
+    queryFn: () => api.getExamResults({ scope: "mine", page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
   const { data: sessionsData, isLoading: sessLoading } = useQuery({

@@ -47,7 +47,7 @@ export function ShareExamCard({ exam }: { exam: Pick<Exam, "id" | "isPublic" | "
             </div>
             <p className="text-xs text-muted-foreground">
               Anyone with this link can sign in (or create an account) and take the exam without an invitation.
-              Public links have no attempt limit; send invitations if you need to limit attempts or schedule a time window.
+              People can retake it until they pass; send invitations if you need a fixed attempt limit or a scheduled time window.
             </p>
             {exam.status !== "active" && (
               <p className="text-xs text-amber-600 dark:text-amber-400">

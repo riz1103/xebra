@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { use, useState, useEffect, useCallback, useRef } from "react";
+import { use, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -32,6 +32,8 @@ import {
 import { cn, formatDuration } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { parseBlanks } from "@/lib/question-blanks";
+
+const UNASSIGNED_PART_ID = "__unassigned";
 
 export default function ExamPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
@@ -66,35 +68,54 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   });
 
   const session = data?.data;
-  const allQuestions = session?.questions || [];
+  const sessionQuestions = session?.questions;
   const selectedQuestionIds = session?.selectedQuestionIds;
-  
-  // Filter and sort questions to match selectedQuestionIds order if it exists
-  const questions: SessionQuestion[] = selectedQuestionIds && selectedQuestionIds.length > 0
-    ? selectedQuestionIds
-        .map((id) => allQuestions.find((q) => q.id === id))
-        .filter((q): q is SessionQuestion => q !== undefined)
-    : (allQuestions as SessionQuestion[]);
-  
-  // Filter questionsByPart if it exists and selectedQuestionIds is provided
-  // Maintain order within each part based on selectedQuestionIds
   const rawQuestionsByPart = session?.questionsByPart || null;
-  const questionsByPart = rawQuestionsByPart && selectedQuestionIds && selectedQuestionIds.length > 0
-    ? Object.keys(rawQuestionsByPart).reduce((acc, partId) => {
-        const partData = rawQuestionsByPart[partId];
-        // Filter and sort by selectedQuestionIds order
-        const filteredQuestions = selectedQuestionIds
-          .map((id) => partData.questions.find((q) => q.id === id))
+
+  // Memoized so effects that depend on these only re-run when the session data changes
+  const questions = useMemo<SessionQuestion[]>(() => {
+    const allQuestions = (sessionQuestions || []) as SessionQuestion[];
+    if (!selectedQuestionIds || selectedQuestionIds.length === 0) return allQuestions;
+    const byId = new Map(allQuestions.map((q) => [q.id, q]));
+    return selectedQuestionIds
+      .map((id) => byId.get(id))
+      .filter((q): q is SessionQuestion => q !== undefined);
+  }, [sessionQuestions, selectedQuestionIds]);
+
+  // Maintain order within each part based on selectedQuestionIds
+  const questionsByPart = useMemo(() => {
+    if (!rawQuestionsByPart) return null;
+    const questionById = new Map(((sessionQuestions || []) as SessionQuestion[]).map((q) => [q.id, q]));
+    const byPart: Record<string, (typeof rawQuestionsByPart)[string] & { questions: SessionQuestion[] }> = {};
+    for (const partId of Object.keys(rawQuestionsByPart)) {
+      const partData = rawQuestionsByPart[partId];
+      const partQuestions: SessionQuestion[] =
+        partData.questions ??
+        (partData.questionIds ?? [])
+          .map((id) => questionById.get(id))
           .filter((q): q is SessionQuestion => q !== undefined);
-        if (filteredQuestions.length > 0) {
-          acc[partId] = {
-            ...partData,
-            questions: filteredQuestions,
-          };
-        }
-        return acc;
-      }, {} as typeof rawQuestionsByPart)
-    : rawQuestionsByPart;
+      const partQuestionById = new Map(partQuestions.map((q) => [q.id, q]));
+      const filteredQuestions = selectedQuestionIds && selectedQuestionIds.length > 0
+        ? selectedQuestionIds
+            .map((id) => partQuestionById.get(id))
+            .filter((q): q is SessionQuestion => q !== undefined)
+        : partQuestions;
+      if (filteredQuestions.length > 0) {
+        byPart[partId] = { ...partData, questions: filteredQuestions };
+      }
+    }
+    if (Object.keys(byPart).length > 0) {
+      const inPart = new Set(Object.values(byPart).flatMap((p) => p.questions.map((q) => q.id)));
+      const unassigned = questions.filter((q) => !inPart.has(q.id));
+      if (unassigned.length > 0) {
+        byPart[UNASSIGNED_PART_ID] = {
+          part: { id: UNASSIGNED_PART_ID, name: "Other questions", description: "" },
+          questions: unassigned,
+        };
+      }
+    }
+    return byPart;
+  }, [rawQuestionsByPart, sessionQuestions, selectedQuestionIds, questions]);
   
   const partTimeLimits = session?.partTimeLimits || null;
   const hasParts = questionsByPart !== null && Object.keys(questionsByPart).length > 0;

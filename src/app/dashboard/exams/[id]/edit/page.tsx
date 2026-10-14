@@ -52,7 +52,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
   const { data: resultsData } = useQuery({
     queryKey: ["exam-results", id],
-    queryFn: () => api.getExamResults({ examId: id, size: 1 }),
+    queryFn: () => api.getExamResults({ scope: "managed", examId: id, size: 1 }),
     enabled: !!id,
   });
 

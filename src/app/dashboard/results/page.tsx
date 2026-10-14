@@ -1,46 +1,49 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataTableSkeleton } from "@/components/ui/loading";
 import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
+import {
+  ResultFilters,
+  DEFAULT_RESULT_FILTERS,
+  isDefaultResultFilters,
+  useExamFilterOptions,
+  usePageForParams,
+  useResultQueryParams,
+  type ResultFilterState,
+} from "@/components/results/result-filters";
 import Link from "next/link";
-import { Search, BarChart3, Eye } from "lucide-react";
+import { BarChart3, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { ExamResult } from "@/types";
 
 export default function ResultsPage() {
   const { user } = useAuthStore();
-  const [search, setSearch] = useState("");
-  const [examFilter, setExamFilter] = useState("all");
-  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<ResultFilterState>(DEFAULT_RESULT_FILTERS);
   const [selectedResult, setSelectedResult] = useState<ExamResult | null>(null);
 
   const isProctorOrAdmin = user?.role === "proctor" || user?.role === "admin";
+  const queryParams = useResultQueryParams(filters);
+  const [page, setPage] = usePageForParams(queryParams);
 
-  const { data: resultsData, isLoading } = useQuery({
-    queryKey: ["results", page, examFilter],
+  const { data: resultsData, isLoading, isFetching } = useQuery({
+    queryKey: ["results", "managed", page, queryParams],
     queryFn: () =>
       api.getExamResults({
+        scope: "managed",
         page,
         size: DEFAULT_PAGE_SIZE,
-        examId: examFilter === "all" ? undefined : examFilter,
+        ...queryParams,
       }),
-  });
-
-  const { data: examsData } = useQuery({
-    queryKey: ["exams"],
-    queryFn: () => api.getExams(),
+    placeholderData: keepPreviousData,
   });
 
   const { data: fullResultData } = useQuery({
@@ -51,21 +54,22 @@ export default function ResultsPage() {
 
   const resultForReview = fullResultData?.data ?? selectedResult;
 
-  const items = resultsData?.data || [];
+  const results = resultsData?.data || [];
   const pagination = resultsData?.pagination;
-  const results = items.filter((r) => {
-    const matchesSearch = (r.examineeName || "").toLowerCase().includes(search.toLowerCase()) ||
-      (r.examTitle || "").toLowerCase().includes(search.toLowerCase());
-    return matchesSearch;
-  });
+  const summary = resultsData?.summary;
+  const examOptions = useExamFilterOptions(
+    resultsData?.exams,
+    filters.examId,
+    results.find((r) => r.examId === filters.examId)?.examTitle
+  );
 
-  const exams = examsData?.data || [];
-
-  const totalResults = pagination?.total ?? results.length;
-  const passedCount = results.filter((r) => r.passed).length;
-  const avgPercentage = results.length > 0
+  const totalResults = summary?.total ?? pagination?.total ?? results.length;
+  const passedCount = summary?.passed ?? results.filter((r) => r.passed).length;
+  const avgPercentage = summary?.averagePercentage ?? (results.length > 0
     ? Math.round(results.reduce((s, r) => s + r.percentage, 0) / results.length)
-    : 0;
+    : 0);
+  const passRate = totalResults > 0 ? Math.round((passedCount / totalResults) * 100) : 0;
+  const filtersActive = !isDefaultResultFilters(filters);
 
   return (
     <div className="space-y-6">
@@ -89,9 +93,7 @@ export default function ResultsPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Pass Rate</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">
-              {results.length > 0 ? Math.round((passedCount / results.length) * 100) : 0}%
-            </div>
+            <div className="text-2xl font-bold text-emerald-600">{passRate}%</div>
           </CardContent>
         </Card>
         <Card>
@@ -102,20 +104,14 @@ export default function ResultsPage() {
         </Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search results..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={examFilter} onValueChange={(v) => { setExamFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Filter by exam" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Exams</SelectItem>
-            {exams.map((e) => (<SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>))}
-          </SelectContent>
-        </Select>
-      </div>
+      <ResultFilters
+        value={filters}
+        onChange={setFilters}
+        exams={examOptions}
+        showExamineeSort
+        searchPlaceholder="Search by examinee name, email, or exam..."
+        total={summary?.total ?? pagination?.total}
+      />
 
       {/* Results List */}
       {isLoading ? (
@@ -125,11 +121,15 @@ export default function ResultsPage() {
           <CardContent className="flex flex-col items-center justify-center py-16">
             <BarChart3 className="h-12 w-12 text-muted-foreground/50 mb-4" />
             <h3 className="text-lg font-semibold">No results found</h3>
-            <p className="text-sm text-muted-foreground mt-1">Results will appear here when examinees complete exams.</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {filtersActive
+                ? "No results match these filters."
+                : "Results will appear here when examinees complete exams."}
+            </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className={cn("space-y-3 transition-opacity", isFetching && "opacity-60")}>
           {results.map((result) => (
             <Card key={result.id} className="transition-shadow hover:shadow-md cursor-pointer" onClick={() => setSelectedResult(result)}>
               <CardContent className="flex items-center gap-4 py-4">

@@ -27,6 +27,8 @@ import type {
   UpdateExamSessionPayload,
   AnswerQuestionPayload,
   ExamResult,
+  ExamResultListParams,
+  ExamResultSummary,
   ExamInvitation,
   CreateExamInvitationPayload,
   CreateGroupInvitationPayload,
@@ -42,6 +44,13 @@ import type {
 /** List response with optional pagination metadata from API */
 export interface ListResponse<T> extends ApiResponse<T[]> {
   pagination?: PaginationMeta;
+}
+
+export interface ExamResultListResponse extends ListResponse<ExamResult> {
+  /** Totals across every result matching the filters, not just the current page */
+  summary?: ExamResultSummary;
+  /** Exams with results in the current scope; omitted when filtering by examId */
+  exams?: { id: string; title: string }[];
 }
 
 const API_BASE_URL =
@@ -355,8 +364,8 @@ class ApiClient {
   }
 
   // ============ Exam Results ============
-  async getExamResults(params?: { examId?: string; examineeId?: string; page?: number; size?: number }) {
-    const { data } = await this.client.get<ListResponse<ExamResult>>("/api/exam-results", { params });
+  async getExamResults(params?: ExamResultListParams) {
+    const { data } = await this.client.get<ExamResultListResponse>("/api/exam-results", { params });
     return data;
   }
 
