@@ -501,7 +501,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
               <div>
                 <Label>Allow examinees to review their answers</Label>
                 <p className="text-xs text-muted-foreground">
-                  When on, examinees can open &quot;View my answers&quot; after submitting to see questions and correct/incorrect.
+                  When on, examinees can open &quot;View my answers&quot; after submitting to see questions, correct answers, and explanations.
                 </p>
               </div>
             </div>
@@ -727,7 +727,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
               <div>
                 <Label>Allow examinees to review their answers</Label>
                 <p className="text-xs text-muted-foreground">
-                  When on, examinees can open &quot;View my answers&quot; after submitting to see questions and correct/incorrect.
+                  When on, examinees can open &quot;View my answers&quot; after submitting to see questions, correct answers, and explanations.
                 </p>
               </div>
             </div>

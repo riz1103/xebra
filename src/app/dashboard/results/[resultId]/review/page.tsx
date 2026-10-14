@@ -334,6 +334,18 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
   const userAnswerStr = typeof rawUserAnswer === "string" ? rawUserAnswer : null;
   const qResult = currentQuestion ? resultByQuestionId[currentQuestion.id] : null;
   const isCorrect = qResult?.isCorrect ?? false;
+  const correctAnswers = !currentQuestion?.correctAnswer
+    ? []
+    : Array.isArray(currentQuestion.correctAnswer)
+      ? currentQuestion.correctAnswer
+      : [currentQuestion.correctAnswer];
+  const correctAnswerLabel = correctAnswers
+    .map((answer) => {
+      const i = currentQuestion?.options.indexOf(answer) ?? -1;
+      return i >= 0 ? `${String.fromCharCode(65 + i)}. ${answer}` : answer;
+    })
+    .join(", ");
+  const explanation = currentQuestion?.explanation?.trim();
 
   return (
     <div className="min-h-screen bg-background">
@@ -460,7 +472,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
           {currentQuestion ? (
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <Badge variant="outline" className="text-xs">
                     Question {currentIndex + 1} of {currentQuestions.length}
                     {hasParts && currentPart && questionsByPart && (
@@ -605,10 +617,25 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                     className="mt-4"
                   />
                 ) : (
-                  examineeCanViewSources &&
-                  currentQuestion.metadata?.ai && (
-                    <QuestionSource source={currentQuestion.metadata.ai} className="mt-4 rounded-md bg-muted/40 p-2.5" />
-                  )
+                  <>
+                    {!isCorrect && correctAnswerLabel && (
+                      <div className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/30">
+                        <span className="font-medium text-emerald-800 dark:text-emerald-300">
+                          Correct answer{correctAnswers.length > 1 ? "s" : ""}:{" "}
+                        </span>
+                        <span className="break-words">{correctAnswerLabel}</span>
+                      </div>
+                    )}
+                    {explanation && (
+                      <div className="mt-3 rounded-md bg-muted/40 p-3 text-sm">
+                        <p className="font-medium mb-1">Explanation</p>
+                        <p className="text-muted-foreground whitespace-pre-wrap break-words">{explanation}</p>
+                      </div>
+                    )}
+                    {examineeCanViewSources && currentQuestion.metadata?.ai && (
+                      <QuestionSource source={currentQuestion.metadata.ai} className="mt-3 rounded-md bg-muted/40 p-2.5" />
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

@@ -131,7 +131,7 @@ export interface ExamQuestion {
   examId: string;
   partId?: string | null; // New: ID of the exam part this question belongs to
   timeLimit?: number;
-  /** Proctor-only: why the answer is correct */
+  /** Why the answer is correct; shown to proctors, and to examinees when the exam is reviewable */
   explanation?: string;
   metadata?: QuestionMetadata;
   /** 'active' (default) = included in question pool; 'disabled' = excluded from new sessions */
