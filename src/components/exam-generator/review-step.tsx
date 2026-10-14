@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LAYOUT_LABELS, QUESTION_LAYOUTS } from "@/lib/exam-blueprint";
 import type { GeneratedQuestion, GenerationResult } from "@/lib/exam-generator";
+import { QuestionSource } from "./question-source";
 
 function QuestionPreview({
   question: q,
@@ -68,7 +69,7 @@ function QuestionPreview({
           )}
 
           {q.explanation && <p className="text-xs text-muted-foreground">{q.explanation}</p>}
-          {q.sourceRef && <p className="text-[11px] text-muted-foreground">Source: {q.sourceRef}</p>}
+          <QuestionSource source={q} />
 
           {q.issues.map((issue) => (
             <p key={issue} className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">

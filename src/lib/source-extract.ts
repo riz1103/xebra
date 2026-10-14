@@ -15,6 +15,8 @@ export interface SourceImage {
 export interface SourcePage {
   /** Human-readable reference used in prompts and source citations, e.g. "Slide 4" */
   label: string;
+  /** 1-based page number inside the original PDF, used to open the file at this page */
+  page?: number;
   text?: string;
   images?: SourceImage[];
 }
@@ -25,6 +27,8 @@ export interface ExtractedSource {
   kind: SourceKind;
   pages: SourcePage[];
   warnings: string[];
+  /** Original upload, kept so it can be stored and linked from the questions that cite it */
+  file?: File;
 }
 
 export const SOURCE_ACCEPT =
@@ -158,14 +162,14 @@ async function extractPdf(file: File, warnings: string[]): Promise<SourcePage[]>
     const text = await readPdfPageText(page);
     const label = `Page ${i}`;
     if (text.replace(/\s/g, "").length >= MIN_PAGE_TEXT_CHARS) {
-      pages.push({ label, text });
+      pages.push({ label, page: i, text });
       continue;
     }
     if (rendered >= MAX_RENDERED_PDF_PAGES) {
       skipped++;
       continue;
     }
-    pages.push({ label, text: text || undefined, images: [await renderPdfPage(page)] });
+    pages.push({ label, page: i, text: text || undefined, images: [await renderPdfPage(page)] });
     rendered++;
   }
   if (skipped > 0) {
@@ -336,7 +340,7 @@ export async function extractSource(file: File): Promise<ExtractedSource> {
   }
 
   if (pages.length === 0) throw new Error(`${file.name}: no readable content was found.`);
-  return { id: genSourceId(), name: file.name, kind, pages, warnings };
+  return { id: genSourceId(), name: file.name, kind, pages, warnings, file };
 }
 
 export function sourceNeedsTranscription(source: ExtractedSource): boolean {

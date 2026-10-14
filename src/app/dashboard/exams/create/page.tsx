@@ -74,6 +74,8 @@ import {
   GenerateFromMaterialDialog,
   type GeneratedExamApplication,
 } from "@/components/exam-generator/generate-from-material-dialog";
+import { QuestionSource } from "@/components/exam-generator/question-source";
+import { SourceViewableSwitch } from "@/components/exams/source-viewable-switch";
 import { buildExamInstruction } from "@/lib/exam-blueprint";
 import Link from "next/link";
 import { parseBlanks } from "@/lib/question-blanks";
@@ -429,9 +431,7 @@ function QuestionCard({
               <Badge variant="outline" className="text-[10px] capitalize">{q.metadata.ai.difficulty}</Badge>
             )}
             {q.metadata.ai.topic && <Badge variant="outline" className="text-[10px]">{q.metadata.ai.topic}</Badge>}
-            {q.metadata.ai.sourceRef && (
-              <span className="text-[11px] text-muted-foreground">Source: {q.metadata.ai.sourceRef}</span>
-            )}
+            <QuestionSource source={q.metadata.ai} />
           </div>
         )}
         <div className="space-y-2">
@@ -528,6 +528,7 @@ export default function CreateExamPage() {
       passingCondition: { type: "percentage", value: 70 },
       isPublic: false,
       reviewableByExaminee: false,
+      sourceViewableByExaminee: false,
     },
   });
 
@@ -557,6 +558,7 @@ export default function CreateExamPage() {
         parts: finalParts,
         passingCondition: finalPassingCondition,
         timeLimit: finalTimeLimit,
+        sourceViewableByExaminee: !!(values.reviewableByExaminee && values.sourceViewableByExaminee),
         origin: examOriginFor(sectionQuestions(secs)),
         questions: [], // We add questions (and phrases) below
       });
@@ -1958,6 +1960,11 @@ export default function CreateExamPage() {
                 </p>
               </div>
             </div>
+            <SourceViewableSwitch
+              checked={form.watch("sourceViewableByExaminee") ?? false}
+              onCheckedChange={(v) => form.setValue("sourceViewableByExaminee", v)}
+              reviewable={form.watch("reviewableByExaminee") ?? false}
+            />
           </CardContent>
         </Card>
 

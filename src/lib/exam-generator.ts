@@ -57,6 +57,8 @@ export type ProgressCallback = (done: number, total: number, label: string) => v
 interface MaterialPage {
   ref: string;
   text: string;
+  sourceId: string;
+  page?: number;
 }
 
 function pageRef(source: ExtractedSource, label: string, sources: ExtractedSource[]): string {
@@ -69,7 +71,7 @@ function buildCorpus(sources: ExtractedSource[]): MaterialPage[] {
   return sources.flatMap((source) =>
     source.pages
       .filter((p) => p.text && p.text.trim())
-      .map((p) => ({ ref: pageRef(source, p.label, sources), text: p.text!.trim() }))
+      .map((p) => ({ ref: pageRef(source, p.label, sources), text: p.text!.trim(), sourceId: source.id, page: p.page }))
   );
 }
 
@@ -322,6 +324,14 @@ export interface GeneratedQuestion {
   cognitiveLevel: CognitiveLevel;
   topic: string;
   sourceRef: string;
+  /** Text of the cited page as the AI read it */
+  sourceExcerpt: string;
+  /** ExtractedSource the cited page belongs to */
+  sourceId?: string;
+  /** PDF page number of the cited page */
+  sourcePage?: number;
+  /** Link to the uploaded original file; set when the questions are applied */
+  sourceUrl?: string;
   /** Problems found while validating; shown to the proctor during review */
   issues: string[];
   passageId?: string;
@@ -524,11 +534,26 @@ function shuffleOptions(options: string[], correct: number[]): { options: string
   };
 }
 
+const MAX_SOURCE_EXCERPT_CHARS = 4000;
+
+/** Finds the cited page; the model sometimes drops the " — Photo" / " — Page N" suffix. */
+function resolveSourcePage(ref: string, pages: Map<string, MaterialPage>): MaterialPage | undefined {
+  if (!ref) return undefined;
+  const exact = pages.get(ref);
+  if (exact) return exact;
+  const prefixed = [...pages.values()].filter((p) => p.ref.startsWith(`${ref} — `));
+  return prefixed.length === 1 ? prefixed[0] : undefined;
+}
+
+function sourceExcerpt(text: string): string {
+  return text.length > MAX_SOURCE_EXCERPT_CHARS ? `${text.slice(0, MAX_SOURCE_EXCERPT_CHARS).trimEnd()}…` : text;
+}
+
 /** Validates and normalizes one raw question; returns null when it can't be used at all. */
 function normalizeQuestion(
   raw: RawQuestion,
   layout: QuestionLayout,
-  knownRefs: Set<string>,
+  pages: Map<string, MaterialPage>,
   passageId?: string
 ): GeneratedQuestion | null {
   const questionText = (raw.questionText ?? "").trim();
@@ -581,8 +606,9 @@ function normalizeQuestion(
     }
   }
 
-  const sourceRef = (raw.sourceRef ?? "").trim();
-  if (sourceRef && !knownRefs.has(sourceRef)) issues.push("The cited source page couldn't be matched to the material.");
+  const rawRef = (raw.sourceRef ?? "").trim();
+  const page = resolveSourcePage(rawRef, pages);
+  if (rawRef && !page) issues.push("The cited source page couldn't be matched to the material.");
 
   return {
     id: genQuestionId(),
@@ -596,7 +622,10 @@ function normalizeQuestion(
     difficulty: DIFFICULTIES.includes(raw.difficulty) ? raw.difficulty : "medium",
     cognitiveLevel: COGNITIVE_LEVELS.includes(raw.cognitiveLevel) ? raw.cognitiveLevel : "remember",
     topic: (raw.topic ?? "").trim(),
-    sourceRef,
+    sourceRef: page?.ref ?? rawRef,
+    sourceExcerpt: page ? sourceExcerpt(page.text) : "",
+    sourceId: page?.sourceId,
+    sourcePage: page?.page,
     issues,
     passageId,
   };
@@ -656,7 +685,7 @@ export async function generateExam(
 ): Promise<GenerationResult> {
   const existing = options.existingQuestions ?? [];
   const corpus = buildCorpus(sources);
-  const knownRefs = new Set(corpus.map((p) => p.ref));
+  const pagesByRef = new Map(corpus.map((p) => [p.ref, p]));
   const batches = planBatches(bp);
   if (batches.length === 0) throw new Error("Set at least one question to generate.");
 
@@ -672,7 +701,7 @@ export async function generateExam(
         return {
           questions: (parsed.questions ?? [])
             .slice(0, batch.count)
-            .map((q) => normalizeQuestion(q, batch.layout, knownRefs))
+            .map((q) => normalizeQuestion(q, batch.layout, pagesByRef))
             .filter((q): q is GeneratedQuestion => q !== null),
           passages: [] as GeneratedPassage[],
         };
@@ -690,7 +719,7 @@ export async function generateExam(
         passages.push(passage);
         (p.questions ?? [])
           .slice(0, batch.questionsPerPassage)
-          .map((q) => normalizeQuestion(q, "multiple_choice", knownRefs, passage.id))
+          .map((q) => normalizeQuestion(q, "multiple_choice", pagesByRef, passage.id))
           .forEach((q) => q && questions.push(q));
       }
       return { questions, passages };
@@ -755,6 +784,8 @@ function toPayload(q: GeneratedQuestion, typeId: string, points: number): Create
     cognitiveLevel: q.cognitiveLevel,
     ...(q.topic && { topic: q.topic }),
     ...(q.sourceRef && { sourceRef: q.sourceRef }),
+    ...(q.sourceExcerpt && { sourceExcerpt: q.sourceExcerpt }),
+    ...(q.sourceUrl && { sourceUrl: q.sourceUrl }),
     ...(q.rubric && { rubric: q.rubric }),
   };
   return {

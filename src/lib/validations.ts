@@ -71,6 +71,7 @@ export const examSchema = z.object({
   }),
   isPublic: z.boolean(),
   reviewableByExaminee: z.boolean().optional(),
+  sourceViewableByExaminee: z.boolean().optional(),
 }).refine((data) => {
   // If timeType is 'per_part', parts must exist and each part must have a timeLimit
   if (data.timeType === "per_part") {

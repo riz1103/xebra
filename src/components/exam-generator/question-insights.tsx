@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { QuestionMetadata } from "@/types";
+import { QuestionSource } from "./question-source";
 
 /** Proctor-facing answer explanation, essay rubric, and AI-generation tags for a question. */
 export function QuestionInsights({
@@ -39,7 +40,7 @@ export function QuestionInsights({
           <span className="text-muted-foreground">{ai.rubric}</span>
         </p>
       )}
-      {ai?.sourceRef && <p className="text-[11px] text-muted-foreground">Source: {ai.sourceRef}</p>}
+      {ai && <QuestionSource source={ai} />}
     </div>
   );
 }

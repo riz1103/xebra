@@ -104,6 +104,10 @@ export interface AiQuestionMetadata {
   cognitiveLevel?: string;
   topic?: string;
   sourceRef?: string;
+  /** Text of the cited material page as the AI read it */
+  sourceExcerpt?: string;
+  /** Uploaded original material file; PDF links include a #page= fragment */
+  sourceUrl?: string;
   /** Essay grading guide */
   rubric?: string;
 }
@@ -215,6 +219,8 @@ export interface Exam {
   isPublic: boolean;
   /** If true, examinee can view their answers and correct answers after submission. */
   reviewableByExaminee?: boolean;
+  /** If true, examinees reviewing their answers can also view each AI question's source material. */
+  sourceViewableByExaminee?: boolean;
   status: "draft" | "active" | "archived";
   createdBy: string;
   createdByName?: string;
@@ -237,6 +243,7 @@ export interface CreateExamPayload {
   passingCondition: PassingCondition;
   isPublic: boolean;
   reviewableByExaminee?: boolean;
+  sourceViewableByExaminee?: boolean;
   origin?: ExamOrigin;
   questions?: CreateExamQuestionPayload[];
 }
@@ -254,6 +261,7 @@ export interface UpdateExamPayload {
   passingCondition?: PassingCondition;
   isPublic?: boolean;
   reviewableByExaminee?: boolean;
+  sourceViewableByExaminee?: boolean;
   status?: "draft" | "active" | "archived";
 }
 
@@ -453,6 +461,8 @@ export interface ExamResult {
   feedback?: string;
   /** When true, examinee can view questions and answers for this result (from exam setting). */
   reviewableByExaminee?: boolean;
+  /** When true, examinee can view AI questions' source material while reviewing (from exam setting). */
+  sourceViewableByExaminee?: boolean;
   /** Passing threshold (e.g. percentage value). Used when recalculating after proctor review. */
   passingScore?: number;
   passingCondition?: PassingCondition;

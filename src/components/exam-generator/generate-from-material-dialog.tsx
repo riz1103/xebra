@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ import {
   type MaterialAnalysis,
 } from "@/lib/exam-generator";
 import { extractSource, sourceFromText, type ExtractedSource } from "@/lib/source-extract";
+import { attachSourceUrls } from "@/lib/source-storage";
 import {
   defaultPlacement,
   placedBlueprint,
@@ -109,6 +110,7 @@ export function GenerateFromMaterialDialog({
   const [error, setError] = useState<{ message: string; detail: string } | null>(null);
   const [creatingTypes, setCreatingTypes] = useState(false);
   const [placement, setPlacement] = useState<AppendPlacement | null>(null);
+  const uploadedSourceUrls = useRef(new Map<string, string>());
 
   const showAiError = (err: unknown) => {
     console.error("AI exam generation failed:", err);
@@ -133,6 +135,7 @@ export function GenerateFromMaterialDialog({
     setWarnings([]);
     setError(null);
     setPlacement(null);
+    uploadedSourceUrls.current = new Map();
   };
 
   const addFiles = async (files: File[]) => {
@@ -217,19 +220,25 @@ export function GenerateFromMaterialDialog({
 
   const apply = async () => {
     if (!result || !effectiveBlueprint || !analysis) return;
-    const selected = { ...result, questions: result.questions.filter((q) => selectedIds.has(q.id)) };
-    const applied = generatedToSections(
-      selected,
-      effectiveBlueprint,
-      questionTypes,
-      existingExam && activePlacement
-        ? { existingPartCount: existingExam.parts.length, targetPart: targetPart(existingExam, activePlacement) }
-        : {}
-    );
     setError(null);
     setStep("saving");
-    setProgress({ done: 0, total: 1, label: "Adding questions…" });
     try {
+      const withSources = await attachSourceUrls(
+        result.questions.filter((q) => selectedIds.has(q.id)),
+        sources,
+        uploadedSourceUrls.current,
+        (done, total, label) => setProgress({ done, total, label })
+      );
+      withSources.warnings.forEach((w) => toast.warning(w));
+      const applied = generatedToSections(
+        { ...result, questions: withSources.questions },
+        effectiveBlueprint,
+        questionTypes,
+        existingExam && activePlacement
+          ? { existingPartCount: existingExam.parts.length, targetPart: targetPart(existingExam, activePlacement) }
+          : {}
+      );
+      setProgress({ done: 0, total: 1, label: "Adding questions…" });
       await onApply(
         { applied, blueprint: effectiveBlueprint, analysis, placement: activePlacement ?? undefined },
         (done, total) => setProgress({ done, total, label: `Saving question ${done} of ${total}…` })

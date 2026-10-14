@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageLoader } from "@/components/ui/loading";
 import { QuestionInsights } from "@/components/exam-generator/question-insights";
+import { QuestionSource } from "@/components/exam-generator/question-source";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -69,6 +70,8 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
   const canGrade = isProctorOrAdmin;
   const canViewAsExaminee = isExaminee && result?.reviewableByExaminee === true;
   const allowed = canGrade || canViewAsExaminee;
+  const examineeCanViewSources =
+    canViewAsExaminee && (result?.sourceViewableByExaminee ?? exam?.sourceViewableByExaminee) === true;
 
   const { data: reconciliationsData } = useQuery({
     queryKey: ["exam-reconciliations", result?.examId],
@@ -571,12 +574,17 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                     })}
                   </div>
                 )}
-                {canGrade && (
+                {canGrade ? (
                   <QuestionInsights
                     explanation={currentQuestion.explanation}
                     metadata={currentQuestion.metadata}
                     className="mt-4"
                   />
+                ) : (
+                  examineeCanViewSources &&
+                  currentQuestion.metadata?.ai && (
+                    <QuestionSource source={currentQuestion.metadata.ai} className="mt-4 rounded-md bg-muted/40 p-2.5" />
+                  )
                 )}
               </CardContent>
             </Card>
