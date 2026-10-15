@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LAYOUT_LABELS, QUESTION_LAYOUTS } from "@/lib/exam-blueprint";
 import type { GeneratedQuestion, GenerationResult } from "@/lib/exam-generator";
+import { MathAnswerList, MathText } from "@/components/math/math-text";
+import { parseBlanks } from "@/lib/question-blanks";
 import { QuestionSource } from "./question-source";
 
 function QuestionPreview({
@@ -34,7 +36,7 @@ function QuestionPreview({
             <Badge variant="outline" className="text-[10px] capitalize">{q.cognitiveLevel}</Badge>
             {q.topic && <Badge variant="secondary" className="text-[10px]">{q.topic}</Badge>}
           </div>
-          <p className="text-sm whitespace-pre-wrap">{q.questionText}</p>
+          <p className="text-sm whitespace-pre-wrap"><MathText text={q.questionText} /></p>
 
           {q.options.length > 0 && (
             <ul className="space-y-1">
@@ -46,7 +48,7 @@ function QuestionPreview({
                     className={`flex items-start gap-2 text-sm ${correct ? "font-medium text-emerald-700 dark:text-emerald-400" : ""}`}
                   >
                     <span className="w-5 shrink-0 text-xs text-muted-foreground">{String.fromCharCode(65 + i)}.</span>
-                    <span className="flex-1">{opt}</span>
+                    <MathText text={opt} className="flex-1" />
                     {correct && <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
                   </li>
                 );
@@ -57,7 +59,11 @@ function QuestionPreview({
           {q.acceptedAnswers.length > 0 && (
             <p className="text-sm">
               <span className="text-xs text-muted-foreground">Answer: </span>
-              <span className="font-medium text-emerald-700 dark:text-emerald-400">{q.acceptedAnswers.join(" / ")}</span>
+              <MathAnswerList
+                answers={q.acceptedAnswers}
+                joiner={parseBlanks(q.questionText).blankCount > 1 ? "and" : "or"}
+                className="font-medium text-emerald-700 dark:text-emerald-400"
+              />
             </p>
           )}
 
@@ -68,7 +74,7 @@ function QuestionPreview({
             </div>
           )}
 
-          {q.explanation && <p className="text-xs text-muted-foreground">{q.explanation}</p>}
+          {q.explanation && <p className="text-xs text-muted-foreground"><MathText text={q.explanation} /></p>}
           <QuestionSource source={q} />
 
           {q.issues.map((issue) => (
@@ -135,7 +141,7 @@ export function ReviewStep({
               <BookOpen className="h-4 w-4" /> Reading passage{passage.title ? `: ${passage.title}` : ""}
             </h4>
             <div className="max-h-48 overflow-y-auto rounded-lg bg-muted/40 p-3 text-sm whitespace-pre-wrap">
-              {passage.body}
+              <MathText text={passage.body} />
             </div>
             {questions.map((q) => (
               <QuestionPreview

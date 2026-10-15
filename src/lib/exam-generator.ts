@@ -34,6 +34,7 @@ import {
 } from "@/lib/exam-blueprint";
 import { getQuestionLayout, type QuestionLayout } from "@/lib/question-layout";
 import { parseBlanks } from "@/lib/question-blanks";
+import { latexToPlainMath, normalizeAnswer } from "@/lib/math-notation";
 import { genPartId, genPartPhraseId, genSectionId, type QuestionSection } from "@/lib/exam-sections";
 import type { ExtractedSource, SourceImage } from "@/lib/source-extract";
 import type { AiQuestionMetadata, CreateExamQuestionPayload, ExamPart } from "@/types";
@@ -132,8 +133,24 @@ const transcriptionSchema = Schema.object({
   },
 });
 
+/**
+ * How math must be written in everything the model returns. The app renders this notation like a
+ * printed exam (see math-notation.ts); LaTeX would show up as raw backslashes and braces.
+ */
+const MATH_NOTATION = `Never use LaTeX or Markdown math: no $...$, \\(...\\), \\frac, \\times, \\div, \\sqrt, or braces. Write math in this plain-text notation, which the app displays like a printed exam:
+  - Multiplication: × (e.g. 3 × 4). Division: ÷ (e.g. 12 ÷ 4). Never use * for multiplication.
+  - Fractions: a/b with no spaces around the slash; it is displayed stacked. Whenever the top or bottom has more than one number or letter, wrap it in parentheses: (2x^3y)/(3x^2), (x+1)/2, 5/(2x). Letters written right after the denominator belong to it (3x/10x^2 is 3x over 10x²), so write a fraction times a variable as (1/2)x. Mixed numbers: 1 1/2.
+  - Never write a spaced slash or chain slashes and ÷ ambiguously. Dividing fractions: (2x^3y)/(3x^2) ÷ (5y^2)/(18xy), not 2x^3y/3x^2 ÷ 5y^2 / 18xy.
+  - Exponents: ^ (x^2, 10^-3, 2^(n+1)); group longer exponents in parentheses. Scientific notation: 3.0 × 10^8.
+  - Subscripts: Unicode subscript digits for chemical formulas and ions (H₂O, CO₂, SO₄²⁻, Ca²⁺) and indexed variables (x₁, a₂); x_n for letter subscripts.
+  - Roots: sqrt(16), sqrt(x+1), cbrt(27).
+  - Symbols: ≤ ≥ ≠ ≈ ± ∞ π ° ∠ △ ⊥ ∥ ≅ ∈ ∪ ∩ ∅ ∑ ∫ Δ, Greek letters (α β θ λ μ Ω), units with ℃ or °C, arrows → for reactions and implications, ⇌ for reversible reactions.
+  - Units: rates inline as m/s, km/h, m/s^2.
+  - Subtraction: 7 - 3 with spaces around the minus; negative numbers as -5.`;
+
 const TRANSCRIBE_PROMPT = `You are transcribing study material (lecture slides, textbook pages, handwritten notes, or whiteboard photos) so it can be used to write exam questions.
-For every image, return its reference label and the full text exactly as written. Preserve headings, bullet lists, numbering, and formulas (use plain-text notation).
+For every image, return its reference label and the full text exactly as written. Preserve headings, bullet lists, numbering, and formulas.
+${MATH_NOTATION}
 Describe diagrams, charts, tables, and figures in words, including labels and values, so their information is usable without the image.
 Ignore page decorations such as headers, footers, and slide numbers. If an image is unreadable, return an empty string for it.`;
 
@@ -291,7 +308,7 @@ function normalizeAnalysis(analysis: MaterialAnalysis): MaterialAnalysis {
       ...t,
       name: t.name.trim(),
       refs: t.refs ?? [],
-      ...(t.keyPoints && { keyPoints: t.keyPoints.map((k) => k.trim()).filter(Boolean) }),
+      ...(t.keyPoints && { keyPoints: t.keyPoints.map(cleanText).filter(Boolean) }),
     }))
     .sort((a, b) => b.importance - a.importance);
   analysis.recommendedLayouts = (analysis.recommendedLayouts ?? []).filter((l) => QUESTION_LAYOUTS.includes(l));
@@ -333,6 +350,7 @@ Guidelines:
 - Recommend layouts the content supports: definitions and terms suit identification; processes, comparisons, and arguments suit essay; factual statements suit true_false.
 - List 3-15 topics, ordered by importance. For each topic, list the reference labels (exactly as given) where it appears.
 - If the material is itself an exam or worksheet, set containsExistingQuestions to true.
+- ${MATH_NOTATION}
 
 Material:
 ${text}`;
@@ -393,7 +411,8 @@ Guidelines:
 - List 2-10 topics, ordered by importance. For each, give 3-6 keyPoints: the specific concepts, rules, definitions, skills, or facts examinees at this level are expected to know, each a short, accurate sentence. Questions will be written from these, so match the depth of a typical curriculum for the level.
 - If the description states an exam type, item count, or question types, follow it exactly. Otherwise a narrow topic suits a quiz, a unit suits a long_test, and a whole term suits a midterm or final.
 - Recommend layouts that fit the topics: terms and definitions suit identification; rules and facts suit true_false and multiple_choice; explanations and arguments suit essay. For young examinees, prefer multiple_choice, true_false, and short identification.
-- Set hasReadingPassages to true only when reading comprehension fits the subject (language, literature, reading) or the description asks for passages.`;
+- Set hasReadingPassages to true only when reading comprehension fits the subject (language, literature, reading) or the description asks for passages.
+- ${MATH_NOTATION}`;
 
   const response = await generateJson(promptPlanSchema, prompt, { temperature: 0.3, maxOutputTokens: 8192 });
   const plan = JSON.parse(response) as Omit<MaterialAnalysis, "contentType" | "containsExistingQuestions" | "request">;
@@ -559,7 +578,10 @@ function blueprintContext(bp: ExamBlueprint, analysis: MaterialAnalysis): string
 const SHARED_RULES = `- Write questions that stand alone: never mention "the text", "the lecture", "the slide", or page numbers.
 - Do not repeat a fact across questions, and don't let one question reveal another's answer.
 - Do not use underscores except for blanks in identification questions.
-- Keep wording clear and unambiguous, appropriate for the examinee level.`;
+- Keep wording clear and unambiguous, appropriate for the examinee level.
+- Math notation applies to questionText, every option, acceptedAnswers, explanation, rubric, and passages. Keep options in the same notation as each other and as the question.
+- Do not list notation-only variants in acceptedAnswers (3/4 vs ¾, 3 × 4 vs 3*4, x^2 vs x²); they are graded as equal. Use the variant slots for genuinely different accepted answers (e.g. 0.75 for 3/4).
+- ${MATH_NOTATION}`;
 
 const MATERIAL_RULES = `General rules:
 - Base every question only on the material. Do not use outside facts.
@@ -701,6 +723,11 @@ function sourceExcerpt(text: string): string {
   return text.length > MAX_SOURCE_EXCERPT_CHARS ? `${text.slice(0, MAX_SOURCE_EXCERPT_CHARS).trimEnd()}…` : text;
 }
 
+/** Trims model output and rewrites any LaTeX math in the app's notation. */
+function cleanText(value: unknown): string {
+  return latexToPlainMath(String(value ?? "").trim()).trim();
+}
+
 /** Validates and normalizes one raw question; returns null when it can't be used at all. */
 function normalizeQuestion(
   raw: RawQuestion,
@@ -708,14 +735,14 @@ function normalizeQuestion(
   pages: Map<string, MaterialPage>,
   passageId?: string
 ): GeneratedQuestion | null {
-  const questionText = (raw.questionText ?? "").trim();
+  const questionText = cleanText(raw.questionText);
   if (!questionText) return null;
   const issues: string[] = [];
   let options: string[] = [];
   let correctIndexes: number[] = [];
   let acceptedAnswers: string[] = [];
 
-  const rawOptions = (raw.options ?? []).map((o) => String(o).trim());
+  const rawOptions = (raw.options ?? []).map(cleanText);
   const rawCorrectTexts = (raw.correctOptions ?? [])
     .map((letter) => rawOptions[OPTION_LETTERS.indexOf(String(letter).toUpperCase())])
     .filter((t): t is string => !!t);
@@ -730,14 +757,14 @@ function normalizeQuestion(
   } else if (layout === "multiple_choice" || layout === "multiple_answer") {
     const seen = new Set<string>();
     for (const opt of rawOptions) {
-      const key = opt.toLowerCase();
+      const key = normalizeAnswer(opt);
       if (!opt || seen.has(key)) continue;
       seen.add(key);
       options.push(opt);
     }
     if (options.length < 2) return null;
     if (options.length < rawOptions.length) issues.push("Duplicate or empty options were removed.");
-    correctIndexes = [...new Set(rawCorrectTexts.map((t) => options.findIndex((o) => o.toLowerCase() === t.toLowerCase())))]
+    correctIndexes = [...new Set(rawCorrectTexts.map((t) => options.findIndex((o) => normalizeAnswer(o) === normalizeAnswer(t))))]
       .filter((i) => i >= 0)
       .sort((a, b) => a - b);
     if (layout === "multiple_choice" && correctIndexes.length > 1) {
@@ -750,8 +777,14 @@ function normalizeQuestion(
     if (correctIndexes.length === 0) issues.push("No correct answer was identified.");
     ({ options, correct: correctIndexes } = shuffleOptions(options, correctIndexes));
   } else if (layout === "identification") {
-    acceptedAnswers = (raw.acceptedAnswers ?? []).map((a) => String(a).trim()).filter(Boolean);
     const blankCount = parseBlanks(questionText).blankCount;
+    acceptedAnswers = (raw.acceptedAnswers ?? []).map(cleanText).filter(Boolean);
+    if (blankCount === 0) {
+      // Variants that differ only in notation (3/4 vs ¾, 3 × 4 vs 3*4) are graded as equal anyway
+      acceptedAnswers = acceptedAnswers.filter(
+        (a, i) => acceptedAnswers.findIndex((b) => normalizeAnswer(b) === normalizeAnswer(a)) === i
+      );
+    }
     if (acceptedAnswers.length === 0) issues.push("No accepted answer was provided.");
     else if (blankCount > 0 && acceptedAnswers.length < blankCount) {
       issues.push(`The question has ${blankCount} blanks but only ${acceptedAnswers.length} answer(s).`);
@@ -771,8 +804,8 @@ function normalizeQuestion(
     options,
     correctIndexes,
     acceptedAnswers,
-    rubric: (raw.rubric ?? "").trim(),
-    explanation: (raw.explanation ?? "").trim(),
+    rubric: cleanText(raw.rubric),
+    explanation: cleanText(raw.explanation),
     difficulty: DIFFICULTIES.includes(raw.difficulty) ? raw.difficulty : "medium",
     cognitiveLevel: COGNITIVE_LEVELS.includes(raw.cognitiveLevel) ? raw.cognitiveLevel : "remember",
     topic: (raw.topic ?? "").trim() || (grounded ? "" : (raw.sourceRef ?? "").trim()),
@@ -880,8 +913,8 @@ export async function generateExam(
         if (!p.body?.trim()) continue;
         const passage = {
           id: genQuestionId(),
-          title: (p.title ?? "").trim(),
-          body: p.body.trim(),
+          title: cleanText(p.title),
+          body: cleanText(p.body),
           sourceRef: grounded ? (p.sourceRef ?? "").trim() : "",
         };
         passages.push(passage);

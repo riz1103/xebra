@@ -25,6 +25,9 @@ import { ArrowLeft, Loader2, Plus, Sparkles, Trash2, Save } from "lucide-react";
 import Link from "next/link";
 import { getLayoutConfig } from "@/lib/question-layout";
 import { parseBlanks } from "@/lib/question-blanks";
+import { looksMathematical } from "@/lib/math-notation";
+import { MathText, MathPreview } from "@/components/math/math-text";
+import { MathKeypadScope } from "@/components/math/math-keypad";
 import { toExamPartPayload } from "@/lib/exam-sections";
 import { appendToExam, examContext } from "@/lib/exam-append";
 import {
@@ -795,7 +798,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
               <div key={q.id} className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border p-3 sm:flex-nowrap">
                 <span className="text-sm font-medium text-muted-foreground mt-0.5">Q{i + 1}.</span>
                 <div className="min-w-0 flex-1 text-sm">
-                  <p className="break-words">{q.questionText}</p>
+                  <p className="break-words"><MathText text={q.questionText} /></p>
                   <p className="text-xs text-muted-foreground mt-1">{q.options.length} options &middot; {q.points} pts</p>
                 </div>
                 <div className="flex w-full items-center justify-end gap-1 shrink-0 sm:w-auto">
@@ -824,7 +827,14 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
           {newQuestions.map((q, qi) => {
             const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
             return (
-              <div key={qi} className="rounded-lg border-2 border-dashed border-primary/30 p-3 space-y-3 sm:p-4">
+              <MathKeypadScope
+                key={qi}
+                defaultOpen={looksMathematical(q.questionText)}
+                showNotationHint
+                className="rounded-lg border-2 border-dashed border-primary/30 p-3 space-y-3 sm:p-4"
+              >
+                {(mathKeypad) => (
+                <>
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium text-primary">New Question</h4>
                   <div className="flex gap-2">
@@ -846,6 +856,8 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                     setNewQuestions(updated);
                   }}
                 />
+                <MathPreview value={q.questionText} label="Examinees see" />
+                {mathKeypad}
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Select value={q.questionTypeId} onValueChange={(v) => handleNewQuestionTypeChange(qi, v)}>
                     <SelectTrigger><SelectValue placeholder="Question type" /></SelectTrigger>
@@ -922,10 +934,14 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                             setNewQuestions(updated);
                           }} placeholder={`Option ${String.fromCharCode(65 + oi)}`} className="flex-1" />
                         ) : (
-                          <span className="text-sm flex-1">{opt}</span>
+                          <MathText text={opt} className="text-sm flex-1" />
                         )}
                       </div>
                     ))}
+                    {layoutConfig.editableOptions &&
+                      q.options.map((opt, oi) => (
+                        <MathPreview key={oi} value={opt} label={`${String.fromCharCode(65 + oi)} shows as`} className="ml-7" />
+                      ))}
                     {layoutConfig.editableOptions && (
                       <Button type="button" variant="ghost" size="sm" onClick={() => {
                         const updated = [...newQuestions];
@@ -979,6 +995,9 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                                 />
                               </div>
                             ))}
+                            {answers.map((ans, ai) => (
+                              <MathPreview key={ai} value={ans} label={`Blank ${ai + 1} shows as`} />
+                            ))}
                           </div>
                         );
                       }
@@ -1020,6 +1039,9 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                               )}
                             </div>
                           ))}
+                          {answers.map((ans, ai) => (
+                            <MathPreview key={ai} value={ans} label={answers.length > 1 ? `Answer ${ai + 1} shows as` : "Shows as"} />
+                          ))}
                           <Button type="button" variant="ghost" size="sm" onClick={() => {
                             const updated = [...newQuestions];
                             const arr = Array.isArray(updated[qi].correctAnswer)
@@ -1046,7 +1068,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                                 onCheckedChange={(checked) => toggleNewQuestionCorrectAnswer(qi, oi, !!checked)}
                               />
                               <span className="text-xs text-muted-foreground">{String.fromCharCode(65 + oi)}.</span>
-                              <span className="text-sm">{opt}</span>
+                              <MathText text={opt} className="text-sm" />
                             </label>
                           );
                         })}
@@ -1061,7 +1083,9 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                     This question type will be graded manually. No options or correct answer needed.
                   </p>
                 )}
-              </div>
+                </>
+                )}
+              </MathKeypadScope>
             );
           })}
         </CardContent>

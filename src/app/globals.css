@@ -186,6 +186,73 @@
   background: oklch(0.4 0.01 265);
 }
 
+/* Printed-style math from MathText: stacked fractions, exponents, radicals */
+.math-frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  vertical-align: middle;
+  margin: 0 0.12em;
+  font-size: 0.9em;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+}
+.math-frac-num {
+  padding: 0 0.2em 0.05em;
+}
+.math-frac-den {
+  padding: 0.05em 0.2em 0;
+  border-top: 0.08em solid currentColor;
+}
+.math-sup {
+  position: relative;
+  top: -0.5em;
+  vertical-align: baseline;
+  font-size: 0.72em;
+  line-height: 0;
+  margin-left: 0.03em;
+}
+.math-sub {
+  position: relative;
+  bottom: -0.25em;
+  vertical-align: baseline;
+  font-size: 0.72em;
+  line-height: 0;
+  margin-left: 0.02em;
+}
+.math-root {
+  display: inline-flex;
+  align-items: stretch;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+.math-root-index {
+  font-size: 0.6em;
+  line-height: 1;
+  align-self: center;
+  margin-right: -0.55em;
+  transform: translateY(-0.45em);
+}
+.math-radical {
+  width: 0.6em;
+  height: auto;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.08em;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.math-radical path {
+  vector-effect: non-scaling-stroke;
+}
+.math-radicand {
+  border-top: 0.08em solid currentColor;
+  padding: 0.12em 0.15em 0 0.1em;
+  line-height: 1.15;
+}
+
 /* Drop zone "just landed" animation */
 .animate-drop-landed {
   animation: var(--animate-drop-landed);

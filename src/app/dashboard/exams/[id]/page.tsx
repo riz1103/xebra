@@ -14,6 +14,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 import { QuestionInsights } from "@/components/exam-generator/question-insights";
+import { MathAnswerList, MathText } from "@/components/math/math-text";
+import { parseBlanks } from "@/lib/question-blanks";
 import { ExamOriginBadge } from "@/components/exam-generator/exam-origin-badge";
 import { ShareExamCard } from "@/components/exams/share-exam-card";
 
@@ -212,7 +214,7 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
                   {exam.questions.map((q, i) => (
                     <div key={q.id} className="rounded-lg border p-3 sm:p-4">
                       <div className="flex items-start justify-between mb-2">
-                        <span className="min-w-0 break-words text-sm font-medium">Q{i + 1}. {q.questionText}</span>
+                        <span className="min-w-0 break-words text-sm font-medium">Q{i + 1}. <MathText text={q.questionText} /></span>
                         <Badge variant="outline" className="text-xs shrink-0 ml-2">{q.points} pts</Badge>
                       </div>
                       <div className="grid gap-1.5 mt-3">
@@ -223,12 +225,22 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
                           return (
                             <div key={oi} className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${isCorrect ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" : ""}`}>
                               <span className="text-xs text-muted-foreground w-5 shrink-0">{String.fromCharCode(65 + oi)}.</span>
-                              <span className="min-w-0 break-words">{opt}</span>
+                              <MathText text={opt} className="min-w-0 break-words" />
                               {isCorrect && <CheckCircle className="h-3 w-3 ml-auto shrink-0" />}
                             </div>
                           );
                         })}
                       </div>
+                      {q.options.length === 0 && [q.correctAnswer].flat().some(Boolean) && (
+                        <p className="mt-2 text-sm">
+                          <span className="text-xs text-muted-foreground">Answer: </span>
+                          <MathAnswerList
+                            answers={[q.correctAnswer].flat().filter(Boolean)}
+                            joiner={parseBlanks(q.questionText).blankCount > 1 ? "and" : "or"}
+                            className="font-medium text-emerald-700 dark:text-emerald-400"
+                          />
+                        </p>
+                      )}
                       <QuestionInsights explanation={q.explanation} metadata={q.metadata} className="mt-3" />
                     </div>
                   ))}

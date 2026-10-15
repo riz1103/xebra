@@ -35,6 +35,9 @@ import { useAuthStore } from "@/stores/auth-store";
 import { parseBlanks } from "@/lib/question-blanks";
 import { getQuestionLayout } from "@/lib/question-layout";
 import { Textarea } from "@/components/ui/textarea";
+import { MathText, MathPreview } from "@/components/math/math-text";
+import { MathKeypad } from "@/components/math/math-keypad";
+import { looksMathematical } from "@/lib/math-notation";
 
 const UNASSIGNED_PART_ID = "__unassigned";
 const TEXT_SAVE_DELAY_MS = 800;
@@ -58,6 +61,9 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const [showInstructions, setShowInstructions] = useState(true);
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [navigatorOpen, setNavigatorOpen] = useState(false);
+  /** null until the examinee toggles it; then their choice sticks across questions */
+  const [mathKeypadPref, setMathKeypadPref] = useState<boolean | null>(null);
+  const answerScopeRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -374,7 +380,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         ? typeof current === "string" ? current : ""
         : (Array.isArray(current) ? [...current] : Array(blankCount).fill(""));
       if (blankCount === 1) {
-        handleAnswer(value.trim() || null);
+        handleAnswer(value.trim() ? value : null);
         return;
       }
       const arr = base as string[];
@@ -462,6 +468,14 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     !isFillInTheBlank &&
     (currentLayout === "identification" || currentLayout === "essay" || (currentQuestion.options?.length ?? 0) === 0);
   const isEssay = currentLayout === "essay";
+  const showMathKeypad =
+    mathKeypadPref ??
+    (!!currentQuestion && looksMathematical([currentQuestion.questionText, ...(currentQuestion.options ?? [])].join(" ")));
+  const currentAnswer = currentQuestion ? answers[currentQuestion.id] : null;
+  const blankAnswers: string[] =
+    blankCount === 1
+      ? [typeof currentAnswer === "string" ? currentAnswer : ""]
+      : Array.isArray(currentAnswer) ? currentAnswer : [];
   
   // Get current part time remaining
   const currentPartTimeRemaining = hasParts && currentPart && partTimeRemaining[currentPart] !== undefined
@@ -710,7 +724,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                   )}
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{phraseForBlock.body}</p>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed"><MathText text={phraseForBlock.body} /></p>
                   {phraseForBlock.imageUrls && phraseForBlock.imageUrls.length > 0 && (
                     <div className="flex flex-col gap-3 pt-2">
                       {phraseForBlock.imageUrls.map((url: string, i: number) => (
@@ -754,7 +768,9 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                   </div>
                 </div>
                 {!isFillInTheBlank && (
-                  <CardTitle className="text-base sm:text-lg mt-3 leading-relaxed break-words">{currentQuestion.questionText}</CardTitle>
+                  <CardTitle className="text-base sm:text-lg mt-3 leading-relaxed break-words whitespace-pre-wrap">
+                    <MathText text={currentQuestion.questionText} />
+                  </CardTitle>
                 )}
                 {isMultipleAnswer && !isFillInTheBlank && (
                   <p className="text-xs text-muted-foreground mt-1">Select all that apply</p>
@@ -763,11 +779,11 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
               <CardContent className="space-y-3">
                 {isFillInTheBlank ? (
                   // Fill in the blank: stem with one input/dropdown per blank
-                  <div className="space-y-3">
+                  <div ref={answerScopeRef} className="space-y-3">
                     <p className="text-base sm:text-lg leading-relaxed flex flex-wrap items-baseline gap-x-1 gap-y-2">
                       {blankResult.segments.map((seg, i) => (
                         <span key={i}>
-                          {seg}
+                          <MathText text={seg} />
                           {i < blankCount && (
                             hasOptionsForBlank ? (
                               <Select
@@ -783,7 +799,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                                 </SelectTrigger>
                                 <SelectContent>
                                   {currentQuestion.options.map((opt, j) => (
-                                    <SelectItem key={j} value={opt}>{opt}</SelectItem>
+                                    <SelectItem key={j} value={opt}><MathText text={opt} /></SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -795,11 +811,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                                 autoComplete="off"
                                 autoCapitalize="off"
                                 className={cn("inline-flex w-40 max-w-full h-10 mx-0.5 align-baseline", ANSWER_FIELD_CLASS)}
-                                value={
-                                  blankCount === 1
-                                    ? (answers[currentQuestion.id] as string) ?? ""
-                                    : ((answers[currentQuestion.id] as string[])?.[i] ?? "")
-                                }
+                                value={blankAnswers[i] ?? ""}
                                 onChange={(e) => handleFillInAnswer(i, e.target.value, blankCount)}
                               />
                             )
@@ -807,9 +819,17 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                         </span>
                       ))}
                     </p>
+                    {!hasOptionsForBlank && (
+                      <>
+                        {blankAnswers.map((value, i) => (
+                          <MathPreview key={i} value={value} label={blankCount > 1 ? `Blank ${i + 1} shows as` : "Shows as"} />
+                        ))}
+                        <MathKeypad scopeRef={answerScopeRef} open={showMathKeypad} onOpenChange={setMathKeypadPref} />
+                      </>
+                    )}
                   </div>
                 ) : isTextAnswer ? (
-                  <div className="space-y-2">
+                  <div ref={answerScopeRef} className="space-y-2">
                     <Label htmlFor={`answer-${currentQuestion.id}`} className="text-sm text-muted-foreground">
                       {isEssay ? "Write your answer" : "Type your answer"}
                     </Label>
@@ -836,6 +856,8 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                         onBlur={flushTextAnswer}
                       />
                     )}
+                    <MathPreview value={typeof currentAnswer === "string" ? currentAnswer : ""} />
+                    <MathKeypad scopeRef={answerScopeRef} open={showMathKeypad} onOpenChange={setMathKeypadPref} />
                   </div>
                 ) : isMultipleAnswer ? (
                   // Multiple answer (checkboxes)
@@ -860,7 +882,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                           <span className="text-sm font-medium text-muted-foreground mr-2">
                             {String.fromCharCode(65 + i)}.
                           </span>
-                          <span className="min-w-0 break-words text-[15px] sm:text-sm">{option}</span>
+                          <MathText text={option} className="min-w-0 break-words text-[15px] sm:text-sm" />
                         </label>
                       );
                     })}
@@ -897,7 +919,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                               <span className="text-sm font-medium text-muted-foreground mr-2">
                                 {String.fromCharCode(65 + i)}.
                               </span>
-                              <span className="min-w-0 break-words text-[15px] sm:text-sm">{option}</span>
+                              <MathText text={option} className="min-w-0 break-words text-[15px] sm:text-sm" />
                             </label>
                           );
                         })}

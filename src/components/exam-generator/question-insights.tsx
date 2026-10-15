@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { QuestionMetadata } from "@/types";
+import { MathText } from "@/components/math/math-text";
 import { QuestionSource } from "./question-source";
 
 /** Proctor-facing answer explanation, essay rubric, and AI-generation tags for a question. */
@@ -31,7 +32,7 @@ export function QuestionInsights({
       {explanation?.trim() && (
         <p>
           <span className="font-medium">Explanation: </span>
-          <span className="text-muted-foreground">{explanation}</span>
+          <MathText text={explanation} className="text-muted-foreground" />
         </p>
       )}
       {ai?.rubric && (

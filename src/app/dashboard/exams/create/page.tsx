@@ -80,6 +80,9 @@ import { AnswerRevealSelect } from "@/components/exams/answer-reveal-select";
 import { buildExamInstruction } from "@/lib/exam-blueprint";
 import Link from "next/link";
 import { parseBlanks } from "@/lib/question-blanks";
+import { looksMathematical } from "@/lib/math-notation";
+import { MathText, MathPreview } from "@/components/math/math-text";
+import { MathKeypad } from "@/components/math/math-keypad";
 import type { CreateExamQuestionPayload, ExamPart } from "@/types";
 import {
   genPartPhraseId,
@@ -179,8 +182,11 @@ function QuestionCard({
   sections: QuestionSection[];
   setSections: React.Dispatch<React.SetStateAction<QuestionSection[]>>;
 }) {
+  const mathScopeRef = useRef<HTMLDivElement>(null);
+  const [mathKeypadPref, setMathKeypadPref] = useState<boolean | null>(null);
   return (
     <div
+      ref={mathScopeRef}
       className={`rounded-lg border p-3 space-y-4 sm:p-5 sm:space-y-5 ${
         needsAnswer ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20" : ""
       }`}
@@ -210,11 +216,18 @@ function QuestionCard({
             rows={3}
             className="min-h-[6rem] resize-y"
           />
+          <MathPreview value={q.questionText} label="Examinees see" />
           {layoutConfig.layout === "identification" && (
             <p className="text-xs text-muted-foreground">
               Tip: Use _____ (two or more underscores) for fill-in-the-blank. One input per blank; answer as text or multiple accepted answers.
             </p>
           )}
+          <MathKeypad
+            scopeRef={mathScopeRef}
+            open={mathKeypadPref ?? looksMathematical(q.questionText)}
+            onOpenChange={setMathKeypadPref}
+            showNotationHint
+          />
         </div>
         <div className="space-y-2">
           <Label>Question Type</Label>
@@ -280,7 +293,7 @@ function QuestionCard({
                     className="flex-1"
                   />
                 ) : (
-                  <span className="text-sm flex-1">{opt}</span>
+                  <MathText text={opt} className="text-sm flex-1" />
                 )}
                 {layoutConfig.editableOptions && q.options.length > 2 && (
                   <Button type="button" variant="ghost" size="icon" onClick={() => removeOption(oi)} className="shrink-0">
@@ -289,6 +302,10 @@ function QuestionCard({
                 )}
               </div>
             ))}
+            {layoutConfig.editableOptions &&
+              q.options.map((opt, oi) => (
+                <MathPreview key={oi} value={opt} label={`${String.fromCharCode(65 + oi)} shows as`} className="ml-8" />
+              ))}
             </div>
           </div>
         </>
@@ -333,6 +350,9 @@ function QuestionCard({
                           />
                         </div>
                       ))}
+                      {answers.map((ans, ai) => (
+                        <MathPreview key={ai} value={ans} label={`Blank ${ai + 1} shows as`} />
+                      ))}
                     </div>
                   );
                 }
@@ -376,6 +396,9 @@ function QuestionCard({
                         )}
                       </div>
                     ))}
+                    {answers.map((ans, ai) => (
+                      <MathPreview key={ai} value={ans} label={answers.length > 1 ? `Answer ${ai + 1} shows as` : "Shows as"} />
+                    ))}
                     <Button
                       type="button"
                       variant="ghost"
@@ -404,7 +427,7 @@ function QuestionCard({
                         onCheckedChange={(checked) => toggleCorrectAnswer(oi, !!checked)}
                       />
                       <span className="text-xs text-muted-foreground">{String.fromCharCode(65 + oi)}.</span>
-                      <span className="text-sm">{opt}</span>
+                      <MathText text={opt} className="text-sm" />
                     </label>
                   );
                 })}

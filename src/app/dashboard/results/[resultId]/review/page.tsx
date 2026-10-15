@@ -21,6 +21,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { PageLoader } from "@/components/ui/loading";
 import { QuestionInsights } from "@/components/exam-generator/question-insights";
 import { QuestionSource } from "@/components/exam-generator/question-source";
+import { MathAnswerList, MathText } from "@/components/math/math-text";
+import { parseBlanks } from "@/lib/question-blanks";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -339,12 +341,12 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
     : Array.isArray(currentQuestion.correctAnswer)
       ? currentQuestion.correctAnswer
       : [currentQuestion.correctAnswer];
-  const correctAnswerLabel = correctAnswers
-    .map((answer) => {
-      const i = currentQuestion?.options.indexOf(answer) ?? -1;
-      return i >= 0 ? `${String.fromCharCode(65 + i)}. ${answer}` : answer;
-    })
-    .join(", ");
+  const correctAnswerLabels = correctAnswers.map((answer) => {
+    const i = currentQuestion?.options.indexOf(answer) ?? -1;
+    return i >= 0 ? `${String.fromCharCode(65 + i)}. ${answer}` : answer;
+  });
+  const correctAnswersAllApply =
+    (currentQuestion?.options.length ?? 0) > 0 || parseBlanks(currentQuestion?.questionText ?? "").blankCount > 1;
   const explanation = currentQuestion?.explanation?.trim();
 
   return (
@@ -525,8 +527,8 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                     )}
                   </div>
                 </div>
-                <CardTitle className="text-base sm:text-lg mt-3 leading-relaxed break-words">
-                  {currentQuestion.questionText}
+                <CardTitle className="text-base sm:text-lg mt-3 leading-relaxed break-words whitespace-pre-wrap">
+                  <MathText text={currentQuestion.questionText} />
                 </CardTitle>
                 {isMultipleAnswer && (
                   <p className="text-xs text-muted-foreground mt-1">Select all that apply</p>
@@ -555,7 +557,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                           <span className="text-sm font-medium text-muted-foreground mr-2">
                             {String.fromCharCode(65 + i)}.
                           </span>
-                          <span className="text-sm flex-1">{option}</span>
+                          <MathText text={option} className="text-sm flex-1" />
                           <div className="flex flex-wrap gap-1 justify-end">
                             {isUserSelected && (
                               <Badge variant={isCorrectOption ? "success" : "destructive"} className="text-xs">
@@ -595,7 +597,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                           <span className="text-sm font-medium text-muted-foreground mr-2">
                             {String.fromCharCode(65 + i)}.
                           </span>
-                          <span className="text-sm flex-1">{option}</span>
+                          <MathText text={option} className="text-sm flex-1" />
                           <div className="flex flex-wrap gap-1 justify-end">
                             {isUserSelected && (
                               <Badge variant={isCorrectOption ? "success" : "destructive"} className="text-xs">
@@ -613,6 +615,16 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                     })}
                   </div>
                 )}
+                {currentQuestion.options.length === 0 && (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                    <span className="font-medium">{canGrade ? "Examinee's answer" : "Your answer"}: </span>
+                    {userAnswerArr.length > 0 ? (
+                      <MathAnswerList answers={userAnswerArr} joiner="and" className="break-words whitespace-pre-wrap" />
+                    ) : (
+                      <span className="italic text-muted-foreground">No answer</span>
+                    )}
+                  </div>
+                )}
                 {canGrade ? (
                   <QuestionInsights
                     explanation={currentQuestion.explanation}
@@ -626,18 +638,22 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                         Correct answers and explanations will be shown once you pass this exam or use up your attempts.
                       </p>
                     )}
-                    {!isCorrect && correctAnswerLabel && (
+                    {!isCorrect && correctAnswerLabels.length > 0 && (
                       <div className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/30">
                         <span className="font-medium text-emerald-800 dark:text-emerald-300">
                           Correct answer{correctAnswers.length > 1 ? "s" : ""}:{" "}
                         </span>
-                        <span className="break-words">{correctAnswerLabel}</span>
+                        <MathAnswerList
+                          answers={correctAnswerLabels}
+                          joiner={correctAnswersAllApply ? "and" : "or"}
+                          className="break-words"
+                        />
                       </div>
                     )}
                     {explanation && (
                       <div className="mt-3 rounded-md bg-muted/40 p-3 text-sm">
                         <p className="font-medium mb-1">Explanation</p>
-                        <p className="text-muted-foreground whitespace-pre-wrap break-words">{explanation}</p>
+                        <p className="text-muted-foreground whitespace-pre-wrap break-words"><MathText text={explanation} /></p>
                       </div>
                     )}
                     {examineeCanViewSources && currentQuestion.metadata?.ai && (
@@ -715,7 +731,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
             const existingRec = reconciliations.find((r) => r.questionId === currentQuestion.id);
             return (
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground line-clamp-2">{currentQuestion.questionText}</p>
+                <p className="text-sm text-muted-foreground line-clamp-2"><MathText text={currentQuestion.questionText} /></p>
                 {existingRec && (
                   <div className="rounded-lg border bg-muted/50 p-3 text-sm">
                     <p className="font-medium text-muted-foreground mb-1">Current reconciliation</p>
@@ -761,7 +777,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                           <SelectContent>
                             {currentQuestion.options.map((opt, i) => (
                               <SelectItem key={i} value={opt}>
-                                {String.fromCharCode(65 + i)}. {opt}
+                                {String.fromCharCode(65 + i)}. <MathText text={opt} />
                               </SelectItem>
                             ))}
                           </SelectContent>
