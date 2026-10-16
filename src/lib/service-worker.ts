@@ -1,8 +1,11 @@
-// Xevra service worker: makes the app installable and keeps visited pages usable on a flaky connection.
+/** Service worker source with a build-specific cache version so deploys bust old caches. */
+export function getServiceWorkerScript(buildId: string): string {
+  const version = JSON.stringify(buildId || "dev");
+  return `// Xevra service worker: makes the app installable and keeps visited pages usable on a flaky connection.
 // API calls go to another origin and are never cached; exam answers are protected by the page's own local backup.
-const VERSION = "v1";
-const STATIC_CACHE = `xevra-static-${VERSION}`;
-const PAGE_CACHE = `xevra-pages-${VERSION}`;
+const VERSION = ${version};
+const STATIC_CACHE = \`xevra-static-\${VERSION}\`;
+const PAGE_CACHE = \`xevra-pages-\${VERSION}\`;
 const OFFLINE_URL = "/offline.html";
 const PRECACHE = [OFFLINE_URL, "/icons/icon-192.png", "/icons/icon-512.png", "/xevra-logo.png"];
 const MAX_CACHED_PAGES = 40;
@@ -69,3 +72,5 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+`;
+}

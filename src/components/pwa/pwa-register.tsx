@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { BUILD_ID } from "@/lib/version";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -14,7 +15,8 @@ const INSTALL_DISMISSED_KEY = "xebra:pwa-install-dismissed";
 export function PwaRegister() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js").catch(() => {
+    // Query param helps the browser pick up a new worker when BUILD_ID changes
+    navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(BUILD_ID)}`).catch(() => {
       // Installability is optional; the app works the same without the worker
     });
   }, []);

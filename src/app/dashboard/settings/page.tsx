@@ -10,6 +10,7 @@ import { User, Shield, Mail, Calendar } from "lucide-react";
 import { NotificationSettings } from "@/components/settings/notification-settings";
 import { PlanSettings } from "@/components/settings/plan-settings";
 import { WebhookSettings } from "@/components/settings/webhook-settings";
+import { APP_VERSION_LABEL, BUILD_TIME } from "@/lib/version";
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
@@ -92,8 +93,14 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Version</span>
-            <span className="font-medium">1.0.0</span>
+            <span className="font-medium font-mono">{APP_VERSION_LABEL}</span>
           </div>
+          {BUILD_TIME && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Built</span>
+              <span className="font-medium text-muted-foreground">{formatDate(BUILD_TIME)}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
