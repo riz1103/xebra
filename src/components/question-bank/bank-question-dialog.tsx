@@ -91,14 +91,14 @@ export function BankQuestionDialog({
     if (open && !form.questionTypeId && types[0]) setForm((f) => ({ ...f, questionTypeId: types[0].id }));
   }, [open, types, form.questionTypeId]);
 
-  const typeName = types.find((t) => t.id === form.questionTypeId)?.name ?? "";
-  const layout = getLayoutConfig(typeName);
+  const selectedType = types.find((t) => t.id === form.questionTypeId);
+  const layout = getLayoutConfig(selectedType);
   const positional = isPositionalLayout(layout.layout) ? layout.layout : null;
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   const changeType = (typeId: string) => {
-    const next = getLayoutConfig(types.find((t) => t.id === typeId)?.name ?? "");
+    const next = getLayoutConfig(types.find((t) => t.id === typeId));
     setForm((f) => {
       if (next.layout === layout.layout) return { ...f, questionTypeId: typeId };
       return {

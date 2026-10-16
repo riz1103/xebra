@@ -647,8 +647,8 @@ export default function CreateExamPage() {
     onError: (err: Error) => toast.error(err.message || "Failed to create exam"),
   });
 
-  const getTypeName = (typeId: string) =>
-    questionTypes.find((qt) => qt.id === typeId)?.name || "";
+  const getType = (typeId: string) => questionTypes.find((qt) => qt.id === typeId);
+  const getTypeName = (typeId: string) => getType(typeId)?.name || "";
 
   /** Flatten all questions from sections (for counts and for legacy upload) */
   const allQuestions = sections.flatMap((s) => {
@@ -664,7 +664,7 @@ export default function CreateExamPage() {
 
   const addQuestion = () => {
     const defaultTypeId = questionTypes[0]?.id || "";
-    const layout = getLayoutConfig(getTypeName(defaultTypeId));
+    const layout = getLayoutConfig(getType(defaultTypeId));
     setSections((prev) => [
       ...prev,
       {
@@ -761,7 +761,7 @@ export default function CreateExamPage() {
 
   const addQuestionUnderPhrase = (sectionId: string) => {
     const defaultTypeId = questionTypes[0]?.id || "";
-    const layout = getLayoutConfig(getTypeName(defaultTypeId));
+    const layout = getLayoutConfig(getType(defaultTypeId));
     const newQ: CreateExamQuestionPayload = {
       questionTypeId: defaultTypeId,
       questionText: "",
@@ -803,7 +803,7 @@ export default function CreateExamPage() {
 
   const addQuestionUnderPart = (sectionId: string) => {
     const defaultTypeId = questionTypes[0]?.id || "";
-    const layout = getLayoutConfig(getTypeName(defaultTypeId));
+    const layout = getLayoutConfig(getType(defaultTypeId));
     const newQ: CreateExamQuestionPayload = {
       questionTypeId: defaultTypeId,
       questionText: "",
@@ -867,7 +867,7 @@ export default function CreateExamPage() {
 
   const addQuestionUnderPartPhrase = (sectionId: string, phraseId: string) => {
     const defaultTypeId = questionTypes[0]?.id || "";
-    const layout = getLayoutConfig(getTypeName(defaultTypeId));
+    const layout = getLayoutConfig(getType(defaultTypeId));
     const newQ: CreateExamQuestionPayload = {
       questionTypeId: defaultTypeId,
       questionText: "",
@@ -967,8 +967,8 @@ export default function CreateExamPage() {
   const handleQuestionTypeChange = (sectionId: string, phraseQuestionIndex: number | undefined, newTypeId: string) => {
     const q = getQuestionAt(sectionId, phraseQuestionIndex);
     if (!q) return;
-    const oldLayout = getLayoutConfig(getTypeName(q.questionTypeId));
-    const newLayout = getLayoutConfig(getTypeName(newTypeId));
+    const oldLayout = getLayoutConfig(getType(q.questionTypeId));
+    const newLayout = getLayoutConfig(getType(newTypeId));
     const next: CreateExamQuestionPayload = { ...q, questionTypeId: newTypeId };
     if (oldLayout.layout !== newLayout.layout) {
       next.options = [...newLayout.defaultOptions];
@@ -1098,8 +1098,7 @@ export default function CreateExamPage() {
               : null;
           let out = { ...q, examId: "", partId: partId ?? undefined };
           // Ensure options match the selected question type (e.g. True/False from section hint but parser had no options)
-          const typeName = getTypeName(out.questionTypeId);
-          const layout = getLayoutConfig(typeName);
+          const layout = getLayoutConfig(getType(out.questionTypeId));
           const needsDefaultOptions =
             layout.defaultOptions.length > 0 &&
             (out.options.length === 0 ||
@@ -1800,7 +1799,7 @@ export default function CreateExamPage() {
 
   const onSubmit = (values: ExamFormValues) => {
     const layoutMap = new Map(
-      questionTypes.map((qt) => [qt.id, getLayoutConfig(qt.name)])
+      questionTypes.map((qt) => [qt.id, getLayoutConfig(qt)])
     );
     const allQuestions: { q: CreateExamQuestionPayload; label: string }[] = [];
     sections.forEach((sec, si) => {
@@ -2318,7 +2317,7 @@ export default function CreateExamPage() {
                       {sec.type === "standalone" ? (
                         (() => {
                           const q = sec.question;
-                          const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
+                          const layoutConfig = getLayoutConfig(getType(q.questionTypeId));
                           const needsAnswer = layoutConfig.showCorrectAnswer && (
                             Array.isArray(q.correctAnswer)
                               ? q.correctAnswer.length === 0 || q.correctAnswer.every((a) => !a)
@@ -2529,7 +2528,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                             </div>
                             <QuestionDropZone dropTarget={{ t: "part-questions", sectionId: partSec.id, partSectionId: partSec.id }} label={DROP_ZONE_LABEL} />
                             {partSec.questions.map((q, qIdx) => {
-                              const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
+                              const layoutConfig = getLayoutConfig(getType(q.questionTypeId));
                               const needsAnswer = layoutConfig.showCorrectAnswer && (
                                 Array.isArray(q.correctAnswer)
                                   ? q.correctAnswer.length === 0 || q.correctAnswer.every((a) => !a)
@@ -2581,8 +2580,8 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                     handleQuestionTypeChange={(newTypeId) => {
                                       const prev = partSec.questions[qIdx];
                                       if (!prev) return;
-                                      const oldLayout = getLayoutConfig(getTypeName(prev.questionTypeId));
-                                      const newLayout = getLayoutConfig(getTypeName(newTypeId));
+                                      const oldLayout = getLayoutConfig(getType(prev.questionTypeId));
+                                      const newLayout = getLayoutConfig(getType(newTypeId));
                                       const next = { ...prev, questionTypeId: newTypeId };
                                       if (oldLayout.layout !== newLayout.layout) {
                                         next.options = [...newLayout.defaultOptions];
@@ -2746,7 +2745,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                         <QuestionDropZone dropTarget={{ t: "part-phrase-questions", partSectionId: partSec.id, phraseId: partPhrase.id }} label={DROP_ZONE_LABEL} />
                                       </div>
                                       {partPhrase.questions.map((q, qIdx) => {
-                                        const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
+                                        const layoutConfig = getLayoutConfig(getType(q.questionTypeId));
                                         const needsAnswer = layoutConfig.showCorrectAnswer && (
                                           Array.isArray(q.correctAnswer)
                                             ? q.correctAnswer.length === 0 || q.correctAnswer.every((a) => !a)
@@ -2798,8 +2797,8 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                               handleQuestionTypeChange={(newTypeId) => {
                                                 const prev = partPhrase.questions[qIdx];
                                                 if (!prev) return;
-                                                const oldLayout = getLayoutConfig(getTypeName(prev.questionTypeId));
-                                                const newLayout = getLayoutConfig(getTypeName(newTypeId));
+                                                const oldLayout = getLayoutConfig(getType(prev.questionTypeId));
+                                                const newLayout = getLayoutConfig(getType(newTypeId));
                                                 const next = { ...prev, questionTypeId: newTypeId };
                                                 if (oldLayout.layout !== newLayout.layout) {
                                                   next.options = [...newLayout.defaultOptions];
@@ -3000,7 +2999,7 @@ onRemove={() => setConfirmRemove({ type: "section", sectionId: sec.id })}
                                     <QuestionDropZone dropTarget={{ t: "phrase-questions", sectionId: phraseSec.id }} label={DROP_ZONE_LABEL} />
                                   </div>
                                   {phraseSec.questions.map((q, qIdx) => {
-                                    const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
+                                    const layoutConfig = getLayoutConfig(getType(q.questionTypeId));
                                     const needsAnswer = layoutConfig.showCorrectAnswer && (
                                       Array.isArray(q.correctAnswer)
                                         ? q.correctAnswer.length === 0 || q.correctAnswer.every((a) => !a)

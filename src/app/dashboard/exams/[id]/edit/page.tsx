@@ -233,12 +233,12 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const getTypeName = (typeId: string) =>
-    questionTypes.find((qt) => qt.id === typeId)?.name || "";
+  const getType = (typeId: string) => questionTypes.find((qt) => qt.id === typeId);
+  const getTypeName = (typeId: string) => getType(typeId)?.name || "";
 
   const addNewQuestion = () => {
     const defaultTypeId = questionTypes[0]?.id || "";
-    const layout = getLayoutConfig(getTypeName(defaultTypeId));
+    const layout = getLayoutConfig(getType(defaultTypeId));
     setNewQuestions([
       ...newQuestions,
       {
@@ -256,8 +256,8 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
   const handleNewQuestionTypeChange = (qIndex: number, newTypeId: string) => {
     const updated = [...newQuestions];
-    const oldLayout = getLayoutConfig(getTypeName(updated[qIndex].questionTypeId));
-    const newLayout = getLayoutConfig(getTypeName(newTypeId));
+    const oldLayout = getLayoutConfig(getType(updated[qIndex].questionTypeId));
+    const newLayout = getLayoutConfig(getType(newTypeId));
     updated[qIndex].questionTypeId = newTypeId;
     if (oldLayout.layout !== newLayout.layout) {
       updated[qIndex].options = [...newLayout.defaultOptions];
@@ -281,7 +281,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
   const saveNewQuestion = (index: number) => {
     const q = newQuestions[index];
-    const config = getLayoutConfig(getTypeName(q.questionTypeId));
+    const config = getLayoutConfig(getType(q.questionTypeId));
     if (!q.questionText) {
       toast.error("Please fill in the question text.");
       return;
@@ -884,7 +884,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
           {/* New Question Forms */}
           {newQuestions.map((q, qi) => {
-            const layoutConfig = getLayoutConfig(getTypeName(q.questionTypeId));
+            const layoutConfig = getLayoutConfig(getType(q.questionTypeId));
             return (
               <MathKeypadScope
                 key={qi}

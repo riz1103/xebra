@@ -6,6 +6,7 @@ import type {
   User,
   QuestionType,
   CreateQuestionTypePayload,
+  UpdateQuestionTypePayload,
   Phrase,
   PhraseBlock,
   CreatePhrasePayload,
@@ -179,7 +180,7 @@ class ApiClient {
     return data;
   }
 
-  async updateQuestionType(id: string, payload: Partial<CreateQuestionTypePayload>) {
+  async updateQuestionType(id: string, payload: UpdateQuestionTypePayload) {
     const { data } = await this.client.put<ApiResponse<QuestionType>>(`/api/question-types/${id}`, payload);
     return data;
   }

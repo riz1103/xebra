@@ -33,7 +33,7 @@ import {
 import { cn, formatDuration } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { parseBlanks } from "@/lib/question-blanks";
-import { getQuestionLayout } from "@/lib/question-layout";
+import { resolveQuestionLayout } from "@/lib/question-layout";
 import { Textarea } from "@/components/ui/textarea";
 import { MathText, MathPreview } from "@/components/math/math-text";
 import { MathKeypad } from "@/components/math/math-keypad";
@@ -210,7 +210,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     enabled: !authLoading && isAuthenticated,
   });
   const layoutByTypeId = useMemo(
-    () => new Map((questionTypesData?.data ?? []).map((t) => [t.id, getQuestionLayout(t.name)])),
+    () => new Map((questionTypesData?.data ?? []).map((t) => [t.id, resolveQuestionLayout(t)])),
     [questionTypesData]
   );
   

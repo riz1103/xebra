@@ -41,14 +41,25 @@ export interface QuestionType {
   id: string;
   name: string;
   description: string;
+  /** Coded layout this type enables; legacy rows may omit it */
+  layout?: string | null;
   config: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateQuestionTypePayload {
-  name: string;
-  description: string;
+  /** Required: which coded layout to enable */
+  layout: string;
+  name?: string;
+  description?: string;
+  config?: Record<string, unknown>;
+}
+
+/** Layout is immutable after create */
+export interface UpdateQuestionTypePayload {
+  name?: string;
+  description?: string;
   config?: Record<string, unknown>;
 }
 

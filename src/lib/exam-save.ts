@@ -11,11 +11,11 @@ import type { CreateExamQuestionPayload, ExamOrigin, QuestionType } from "@/type
  */
 export function toApiQuestionPayload(
   q: CreateExamQuestionPayload,
-  questionTypes: Pick<QuestionType, "id" | "name">[]
+  questionTypes: Pick<QuestionType, "id" | "name" | "layout">[]
 ): CreateExamQuestionPayload {
-  const typeName = questionTypes.find((qt) => qt.id === q.questionTypeId)?.name;
-  if (!typeName) return q;
-  const config = getLayoutConfig(typeName);
+  const type = questionTypes.find((qt) => qt.id === q.questionTypeId);
+  if (!type) return q;
+  const config = getLayoutConfig(type);
   if (isPositionalLayout(config.layout)) {
     const fields = payloadFromDraft(config.layout, draftFromQuestion(config.layout, q), q.metadata);
     return "error" in fields ? q : { ...q, ...fields };

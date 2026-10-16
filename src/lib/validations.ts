@@ -19,6 +19,24 @@ export const registerSchema = z
   });
 
 // ============ Question Types ============
+/** Enable a coded layout (create) */
+export const questionTypeCreateSchema = z.object({
+  layout: z.enum([
+    "multiple_choice",
+    "true_false",
+    "multiple_answer",
+    "identification",
+    "essay",
+    "ordering",
+    "matching",
+    "audio",
+    "hotspot",
+  ]),
+  name: z.string().min(1, "Name is required").max(100, "Name too long"),
+  description: z.string().min(1, "Description is required").max(500, "Description too long"),
+});
+
+/** Rename / describe an existing type (layout is immutable) */
 export const questionTypeSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   description: z.string().min(1, "Description is required").max(500, "Description too long"),
@@ -385,6 +403,7 @@ export const reviewProctorRequestSchema = z.object({
 export type LoginFormValues = z.infer<typeof loginSchema>;
 export type RegisterFormValues = z.infer<typeof registerSchema>;
 export type QuestionTypeFormValues = z.infer<typeof questionTypeSchema>;
+export type QuestionTypeCreateFormValues = z.infer<typeof questionTypeCreateSchema>;
 export type ExamQuestionFormValues = z.infer<typeof examQuestionSchema>;
 export type ExamFormValues = z.infer<typeof examSchema>;
 export type ExamBundleFormValues = z.infer<typeof examBundleSchema>;

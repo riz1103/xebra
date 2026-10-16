@@ -32,7 +32,7 @@ import {
   type ExamBlueprint,
   type ExamPurpose,
 } from "@/lib/exam-blueprint";
-import { getQuestionLayout, type QuestionLayout } from "@/lib/question-layout";
+import { resolveQuestionLayout, type QuestionLayout } from "@/lib/question-layout";
 import { parseBlanks } from "@/lib/question-blanks";
 import { latexToPlainMath, normalizeAnswer } from "@/lib/math-notation";
 import { genPartId, genPartPhraseId, genSectionId, type QuestionSection } from "@/lib/exam-sections";
@@ -966,17 +966,23 @@ export async function generateExam(
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 
-/** Finds an existing question type whose name maps to the given layout. */
-export function findQuestionTypeId(layout: QuestionLayout, types: { id: string; name: string }[]): string | null {
-  const matches = types.filter((t) => getQuestionLayout(t.name) === layout);
+/** Finds an existing question type bound to (or resolving to) the given layout. */
+export function findQuestionTypeId(
+  layout: QuestionLayout,
+  types: { id: string; name: string; layout?: string | null }[]
+): string | null {
+  const matches = types.filter((t) => resolveQuestionLayout(t) === layout);
   if (layout === "multiple_choice") {
-    const explicit = matches.find((t) => /choice/i.test(t.name));
+    const explicit = matches.find((t) => t.layout === "multiple_choice" || /choice/i.test(t.name));
     if (explicit) return explicit.id;
   }
   return matches[0]?.id ?? null;
 }
 
-export function missingLayouts(layouts: QuestionLayout[], types: { id: string; name: string }[]): QuestionLayout[] {
+export function missingLayouts(
+  layouts: QuestionLayout[],
+  types: { id: string; name: string; layout?: string | null }[]
+): QuestionLayout[] {
   return [...new Set(layouts)].filter((l) => !findQuestionTypeId(l, types));
 }
 

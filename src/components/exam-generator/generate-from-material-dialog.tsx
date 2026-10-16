@@ -227,7 +227,11 @@ export function GenerateFromMaterialDialog({
     setCreatingTypes(true);
     try {
       for (const layout of missing) {
-        await api.createQuestionType({ name: LAYOUT_LABELS[layout], description: LAYOUT_DESCRIPTIONS[layout] });
+        await api.createQuestionType({
+          layout,
+          name: LAYOUT_LABELS[layout],
+          description: LAYOUT_DESCRIPTIONS[layout],
+        });
       }
       await queryClient.invalidateQueries({ queryKey: ["question-types"] });
       toast.success("Question types created");

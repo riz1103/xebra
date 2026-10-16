@@ -1,6 +1,6 @@
 /**
- * Determines the form layout for a question based on the question type name.
- * Since question types are dynamic (stored in DB), we match by name keywords.
+ * Coded question layouts. Question type DB rows bind to one of these;
+ * authoring, taking, and grading behavior are implemented in code.
  */
 
 export type QuestionLayout =
@@ -13,6 +13,27 @@ export type QuestionLayout =
   | "matching"
   | "audio"
   | "hotspot";
+
+export const ALL_QUESTION_LAYOUTS: QuestionLayout[] = [
+  "multiple_choice",
+  "true_false",
+  "multiple_answer",
+  "identification",
+  "essay",
+  "ordering",
+  "matching",
+  "audio",
+  "hotspot",
+];
+
+export const isQuestionLayout = (value: unknown): value is QuestionLayout =>
+  typeof value === "string" && (ALL_QUESTION_LAYOUTS as readonly string[]).includes(value);
+
+/** Minimal shape needed to resolve a type's layout */
+export type QuestionTypeLayoutSource = {
+  name?: string | null;
+  layout?: string | null;
+};
 
 /** Layouts whose answer is an array compared position by position (see metadata.answerFormat) */
 export const POSITIONAL_LAYOUTS = ["ordering", "matching"] as const;
@@ -47,7 +68,7 @@ export interface LayoutConfig {
 }
 
 /**
- * Detects the question layout from a question type name.
+ * Detects the question layout from a question type name (legacy fallback).
  */
 export function getQuestionLayout(typeName: string): QuestionLayout {
   const name = typeName.toLowerCase().trim();
@@ -123,11 +144,16 @@ export function getQuestionLayout(typeName: string): QuestionLayout {
 }
 
 /**
- * Returns the full layout configuration for a given question type name.
+ * Prefer an explicit layout field; fall back to name keyword matching for legacy rows.
  */
-export function getLayoutConfig(typeName: string): LayoutConfig {
-  const layout = getQuestionLayout(typeName);
+export function resolveQuestionLayout(type: QuestionTypeLayoutSource | string | null | undefined): QuestionLayout {
+  if (typeof type === "string") return getQuestionLayout(type);
+  if (!type) return "multiple_choice";
+  if (isQuestionLayout(type.layout)) return type.layout;
+  return getQuestionLayout(type.name ?? "");
+}
 
+function layoutConfigFor(layout: QuestionLayout): LayoutConfig {
   switch (layout) {
     case "true_false":
       return {
@@ -227,7 +253,7 @@ export function getLayoutConfig(typeName: string): LayoutConfig {
     case "multiple_choice":
     default:
       return {
-        layout,
+        layout: "multiple_choice",
         showOptions: true,
         editableOptions: true,
         showCorrectAnswer: true,
@@ -238,4 +264,16 @@ export function getLayoutConfig(typeName: string): LayoutConfig {
         correctAnswerPlaceholder: "",
       };
   }
+}
+
+/**
+ * Layout config from a type name or question type object (prefers explicit layout).
+ */
+export function getLayoutConfig(typeOrName: string | QuestionTypeLayoutSource | null | undefined): LayoutConfig {
+  return layoutConfigFor(resolveQuestionLayout(typeOrName));
+}
+
+/** @deprecated Prefer getLayoutConfig — same behavior */
+export function getLayoutConfigForType(type: QuestionTypeLayoutSource | string | null | undefined): LayoutConfig {
+  return getLayoutConfig(type);
 }
