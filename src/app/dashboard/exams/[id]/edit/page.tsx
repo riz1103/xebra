@@ -24,9 +24,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Sparkles, Trash2, Save } from "lucide-react";
 import Link from "next/link";
-import { getLayoutConfig, isPositionalLayout } from "@/lib/question-layout";
+import { getLayoutConfig, isMediaLayout, isPositionalLayout } from "@/lib/question-layout";
 import { emptyDraft, payloadFromDraft, type PositionalDraft } from "@/lib/positional-questions";
 import { PositionalQuestionEditor } from "@/components/questions/positional-answer";
+import { AudioQuestionEditor, HotspotQuestionEditor } from "@/components/questions/media-questions";
 import { parseBlanks } from "@/lib/question-blanks";
 import { looksMathematical } from "@/lib/math-notation";
 import { MathText, MathPreview } from "@/components/math/math-text";
@@ -295,6 +296,26 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
       addQuestionMutation.mutate({ ...rest, ...fields }, {
         onSuccess: () => setNewQuestions(newQuestions.filter((_, i) => i !== index)),
       });
+      return;
+    }
+    if (config.layout === "audio" && !q.metadata?.audioUrl) {
+      toast.error("Upload an audio clip for this listening question.");
+      return;
+    }
+    if (config.layout === "hotspot") {
+      if (!q.metadata?.hotspotImageUrl) {
+        toast.error("Upload an image for this hotspot question.");
+        return;
+      }
+      if (!Array.isArray(q.correctAnswer) || q.correctAnswer.length === 0) {
+        toast.error("Click the image to mark at least one correct region.");
+        return;
+      }
+      const { positionalDraft: _draft, ...rest } = q;
+      addQuestionMutation.mutate(
+        { ...rest, metadata: { ...q.metadata, answerFormat: "hotspot" }, correctAnswer: q.correctAnswer },
+        { onSuccess: () => setNewQuestions(newQuestions.filter((_, i) => i !== index)) }
+      );
       return;
     }
     if (config?.layout === "identification" && config.correctAnswerIsText) {
@@ -1127,8 +1148,31 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                   />
                 )}
 
+                {layoutConfig.layout === "audio" && (
+                  <AudioQuestionEditor
+                    metadata={q.metadata}
+                    onChange={(metadata) => {
+                      const updated = [...newQuestions];
+                      updated[qi] = { ...updated[qi], metadata };
+                      setNewQuestions(updated);
+                    }}
+                  />
+                )}
+
+                {layoutConfig.layout === "hotspot" && (
+                  <HotspotQuestionEditor
+                    metadata={q.metadata}
+                    correctAnswer={q.correctAnswer}
+                    onChange={({ metadata, correctAnswer }) => {
+                      const updated = [...newQuestions];
+                      updated[qi] = { ...updated[qi], metadata, correctAnswer };
+                      setNewQuestions(updated);
+                    }}
+                  />
+                )}
+
                 {/* Info for essay type */}
-                {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && !isPositionalLayout(layoutConfig.layout) && (
+                {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && !isPositionalLayout(layoutConfig.layout) && !isMediaLayout(layoutConfig.layout) && (
                   <p className="text-xs text-muted-foreground italic">
                     This question type will be graded manually. No options or correct answer needed.
                   </p>

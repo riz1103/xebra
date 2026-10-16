@@ -33,6 +33,8 @@ export const LAYOUT_LABELS: Record<QuestionLayout, string> = {
   essay: "Essay",
   ordering: "Ordering",
   matching: "Matching",
+  audio: "Audio / Listening",
+  hotspot: "Image Hotspot",
 };
 
 export const LAYOUT_DESCRIPTIONS: Record<QuestionLayout, string> = {
@@ -43,6 +45,8 @@ export const LAYOUT_DESCRIPTIONS: Record<QuestionLayout, string> = {
   essay: "Answer in complete sentences. Graded manually.",
   ordering: "Put the items in the correct order.",
   matching: "Match each item with its correct pair.",
+  audio: "Play an audio clip, then choose the correct answer.",
+  hotspot: "Click the correct spot on an image.",
 };
 
 export const EDUCATION_LEVEL_LABELS: Record<EducationLevel, string> = {
@@ -173,6 +177,8 @@ const MINUTES_PER_ITEM: Record<QuestionLayout, number> = {
   essay: 10,
   ordering: 1.5,
   matching: 2,
+  audio: 1.5,
+  hotspot: 1,
 };
 const MINUTES_PER_PASSAGE = 3;
 
@@ -184,6 +190,8 @@ export const DEFAULT_POINTS: Record<QuestionLayout, number> = {
   essay: 10,
   ordering: 2,
   matching: 2,
+  audio: 1,
+  hotspot: 1,
 };
 
 export interface ExamBlueprint {
@@ -223,7 +231,17 @@ export const MAX_POOL_PER_LAYOUT = 200;
 export const LARGE_POOL_WARNING = 200;
 
 function emptyCounts(): LayoutCounts {
-  return { multiple_choice: 0, true_false: 0, multiple_answer: 0, identification: 0, essay: 0, ordering: 0, matching: 0 };
+  return {
+    multiple_choice: 0,
+    true_false: 0,
+    multiple_answer: 0,
+    identification: 0,
+    essay: 0,
+    ordering: 0,
+    matching: 0,
+    audio: 0,
+    hotspot: 0,
+  };
 }
 
 /** Splits a total item count across layouts using the preset ratio (largest-remainder rounding). */

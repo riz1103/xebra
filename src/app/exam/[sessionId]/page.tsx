@@ -38,8 +38,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { MathText, MathPreview } from "@/components/math/math-text";
 import { MathKeypad } from "@/components/math/math-keypad";
 import { MatchingInput, OrderingInput } from "@/components/questions/positional-answer";
+import { AudioPlayer, HotspotInput } from "@/components/questions/media-questions";
 import { looksMathematical } from "@/lib/math-notation";
-import { clearExamBackup, mergeWithBackup, readExamBackup, writeExamBackup } from "@/lib/exam-backup";
+import {
+  clearExamBackup,
+  hasPendingSubmit,
+  mergeWithBackup,
+  readExamBackup,
+  readExamSessionCache,
+  setPendingSubmit,
+  writeExamBackup,
+  writeExamSessionCache,
+} from "@/lib/exam-backup";
 import { useExamDisplayPrefs } from "@/lib/exam-display";
 import { useIntegrityLogger } from "@/lib/integrity-logger";
 import { ExamDisplayMenu } from "@/components/exam/exam-display-menu";
@@ -79,6 +89,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const answerScopeRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [isOnline, setIsOnline] = useState(true);
+  const [submitQueued, setSubmitQueued] = useState(false);
   /** Answers changed locally that the server hasn't confirmed yet */
   const unsyncedRef = useRef<Set<string>>(new Set());
   const [unsyncedCount, setUnsyncedCount] = useState(0);
@@ -117,16 +128,32 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     }
   }, [authLoading, isAuthenticated, router]);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["exam-session", sessionId],
-    queryFn: () => api.getExamSession(sessionId, { includeQuestions: true }),
+    queryFn: async () => {
+      try {
+        return await api.getExamSession(sessionId, { includeQuestions: true });
+      } catch (err) {
+        // Resume from the last full session copy if the network is down
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          const cached = readExamSessionCache(sessionId);
+          if (cached) return { success: true as const, data: cached };
+        }
+        throw err;
+      }
+    },
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
     staleTime: 0,
     enabled: !authLoading && isAuthenticated,
+    retry: (count) => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+      return count < 2;
+    },
   });
 
-  const session = data?.data;
+  const session = data?.data ?? (isError ? readExamSessionCache(sessionId) ?? undefined : undefined);
+  const usingOfflineCache = !data?.data && !!session;
   const sessionQuestions = session?.questions;
   const selectedQuestionIds = session?.selectedQuestionIds;
   const rawQuestionsByPart = session?.questionsByPart || null;
@@ -209,6 +236,11 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     currentQuestion?.phrase ?? (currentQuestion?.phraseId && session?.phrases?.[currentQuestion.phraseId]);
   const phraseForBlock: PhraseBlock | undefined =
     rawPhrase && rawPhrase !== null && typeof rawPhrase === "object" ? (rawPhrase as PhraseBlock) : undefined;
+
+  // Keep a full session snapshot so a reload while offline can still show questions
+  useEffect(() => {
+    if (session?.questions?.length) writeExamSessionCache(sessionId, session);
+  }, [session, sessionId]);
 
   // Initialize state from session. Refetches (e.g. on window focus) must not drop answers the server
   // hasn't confirmed yet, so those come from the local backup.
@@ -527,12 +559,16 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     if (timerRef.current) clearInterval(timerRef.current);
     const synced = await resyncAnswers();
     if (!synced && typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You're offline, so the exam can't be submitted yet. Your answers are saved on this device; reconnect and submit again.");
+      setPendingSubmit(sessionId, true);
+      setSubmitQueued(true);
+      toast.error(t("exam.offlineSubmit"));
       return;
     }
+    setPendingSubmit(sessionId, false);
+    setSubmitQueued(false);
     await flushIntegrity();
     submitMutation.mutate();
-  }, [resyncAnswers, submitMutation, flushIntegrity]);
+  }, [resyncAnswers, submitMutation, flushIntegrity, sessionId, t]);
 
   const inProgress = session?.status === "in_progress" || session?.status === "in-progress";
 
@@ -601,11 +637,20 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
+    setSubmitQueued(hasPendingSubmit(sessionId));
     const goOnline = () => {
       setIsOnline(true);
-      resyncAnswers().then((ok) => {
-        if (ok) toast.success("Back online. Your answers are synced.", { id: "exam-connection" });
+      resyncAnswers().then(async (ok) => {
+        if (ok) toast.success(t("exam.backOnline"), { id: "exam-connection" });
+        if (ok && hasPendingSubmit(sessionId) && inProgress) {
+          toast.info(t("exam.retryingSubmit"), { id: "exam-pending-submit" });
+          setPendingSubmit(sessionId, false);
+          setSubmitQueued(false);
+          await flushIntegrity();
+          submitMutation.mutate();
+        }
       });
+      queryClient.invalidateQueries({ queryKey: ["exam-session", sessionId] });
     };
     const goOffline = () => setIsOnline(false);
     window.addEventListener("online", goOnline);
@@ -614,7 +659,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
     };
-  }, [resyncAnswers]);
+  }, [resyncAnswers, sessionId, inProgress, flushIntegrity, submitMutation, queryClient, t]);
 
   // Retry unsynced answers periodically while online (e.g. after a server hiccup)
   useEffect(() => {
@@ -802,9 +847,9 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  if (authLoading || isLoading) return <PageLoader />;
+  if (authLoading || (isLoading && !session)) return <PageLoader />;
   if (!authLoading && !isAuthenticated) return <PageLoader />;
-  if (error || !session) {
+  if (!session) {
     return (
       <div className="flex min-h-dvh items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -933,13 +978,13 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         </div>
       </header>
 
-      {!isOnline && (
+      {(!isOnline || usingOfflineCache) && (
         <div role="status" className="border-b border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40">
           <div className="mx-auto flex max-w-5xl items-start gap-2 px-3 py-2 text-sm text-amber-900 dark:text-amber-200 sm:px-4">
             <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              You&apos;re offline. Keep answering; your answers are saved on this device and will sync when the connection returns.
-              The timer keeps running.
+              {usingOfflineCache && isOnline ? t("exam.offlineCache") : t("exam.offline")}
+              {submitQueued ? ` ${t("exam.pendingSubmitHint")}` : ""}
             </span>
           </div>
         </div>
@@ -953,12 +998,12 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
             <span aria-live="polite" className="flex items-center gap-1">
               {unsyncedCount > 0 ? (
                 isOnline ? (
-                  <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>
+                  <><Loader2 className="h-3 w-3 animate-spin" /> {t("exam.saving")}</>
                 ) : (
-                  <><CloudOff className="h-3 w-3 text-amber-600" /> {unsyncedCount} saved on this device</>
+                  <><CloudOff className="h-3 w-3 text-amber-600" /> {t("exam.savedLocal", { count: unsyncedCount })}</>
                 )
               ) : (
-                <><Cloud className="h-3 w-3 text-emerald-600" /> All answers saved</>
+                <><Cloud className="h-3 w-3 text-emerald-600" /> {t("exam.allSaved")}</>
               )}
             </span>
             <span>{Math.round(progressPercentage)}%</span>
@@ -1104,6 +1149,12 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                 )}
               </CardHeader>
               <CardContent className="space-y-3">
+                {currentQuestion.metadata?.audioUrl && (
+                  <AudioPlayer
+                    url={currentQuestion.metadata.audioUrl}
+                    maxPlays={currentQuestion.metadata.maxPlays ?? 0}
+                  />
+                )}
                 {positionalFormat === "ordering" ? (
                   <OrderingInput
                     items={currentQuestion.options}
@@ -1117,6 +1168,21 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                     value={Array.isArray(currentAnswer) ? (currentAnswer as string[]) : null}
                     onChange={(answer) => handleAnswer(answer.some(Boolean) ? answer : null)}
                   />
+                ) : positionalFormat === "hotspot" && currentQuestion.metadata?.hotspotImageUrl ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Click the correct spot on the image.</p>
+                    <HotspotInput
+                      imageUrl={currentQuestion.metadata.hotspotImageUrl}
+                      value={
+                        Array.isArray(currentAnswer) && currentAnswer[0]
+                          ? String(currentAnswer[0])
+                          : typeof currentAnswer === "string"
+                            ? currentAnswer
+                            : null
+                      }
+                      onChange={(v) => handleAnswer(v ? [v] : null)}
+                    />
+                  </div>
                 ) : isFillInTheBlank ? (
                   // Fill in the blank: stem with one input/dropdown per blank
                   <div ref={answerScopeRef} className="space-y-3">

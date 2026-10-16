@@ -55,7 +55,7 @@ function initialState(question: BankQuestion | null, defaultTypeId: string): For
     difficulty: question?.difficulty ?? ANY,
     cognitiveLevel: question?.cognitiveLevel ?? "",
     tags: question?.tags?.join(", ") ?? "",
-    draft: question && format ? draftFromQuestion(format, question) : null,
+    draft: question && (format === "ordering" || format === "matching") ? draftFromQuestion(format, question) : null,
   };
 }
 
@@ -63,11 +63,14 @@ export function BankQuestionDialog({
   open,
   onOpenChange,
   question,
+  organizationId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Edit this question; null creates a new one */
   question: BankQuestion | null;
+  /** When set, new questions are added to this organization's shared bank */
+  organizationId?: string;
 }) {
   const queryClient = useQueryClient();
   const { data: typesData } = useQuery({
@@ -170,6 +173,7 @@ export function BankQuestionDialog({
       difficulty: form.difficulty === ANY ? null : (form.difficulty as QuestionDifficulty),
       cognitiveLevel: form.cognitiveLevel.trim() || null,
       tags: parseTags(form.tags),
+      ...(!question && organizationId ? { organizationId } : {}),
     });
   };
 

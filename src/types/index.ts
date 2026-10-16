@@ -127,14 +127,35 @@ export interface QuestionMetadata {
   orderedBlanks?: boolean;
   /** Essay grading guide for manually written questions (AI questions use ai.rubric); never returned to examinees */
   rubric?: string;
-  /** Ordering: correctAnswer is the items in order. Matching: correctAnswer[i] answers matchPrompts[i]. */
-  answerFormat?: "ordering" | "matching";
+  /** Ordering: correctAnswer is the items in order. Matching: correctAnswer[i] answers matchPrompts[i]. Hotspot: correctAnswer is region id(s). */
+  answerFormat?: "ordering" | "matching" | "hotspot";
   /** Left-hand prompts of a matching question (visible to examinees) */
   matchPrompts?: string[];
+  /** Listening clip URL (audio question types) */
+  audioUrl?: string;
+  audioStoragePath?: string;
+  /** How many times an examinee may play the clip; omit or 0 = unlimited */
+  maxPlays?: number;
+  /** Clickable image for hotspot questions */
+  hotspotImageUrl?: string;
+  hotspotImageStoragePath?: string;
+  /** Target circles on the hotspot image; x/y/radius are % of image width (0–100) */
+  hotspotRegions?: HotspotRegion[];
   /** Topic used by study reports when there is no AI topic (e.g. from the question bank) */
   topic?: string;
   ai?: AiQuestionMetadata;
   [key: string]: unknown;
+}
+
+export interface HotspotRegion {
+  id: string;
+  /** Center X as % of image width */
+  x: number;
+  /** Center Y as % of image height */
+  y: number;
+  /** Hit radius as % of image width */
+  radius: number;
+  label?: string;
 }
 
 export interface ExamQuestion {
@@ -200,6 +221,7 @@ export interface BankQuestionPayload {
   difficulty?: QuestionDifficulty | null;
   cognitiveLevel?: string | null;
   tags?: string[];
+  organizationId?: string | null;
 }
 
 export interface BankFacetValue {
@@ -221,6 +243,8 @@ export interface BankListParams {
   difficulty?: QuestionDifficulty;
   tag?: string;
   cognitiveLevel?: string;
+  /** Shared bank for an organization the caller belongs to */
+  organizationId?: string;
   questionTypeId?: string;
   scope?: "all";
   page?: number;
@@ -867,6 +891,33 @@ export interface AuditLogEntry {
   actorId: string | null;
   actorEmail: string | null;
   createdAt: string | null;
+}
+
+// ============ Organizations ============
+export type OrgRole = "owner" | "admin" | "member";
+export type OrgDepartment = "general" | "math" | "science" | "english" | "ict" | "other";
+
+export interface OrganizationMember {
+  uid: string;
+  email: string | null;
+  name: string | null;
+  role: OrgRole;
+  department: OrgDepartment;
+  joinedAt: string | null;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  description: string | null;
+  createdBy: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  memberCount: number;
+  myRole: OrgRole | null;
+  myDepartment: OrgDepartment | null;
+  members?: OrganizationMember[];
+  canManage?: boolean;
 }
 
 export type WebhookEvent = "result.submitted" | "result.graded";

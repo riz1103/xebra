@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { CheckCircle, Download, Library, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -21,8 +23,12 @@ import { MathAnswerList, MathText } from "@/components/math/math-text";
 import { BankQuestionDialog } from "@/components/question-bank/bank-question-dialog";
 import { ImportToBankDialog } from "@/components/question-bank/import-to-bank-dialog";
 import type { BankQuestion, QuestionDifficulty } from "@/types";
+import { useT } from "@/lib/i18n";
 
-export default function QuestionBankPage() {
+function QuestionBankPageContent() {
+  const t = useT();
+  const searchParams = useSearchParams();
+  const organizationId = searchParams.get("organizationId") || undefined;
   const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -48,6 +54,7 @@ export default function QuestionBankPage() {
     topic: topic === ANY ? undefined : topic,
     difficulty: difficulty === ANY ? undefined : (difficulty as QuestionDifficulty),
     tag: tag === ANY ? undefined : tag,
+    organizationId,
     page,
     size: DEFAULT_PAGE_SIZE,
   };
@@ -85,9 +92,11 @@ export default function QuestionBankPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Question Bank</h1>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            {organizationId ? t("bank.orgTitle") : t("bank.title")}
+          </h1>
           <p className="text-muted-foreground">
-            Reusable questions tagged by topic and difficulty. Build exams from them with draw rules on an exam&apos;s Questions tab.
+            {organizationId ? t("bank.orgSubtitle") : t("bank.subtitle")}
           </p>
         </div>
         <div className="flex gap-2 [&>*]:flex-1 sm:[&>*]:flex-none">
@@ -223,7 +232,7 @@ export default function QuestionBankPage() {
 
       {data?.pagination && <Pagination pagination={data.pagination} onPageChange={setPage} />}
 
-      <BankQuestionDialog open={editorOpen} onOpenChange={setEditorOpen} question={editing} />
+      <BankQuestionDialog open={editorOpen} onOpenChange={setEditorOpen} question={editing} organizationId={organizationId} />
       <ImportToBankDialog open={importOpen} onOpenChange={setImportOpen} />
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
@@ -247,5 +256,13 @@ export default function QuestionBankPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+export default function QuestionBankPage() {
+  return (
+    <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+      <QuestionBankPageContent />
+    </Suspense>
   );
 }

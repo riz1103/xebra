@@ -9,9 +9,10 @@ import { api } from "@/lib/api";
 import { examSchema, type ExamFormValues } from "@/lib/validations";
 import { parseExamFile, parsedToPayload } from "@/lib/exam-parser";
 import type { ParseResult } from "@/lib/exam-parser";
-import { getLayoutConfig, isPositionalLayout, type LayoutConfig, type PositionalLayout } from "@/lib/question-layout";
+import { getLayoutConfig, isMediaLayout, isPositionalLayout, type LayoutConfig, type PositionalLayout } from "@/lib/question-layout";
 import { draftFromQuestion, payloadFromDraft, questionFieldsFromDraft } from "@/lib/positional-questions";
 import { PositionalQuestionEditor } from "@/components/questions/positional-answer";
+import { AudioQuestionEditor, HotspotQuestionEditor } from "@/components/questions/media-questions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -449,7 +450,26 @@ function QuestionCard({
           />
         </>
       )}
-      {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && !isPositionalLayout(layoutConfig.layout) && (
+      {layoutConfig.layout === "audio" && (
+        <>
+          <Separator />
+          <AudioQuestionEditor
+            metadata={q.metadata}
+            onChange={(metadata) => setQuestion({ ...q, metadata })}
+          />
+        </>
+      )}
+      {layoutConfig.layout === "hotspot" && (
+        <>
+          <Separator />
+          <HotspotQuestionEditor
+            metadata={q.metadata}
+            correctAnswer={q.correctAnswer}
+            onChange={({ metadata, correctAnswer }) => setQuestion({ ...q, metadata, correctAnswer })}
+          />
+        </>
+      )}
+      {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && !isPositionalLayout(layoutConfig.layout) && !isMediaLayout(layoutConfig.layout) && (
         <>
           <Separator />
           <p className="text-xs text-muted-foreground italic">
@@ -1813,6 +1833,20 @@ export default function CreateExamPage() {
         const fields = payloadFromDraft(config.layout, draftFromQuestion(config.layout, q));
         if ("error" in fields) {
           toast.error(`${label}: ${fields.error}`);
+          return;
+        }
+      }
+      if (config?.layout === "audio" && !q.metadata?.audioUrl) {
+        toast.error(`${label}: Upload an audio clip for this listening question.`);
+        return;
+      }
+      if (config?.layout === "hotspot") {
+        if (!q.metadata?.hotspotImageUrl) {
+          toast.error(`${label}: Upload an image for this hotspot question.`);
+          return;
+        }
+        if (!Array.isArray(q.correctAnswer) || q.correctAnswer.length === 0) {
+          toast.error(`${label}: Click the image to mark at least one correct region.`);
           return;
         }
       }

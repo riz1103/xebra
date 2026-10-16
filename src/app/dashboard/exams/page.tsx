@@ -32,8 +32,10 @@ import { toast } from "sonner";
 import { EXAM_ORIGIN_LABELS, ExamOriginBadge, examOrigin } from "@/components/exam-generator/exam-origin-badge";
 import { DuplicateExamButton } from "@/components/exams/duplicate-exam-button";
 import type { Exam, ExamOrigin } from "@/types";
+import { useT } from "@/lib/i18n";
 
 export default function ExamsPage() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [originFilter, setOriginFilter] = useState<ExamOrigin | "all">("all");
@@ -86,12 +88,12 @@ export default function ExamsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Exams</h1>
-          <p className="text-muted-foreground">Create and manage your examinations.</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("exams.title")}</h1>
+          <p className="text-muted-foreground">{t("exams.subtitle")}</p>
         </div>
         <Button asChild className="w-full sm:w-auto">
           <Link href="/dashboard/exams/create">
-            <Plus className="mr-2 h-4 w-4" /> Create Exam
+            <Plus className="mr-2 h-4 w-4" /> {t("exams.create")}
           </Link>
         </Button>
       </div>

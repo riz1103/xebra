@@ -25,6 +25,7 @@ import { ReconcileQuestionDialog } from "@/components/results/reconcile-question
 import { IntegrityPanel } from "@/components/results/integrity-panel";
 import { ExplainMistake } from "@/components/study/explain-mistake";
 import { PositionalAnswerReview } from "@/components/questions/positional-answer";
+import { AudioPlayer, HotspotInput } from "@/components/questions/media-questions";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -272,10 +273,13 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
   }
 
   const backHref = canGrade ? "/dashboard/results" : "/dashboard/my-results";
-  const isPositional = !!currentQuestion?.metadata?.answerFormat;
+  const answerFormat = currentQuestion?.metadata?.answerFormat;
+  const isHotspot = answerFormat === "hotspot";
+  const isPositional = answerFormat === "ordering" || answerFormat === "matching";
   const isMultipleAnswer =
     currentQuestion &&
     !isPositional &&
+    !isHotspot &&
     Array.isArray(currentQuestion.correctAnswer) &&
     currentQuestion.correctAnswer.length > 1;
   const rawUserAnswer = currentQuestion ? answers[currentQuestion.id] : null;
@@ -498,7 +502,19 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                 )}
               </CardHeader>
               <CardContent className="space-y-3">
-                {isPositional ? (
+                {currentQuestion.metadata?.audioUrl && (
+                  <AudioPlayer url={currentQuestion.metadata.audioUrl} />
+                )}
+                {isHotspot && currentQuestion.metadata?.hotspotImageUrl ? (
+                  <HotspotInput
+                    imageUrl={currentQuestion.metadata.hotspotImageUrl}
+                    value={userAnswerArr[0] ? String(userAnswerArr[0]) : null}
+                    disabled
+                    showRegions
+                    regions={currentQuestion.metadata.hotspotRegions}
+                    correctIds={Array.isArray(currentQuestion.correctAnswer) ? currentQuestion.correctAnswer.map(String) : []}
+                  />
+                ) : isPositional ? (
                   <PositionalAnswerReview
                     question={currentQuestion}
                     answer={userAnswerArr.map(String)}
@@ -628,7 +644,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                         Correct answers and explanations will be shown once you pass this exam or use up your attempts.
                       </p>
                     )}
-                    {!isCorrect && !isPositional && correctAnswerLabels.length > 0 && (
+                    {!isCorrect && !isPositional && !isHotspot && correctAnswerLabels.length > 0 && (
                       <div className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/30">
                         <span className="font-medium text-emerald-800 dark:text-emerald-300">
                           Correct answer{correctAnswers.length > 1 ? "s" : ""}:{" "}

@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Library,
   Dumbbell,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -42,6 +43,7 @@ const proctorSectionItems: NavItem[] = [
   { href: "/dashboard/invitations", label: "nav.invitations", icon: Mail },
   { href: "/dashboard/groups", label: "nav.groups", icon: Users },
   { href: "/dashboard/results", label: "nav.results", icon: BarChart3 },
+  { href: "/dashboard/organizations", label: "nav.organizations", icon: Building2 },
 ];
 
 const myExamsSectionItems: NavItem[] = [

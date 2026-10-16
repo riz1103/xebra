@@ -20,6 +20,13 @@ export function toApiQuestionPayload(
     const fields = payloadFromDraft(config.layout, draftFromQuestion(config.layout, q), q.metadata);
     return "error" in fields ? q : { ...q, ...fields };
   }
+  if (config.layout === "hotspot") {
+    return {
+      ...q,
+      metadata: { ...q.metadata, answerFormat: "hotspot" as const },
+      correctAnswer: Array.isArray(q.correctAnswer) ? q.correctAnswer : q.correctAnswer ? [q.correctAnswer] : [],
+    };
+  }
   if (q.metadata?.answerFormat) q = { ...q, metadata: withoutPositionalMetadata(q.metadata) };
   if (!Array.isArray(q.correctAnswer)) return q;
   if (config.correctAnswerIsText) {

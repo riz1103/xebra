@@ -1,3 +1,5 @@
+import type { ExamSession } from "@/types";
+
 type Answer = string | string[] | null;
 
 export interface ExamBackup {
@@ -9,7 +11,15 @@ export interface ExamBackup {
   savedAt: number;
 }
 
+/** Full session (with questions) so a revisit while offline can keep going. */
+export interface ExamSessionCache {
+  session: ExamSession;
+  savedAt: number;
+}
+
 const keyFor = (sessionId: string) => `xebra:exam-backup:${sessionId}`;
+const sessionKeyFor = (sessionId: string) => `xebra:exam-session:${sessionId}`;
+const pendingSubmitKeyFor = (sessionId: string) => `xebra:exam-pending-submit:${sessionId}`;
 
 /** Local copy of in-progress answers so a dropped connection or closed tab doesn't lose work. */
 export function readExamBackup(sessionId: string): ExamBackup | null {
@@ -44,8 +54,54 @@ export function clearExamBackup(sessionId: string) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(keyFor(sessionId));
+    window.localStorage.removeItem(sessionKeyFor(sessionId));
+    window.localStorage.removeItem(pendingSubmitKeyFor(sessionId));
   } catch {
     // ignore
+  }
+}
+
+/** Persist the session payload (questions, parts, timers) for offline resume. */
+export function writeExamSessionCache(sessionId: string, session: ExamSession) {
+  if (typeof window === "undefined") return;
+  try {
+    const cache: ExamSessionCache = { session, savedAt: Date.now() };
+    window.localStorage.setItem(sessionKeyFor(sessionId), JSON.stringify(cache));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+export function readExamSessionCache(sessionId: string): ExamSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(sessionKeyFor(sessionId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ExamSessionCache>;
+    if (!parsed?.session || typeof parsed.session !== "object") return null;
+    return parsed.session;
+  } catch {
+    return null;
+  }
+}
+
+/** Mark that the examinee tried to submit while offline; retry when back online. */
+export function setPendingSubmit(sessionId: string, pending: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    if (pending) window.localStorage.setItem(pendingSubmitKeyFor(sessionId), "1");
+    else window.localStorage.removeItem(pendingSubmitKeyFor(sessionId));
+  } catch {
+    // ignore
+  }
+}
+
+export function hasPendingSubmit(sessionId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(pendingSubmitKeyFor(sessionId)) === "1";
+  } catch {
+    return false;
   }
 }
 

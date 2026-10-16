@@ -35,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn, formatDate } from "@/lib/utils";
 import { MathText } from "@/components/math/math-text";
+import { useT } from "@/lib/i18n";
 
 const COUNTS = [5, 10, 15, 20];
 const DIFFICULTY_OPTIONS: { value: PracticeQuizRequest["difficulty"]; label: string }[] = [
@@ -534,6 +535,7 @@ function PracticeResults({
 
 function PracticePageContent() {
   const { user } = useAuthStore();
+  const t = useT();
   const [phase, setPhase] = useState<"setup" | "quiz" | "results">("setup");
   const [request, setRequest] = useState<PracticeQuizRequest | null>(null);
   const [questions, setQuestions] = useState<PracticeQuestion[]>([]);
@@ -588,9 +590,9 @@ function PracticePageContent() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
-          <Dumbbell className="h-6 w-6" /> Practice
+          <Dumbbell className="h-6 w-6" /> {t("practice.title")}
         </h1>
-        <p className="text-muted-foreground">Ungraded quizzes to strengthen weak topics or review your notes.</p>
+        <p className="text-muted-foreground">{t("practice.subtitle")}</p>
       </div>
 
       {phase === "setup" && <PracticeSetup onStart={start} generating={generating} history={history} />}

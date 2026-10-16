@@ -10,13 +10,21 @@ export type QuestionLayout =
   | "identification"
   | "essay"
   | "ordering"
-  | "matching";
+  | "matching"
+  | "audio"
+  | "hotspot";
 
 /** Layouts whose answer is an array compared position by position (see metadata.answerFormat) */
 export const POSITIONAL_LAYOUTS = ["ordering", "matching"] as const;
 export type PositionalLayout = (typeof POSITIONAL_LAYOUTS)[number];
 export const isPositionalLayout = (layout: QuestionLayout): layout is PositionalLayout =>
   (POSITIONAL_LAYOUTS as readonly string[]).includes(layout);
+
+/** Layouts that attach media (audio clip or clickable image) via metadata */
+export const MEDIA_LAYOUTS = ["audio", "hotspot"] as const;
+export type MediaLayout = (typeof MEDIA_LAYOUTS)[number];
+export const isMediaLayout = (layout: QuestionLayout): layout is MediaLayout =>
+  (MEDIA_LAYOUTS as readonly string[]).includes(layout);
 
 export interface LayoutConfig {
   layout: QuestionLayout;
@@ -56,6 +64,20 @@ export function getQuestionLayout(typeName: string): QuestionLayout {
     name.includes("ranking")
   ) {
     return "ordering";
+  }
+
+  if (name.includes("audio") || name.includes("listening") || name.includes("hear")) {
+    return "audio";
+  }
+
+  if (
+    name.includes("hotspot") ||
+    name.includes("image map") ||
+    name.includes("click the") ||
+    name.includes("point on") ||
+    name.includes("click on image")
+  ) {
+    return "hotspot";
   }
 
   if (name.includes("true") && name.includes("false")) {
@@ -162,6 +184,34 @@ export function getLayoutConfig(typeName: string): LayoutConfig {
     // Ordering and matching use their own editor (PositionalQuestionEditor) instead of options/answer fields
     case "ordering":
     case "matching":
+      return {
+        layout,
+        showOptions: false,
+        editableOptions: false,
+        showCorrectAnswer: false,
+        correctAnswerIsText: false,
+        multipleCorrectAnswers: false,
+        defaultOptions: [],
+        correctAnswerLabel: "",
+        correctAnswerPlaceholder: "",
+      };
+
+    // Audio: multiple-choice style answers after listening to a clip
+    case "audio":
+      return {
+        layout,
+        showOptions: true,
+        editableOptions: true,
+        showCorrectAnswer: true,
+        correctAnswerIsText: false,
+        multipleCorrectAnswers: true,
+        defaultOptions: ["", "", "", ""],
+        correctAnswerLabel: "Correct Answer(s)",
+        correctAnswerPlaceholder: "",
+      };
+
+    // Hotspot: click a spot on an image; regions are edited separately
+    case "hotspot":
       return {
         layout,
         showOptions: false,

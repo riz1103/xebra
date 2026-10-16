@@ -561,6 +561,8 @@ function layoutRules(layout: QuestionLayout, choices: number, points: number): s
       return `options, correctOptions, and acceptedAnswers are empty. Ask open-ended questions that require explaining, comparing, or evaluating ideas from the material. Provide a rubric listing the key points expected and how to award ${points} points.`;
     case "ordering":
     case "matching":
+    case "audio":
+    case "hotspot":
       // Not in QUESTION_LAYOUTS, so the generator never requests these
       return "";
   }

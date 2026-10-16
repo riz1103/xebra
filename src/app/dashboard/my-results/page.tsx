@@ -22,8 +22,10 @@ import { BarChart3, Trophy, Target, ArrowLeft, TrendingUp } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { ResultOutcomeBadge, isAwaitingGrading } from "@/components/results/result-outcome-badge";
+import { useT } from "@/lib/i18n";
 
 export default function MyResultsPage() {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlExamId = searchParams.get("examId") ?? undefined;
@@ -89,8 +91,8 @@ export default function MyResultsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">My Results</h1>
-        <p className="text-muted-foreground">View your exam performance and scores.</p>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{t("myResults.title")}</h1>
+        <p className="text-muted-foreground">{t("myResults.subtitle")}</p>
       </div>
 
       {examIdFilter && (

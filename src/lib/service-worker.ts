@@ -54,7 +54,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Pages: always try the network first so users get fresh content; fall back to the last copy, then the offline page
+  // Navigations (including /exam/[sessionId]): network-first, then last cached copy, then offline page
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
@@ -71,6 +71,30 @@ self.addEventListener("fetch", (event) => {
         .catch(async () => (await caches.match(request)) || (await caches.match(OFFLINE_URL)))
     );
   }
+});
+
+// Push notifications: show when the backend sends a payload (requires VAPID setup)
+self.addEventListener("push", (event) => {
+  let payload = { title: "Xevra", body: "You have a new notification", url: "/dashboard" };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {
+    // keep defaults
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: payload.url || "/dashboard" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/dashboard";
+  event.waitUntil(clients.openWindow(url));
 });
 `;
 }

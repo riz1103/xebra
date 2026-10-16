@@ -67,6 +67,10 @@ import type {
   AuditLogEntry,
   Webhook,
   WebhookEvent,
+  Organization,
+  OrganizationMember,
+  OrgRole,
+  OrgDepartment,
 } from "@/types";
 
 /** List response with optional pagination metadata from API */
@@ -781,6 +785,101 @@ class ApiClient {
     const { data } = await this.client.post<ApiResponse<{ ok: boolean; status: number | null; error: string | null }>>(
       `/api/webhooks/${id}/test`
     );
+    return data;
+  }
+
+  // Question media (audio clips, hotspot images)
+  async uploadQuestionMedia(file: File, kind: "audio" | "image") {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await this.client.post<
+      ApiResponse<{ url: string; path: string; kind: string; mimeType: string; size: number }>
+    >(`/api/question-media?kind=${kind}`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  }
+
+  async deleteQuestionMedia(path: string) {
+    const { data } = await this.client.delete<ApiResponse<null>>("/api/question-media", { data: { path } });
+    return data;
+  }
+
+  // Organizations / workspaces
+  async getOrganizations() {
+    const { data } = await this.client.get<
+      ApiResponse<Organization[]> & { roles?: OrgRole[]; departments?: OrgDepartment[] }
+    >("/api/organizations");
+    return data;
+  }
+
+  async createOrganization(payload: { name: string; description?: string }) {
+    const { data } = await this.client.post<ApiResponse<Organization>>("/api/organizations", payload);
+    return data;
+  }
+
+  async getOrganization(id: string) {
+    const { data } = await this.client.get<
+      ApiResponse<Organization> & { roles?: OrgRole[]; departments?: OrgDepartment[] }
+    >(`/api/organizations/${id}`);
+    return data;
+  }
+
+  async updateOrganization(id: string, payload: { name?: string; description?: string | null }) {
+    const { data } = await this.client.put<ApiResponse<Organization>>(`/api/organizations/${id}`, payload);
+    return data;
+  }
+
+  async addOrganizationMember(id: string, payload: { email: string; role?: OrgRole; department?: OrgDepartment }) {
+    const { data } = await this.client.post<ApiResponse<OrganizationMember>>(`/api/organizations/${id}/members`, payload);
+    return data;
+  }
+
+  async updateOrganizationMember(id: string, uid: string, payload: { role?: OrgRole; department?: OrgDepartment }) {
+    const { data } = await this.client.put<ApiResponse<OrganizationMember>>(`/api/organizations/${id}/members/${uid}`, payload);
+    return data;
+  }
+
+  async removeOrganizationMember(id: string, uid: string) {
+    const { data } = await this.client.delete<ApiResponse<null>>(`/api/organizations/${id}/members/${uid}`);
+    return data;
+  }
+
+  async getOrganizationExams(id: string) {
+    const { data } = await this.client.get<ApiResponse<Exam[]>>(`/api/organizations/${id}/exams`);
+    return data;
+  }
+
+  async shareExamWithOrganization(orgId: string, examId: string) {
+    const { data } = await this.client.post<ApiResponse<{ examId: string; organizationId: string }>>(
+      `/api/organizations/${orgId}/exams`,
+      { examId }
+    );
+    return data;
+  }
+
+  // Optional integrations (return 501 until env keys are set)
+  async getIntegrationStatus() {
+    const { data } = await this.client.get<
+      ApiResponse<{
+        stripe: boolean;
+        push: boolean;
+        googleClassroom: boolean;
+        lti: boolean;
+        googleSheets: boolean;
+        webhooks: boolean;
+      }>
+    >("/api/integrations/status");
+    return data;
+  }
+
+  async getPushVapidPublicKey() {
+    const { data } = await this.client.get<ApiResponse<{ publicKey: string }>>("/api/integrations/push/vapid-public-key");
+    return data;
+  }
+
+  async subscribePush(payload: { endpoint: string; keys: { p256dh: string; auth: string } }) {
+    const { data } = await this.client.post<ApiResponse<null>>("/api/integrations/push/subscribe", payload);
     return data;
   }
 }
