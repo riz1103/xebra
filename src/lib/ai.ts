@@ -166,6 +166,8 @@ export async function generateJson(
   request: string | Part[],
   options?: JsonModelOptions
 ): Promise<string> {
+  const status = await refreshAiUsage();
+  if (status?.allowed === false) throw new Error(aiLimitMessage(status));
   const tier = await currentTier();
   try {
     return await generateOn(tier, schema, request, options);
@@ -175,6 +177,18 @@ export async function generateJson(
     setUsageSnapshot({ quotaFallback: true });
     return generateOn("fallback", schema, request, options);
   }
+}
+
+export function aiLimitMessage(status: AiUsageStatus): string {
+  if (status.reason === "daily_practice_limit") {
+    const limit = status.user.dailyRequestLimit;
+    return `You've used all ${limit ? `${limit} ` : ""}of today's AI requests. They reset tomorrow.`;
+  }
+  if (status.reason === "plan_quota") {
+    const plan = status.plan;
+    return `You've used all ${plan ? `${plan.monthlyRequests} AI requests in your ${plan.name} plan` : "of your plan's AI requests"} this month. They reset next month, or ask an admin about upgrading your plan.`;
+  }
+  return "AI features are paused for the rest of the month because the monthly AI budget is used up.";
 }
 
 /** Raw error text including the HTTP status, for troubleshooting alongside the friendly message. */

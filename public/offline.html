@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline · Xevra</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: Canvas; color: CanvasText; }
+      main { max-width: 22rem; padding: 2rem; text-align: center; }
+      img { width: 56px; height: 56px; border-radius: 12px; }
+      h1 { font-size: 1.25rem; margin: 1rem 0 0.5rem; }
+      p { opacity: 0.75; line-height: 1.5; font-size: 0.95rem; }
+      button { margin-top: 1rem; padding: 0.6rem 1.2rem; border-radius: 0.5rem; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/icons/icon-192.png" alt="Xevra" />
+      <h1>You're offline</h1>
+      <p>This page hasn't been saved on this device yet. Reconnect to continue. If you were taking an exam, your answers are saved on this device and will sync when you're back online.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

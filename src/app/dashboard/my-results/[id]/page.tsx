@@ -10,9 +10,11 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Trophy, Target, CheckCircle, XCircle, Clock, AlertTriangle, Eye } from "lucide-react";
+import { ArrowLeft, Trophy, Target, CheckCircle, XCircle, Clock, AlertTriangle, Eye, Printer, Award } from "lucide-react";
+import { StudyReportCard } from "@/components/study/study-report-card";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
+import { ResultOutcomeBadge, isAwaitingGrading } from "@/components/results/result-outcome-badge";
 
 export default function MyResultDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -45,6 +47,8 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
     );
   }
 
+  const awaitingGrading = isAwaitingGrading(result);
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-start gap-2 sm:items-center sm:gap-4">
@@ -62,40 +66,44 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
       </div>
 
       {/* Score Card */}
-      <Card className={result.passed ? "border-emerald-200 dark:border-emerald-800" : "border-red-200 dark:border-red-800"}>
+      <Card className={awaitingGrading ? "border-amber-200 dark:border-amber-800" : result.passed ? "border-emerald-200 dark:border-emerald-800" : "border-red-200 dark:border-red-800"}>
         <CardContent className="py-8">
           <div className="flex flex-col items-center text-center">
             <div
               className={`flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold ${
-                result.passed
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                  : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                awaitingGrading
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                  : result.passed
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                    : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
               }`}
             >
               {result.percentage}%
             </div>
             <div className="mt-4 flex items-center gap-2">
-              {result.passed ? (
+              {awaitingGrading ? null : result.passed ? (
                 <Trophy className="h-5 w-5 text-emerald-500" />
               ) : (
                 <XCircle className="h-5 w-5 text-red-500" />
               )}
-              <Badge
-                variant={result.passed ? "success" : "destructive"}
-                className="text-sm px-4 py-1"
-              >
-                {result.passed ? "PASSED" : "FAILED"}
-              </Badge>
+              <ResultOutcomeBadge result={result} uppercase className="text-sm px-4 py-1" />
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
               Score: {result.score} out of {result.totalPoints} points
+              {awaitingGrading && " so far"}
             </p>
+            {awaitingGrading && (
+              <p className="mt-2 max-w-md text-xs text-muted-foreground">
+                Your proctor still needs to grade {result.pendingReviewCount === 1 ? "1 written answer" : `${result.pendingReviewCount ?? "some"} written answers`}.
+                Your final score and pass/fail status will appear once grading is done.
+              </p>
+            )}
           </div>
 
           <div className="mt-6 px-2 sm:px-8">
             <Progress
               value={result.percentage}
-              className={`h-3 ${result.passed ? "[&>div]:bg-emerald-500" : "[&>div]:bg-red-500"}`}
+              className={`h-3 ${awaitingGrading ? "[&>div]:bg-amber-500" : result.passed ? "[&>div]:bg-emerald-500" : "[&>div]:bg-red-500"}`}
             />
           </div>
         </CardContent>
@@ -133,9 +141,7 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Status</span>
-            <Badge variant={result.passed ? "success" : "destructive"}>
-              {result.passed ? "Passed" : "Failed"}
-            </Badge>
+            <ResultOutcomeBadge result={result} />
           </div>
           {result.startedAt && (
             <>
@@ -182,6 +188,28 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
           </CardContent>
         </Card>
       )}
+      {result.reviewableByExaminee === true && <StudyReportCard resultId={result.id} />}
+
+      {result.passed && !awaitingGrading && result.certificatesEnabled !== false && (
+        <Card className="border-amber-200 dark:border-amber-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Award className="h-4 w-4 text-amber-600" /> Certificate of achievement
+            </CardTitle>
+            <CardDescription>
+              Download a certificate for passing this exam. It has a QR code anyone can scan to confirm it is genuine.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" className="w-full" asChild>
+              <Link href={`/dashboard/my-results/${result.id}/certificate`}>
+                <Award className="mr-2 h-4 w-4" /> {result.certificateCode ? "View certificate" : "Get certificate"}
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {result.reviewableByExaminee === true && (result.questionResults?.length ?? 0) === 0 && (
         <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4 text-center">
           Question-by-question review is not available for this result (no question-level data).
@@ -264,7 +292,7 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
                 />
               </div>
             ))}
-            {!result.passed && (
+            {!result.passed && !awaitingGrading && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
@@ -289,10 +317,15 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
         </Card>
       )}
 
-      <div className="flex justify-center">
+      <div className="flex flex-col justify-center gap-2 sm:flex-row">
         <Button variant="outline" asChild className="w-full sm:w-auto">
           <Link href="/dashboard/my-results">
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to All Results
+          </Link>
+        </Button>
+        <Button variant="outline" asChild className="w-full sm:w-auto">
+          <Link href={`/dashboard/results/${result.id}/slip`}>
+            <Printer className="mr-2 h-4 w-4" /> Print result slip
           </Link>
         </Button>
       </div>

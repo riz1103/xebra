@@ -9,7 +9,9 @@ import { api } from "@/lib/api";
 import { examSchema, type ExamFormValues } from "@/lib/validations";
 import { parseExamFile, parsedToPayload } from "@/lib/exam-parser";
 import type { ParseResult } from "@/lib/exam-parser";
-import { getLayoutConfig, type LayoutConfig } from "@/lib/question-layout";
+import { getLayoutConfig, isPositionalLayout, type LayoutConfig, type PositionalLayout } from "@/lib/question-layout";
+import { draftFromQuestion, payloadFromDraft, questionFieldsFromDraft } from "@/lib/positional-questions";
+import { PositionalQuestionEditor } from "@/components/questions/positional-answer";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -76,6 +78,7 @@ import {
 } from "@/components/exam-generator/generate-from-material-dialog";
 import { QuestionSource } from "@/components/exam-generator/question-source";
 import { SourceViewableSwitch } from "@/components/exams/source-viewable-switch";
+import { CertificatesSwitch, ShuffleOptionsSwitch } from "@/components/exams/shuffle-options-switch";
 import { AnswerRevealSelect } from "@/components/exams/answer-reveal-select";
 import { buildExamInstruction } from "@/lib/exam-blueprint";
 import Link from "next/link";
@@ -436,7 +439,17 @@ function QuestionCard({
           </div>
         </>
       )}
-      {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && (
+      {isPositionalLayout(layoutConfig.layout) && (
+        <>
+          <Separator />
+          <PositionalQuestionEditor
+            layout={layoutConfig.layout}
+            draft={draftFromQuestion(layoutConfig.layout, q)}
+            onChange={(draft) => setQuestion({ ...q, ...questionFieldsFromDraft(layoutConfig.layout as PositionalLayout, draft, q.metadata) })}
+          />
+        </>
+      )}
+      {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && !isPositionalLayout(layoutConfig.layout) && (
         <>
           <Separator />
           <p className="text-xs text-muted-foreground italic">
@@ -554,6 +567,8 @@ export default function CreateExamPage() {
       reviewableByExaminee: false,
       sourceViewableByExaminee: false,
       answerRevealTiming: "always",
+      shuffleOptions: true,
+      certificatesEnabled: true,
     },
   });
 
@@ -1794,6 +1809,13 @@ export default function CreateExamPage() {
     });
     for (const { q, label } of allQuestions) {
       const config = layoutMap.get(q.questionTypeId);
+      if (config && isPositionalLayout(config.layout)) {
+        const fields = payloadFromDraft(config.layout, draftFromQuestion(config.layout, q));
+        if ("error" in fields) {
+          toast.error(`${label}: ${fields.error}`);
+          return;
+        }
+      }
       if (config?.layout === "identification" && config.correctAnswerIsText) {
         const blankCount = parseBlanks(q.questionText).blankCount;
         if (blankCount > 0) {
@@ -1994,6 +2016,14 @@ export default function CreateExamPage() {
               value={form.watch("answerRevealTiming") ?? "always"}
               onValueChange={(v) => form.setValue("answerRevealTiming", v)}
               reviewable={form.watch("reviewableByExaminee") ?? false}
+            />
+            <ShuffleOptionsSwitch
+              checked={form.watch("shuffleOptions") ?? false}
+              onCheckedChange={(v) => form.setValue("shuffleOptions", v)}
+            />
+            <CertificatesSwitch
+              checked={form.watch("certificatesEnabled") ?? true}
+              onCheckedChange={(v) => form.setValue("certificatesEnabled", v)}
             />
           </CardContent>
         </Card>

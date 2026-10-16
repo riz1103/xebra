@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
-import { getLayoutConfig } from "@/lib/question-layout";
+import { getLayoutConfig, isPositionalLayout } from "@/lib/question-layout";
+import { draftFromQuestion, payloadFromDraft, withoutPositionalMetadata } from "@/lib/positional-questions";
 import { parseBlanks } from "@/lib/question-blanks";
 import type { QuestionSection } from "@/lib/exam-sections";
 import type { CreateExamQuestionPayload, ExamOrigin, QuestionType } from "@/types";
@@ -13,8 +14,14 @@ export function toApiQuestionPayload(
   questionTypes: Pick<QuestionType, "id" | "name">[]
 ): CreateExamQuestionPayload {
   const typeName = questionTypes.find((qt) => qt.id === q.questionTypeId)?.name;
-  if (!Array.isArray(q.correctAnswer) || !typeName) return q;
+  if (!typeName) return q;
   const config = getLayoutConfig(typeName);
+  if (isPositionalLayout(config.layout)) {
+    const fields = payloadFromDraft(config.layout, draftFromQuestion(config.layout, q), q.metadata);
+    return "error" in fields ? q : { ...q, ...fields };
+  }
+  if (q.metadata?.answerFormat) q = { ...q, metadata: withoutPositionalMetadata(q.metadata) };
+  if (!Array.isArray(q.correctAnswer)) return q;
   if (config.correctAnswerIsText) {
     const filtered = (q.correctAnswer as string[]).filter(Boolean);
     const orderedBlanks = parseBlanks(q.questionText).blankCount > 1;

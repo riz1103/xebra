@@ -8,6 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ResultOutcomeBadge } from "@/components/results/result-outcome-badge";
+import { PassRateTrendChart, ScoreDistributionChart } from "@/components/results/result-charts";
+import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import {
   FileText,
   Package,
@@ -51,10 +54,16 @@ function ProctorDashboard() {
     queryFn: () => api.getExamResults({ scope: "managed", page: 1, size: DEFAULT_PAGE_SIZE }),
   });
 
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ["results", "stats", "managed"],
+    queryFn: () => api.getExamResultStats({ scope: "managed", weeks: 12 }),
+  });
+
   const exams = examsData?.data || [];
   const bundles = bundlesData?.data || [];
   const groups = groupsData?.data || [];
   const results = resultsData?.data || [];
+  const resultStats = statsData?.data;
   const isLoading = examsLoading || bundlesLoading || groupsLoading || resultsLoading;
 
   const totalExams = examsData?.pagination?.total ?? exams.length;
@@ -70,9 +79,12 @@ function ProctorDashboard() {
   ];
 
   const activeExams = exams.filter((e) => e.status === "active");
-  const avgScore = results.length > 0
+  const avgScore = resultStats?.averagePercentage ?? (results.length > 0
     ? Math.round(results.reduce((sum, r) => sum + r.percentage, 0) / results.length)
-    : 0;
+    : 0);
+  const passRate = resultStats?.passRate ?? (results.length > 0
+    ? Math.round((results.filter((r) => r.passed).length / results.length) * 100)
+    : 0);
 
   return (
     <div className="space-y-8">
@@ -87,6 +99,8 @@ function ProctorDashboard() {
           </Link>
         </Button>
       </div>
+
+      <OnboardingChecklist exams={exams} totalExams={totalExams} totalResults={totalResults} isLoading={isLoading} />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -129,13 +143,17 @@ function ProctorDashboard() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Pass Rate</span>
-              <Badge variant="secondary">
-                {results.length > 0
-                  ? Math.round((results.filter((r) => r.passed).length / results.length) * 100)
-                  : 0}
-                %
-              </Badge>
+              <Badge variant="secondary">{passRate}%</Badge>
             </div>
+            {(resultStats?.pendingReview ?? 0) > 0 && (
+              <Link
+                href="/dashboard/results"
+                className="flex items-center justify-between rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:hover:bg-amber-950/50"
+              >
+                <span>Results awaiting essay grading</span>
+                <Badge variant="warning">{resultStats!.pendingReview}</Badge>
+              </Link>
+            )}
           </CardContent>
         </Card>
 
@@ -179,6 +197,30 @@ function ProctorDashboard() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Score Distribution</CardTitle>
+            <CardDescription>
+              {resultStats ? `${resultStats.graded} graded result${resultStats.graded === 1 ? "" : "s"} by percentage` : "Graded results by percentage"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? <Skeleton className="h-56 w-full" /> : <ScoreDistributionChart data={resultStats?.distribution ?? []} />}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Pass Rate Trend</CardTitle>
+            <CardDescription>Weekly results, pass rate and average score over the last 12 weeks</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? <Skeleton className="h-56 w-full" /> : <PassRateTrendChart data={resultStats?.trend ?? []} />}
           </CardContent>
         </Card>
       </div>
@@ -308,9 +350,10 @@ function ExamineeDashboard() {
                       Score: {result.score}/{result.totalPoints}
                     </p>
                   </div>
-                  <Badge variant={result.passed ? "success" : "destructive"} className="shrink-0">
-                    {result.passed ? "Passed" : "Failed"} - {result.percentage}%
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-sm font-medium">{result.percentage}%</span>
+                    <ResultOutcomeBadge result={result} />
+                  </div>
                 </Link>
               ))}
             </div>

@@ -13,9 +13,15 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Menu, Moon, Sun, User } from "lucide-react";
+import { Languages, LogOut, Menu, Moon, Sun, User } from "lucide-react";
+import { LOCALES, useLocaleStore, useT, type Locale } from "@/lib/i18n";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import Link from "next/link";
@@ -29,6 +35,9 @@ export function Header() {
   const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
+  const setLocale = useLocaleStore((s) => s.setLocale);
 
   const handleLogout = async () => {
     try {
@@ -65,7 +74,7 @@ export function Header() {
           <Image src="/xevra-logo.png" alt="Xevra" width={28} height={28} className="rounded-md" />
         </Link>
         <h2 className="hidden truncate text-base font-semibold sm:block lg:text-lg">
-          Welcome back, {user?.name || user?.displayName || "User"}
+          {t("header.welcome", { name: user?.name || user?.displayName || "User" })}
         </h2>
       </div>
       <MobileNav open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
@@ -108,12 +117,27 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
               <User className="mr-2 h-4 w-4" />
-              Profile
+              {t("menu.profile")}
             </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Languages className="mr-2 h-4 w-4" />
+                {t("menu.language")}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup value={locale} onValueChange={(v) => setLocale(v as Locale)}>
+                  {(Object.keys(LOCALES) as Locale[]).map((code) => (
+                    <DropdownMenuRadioItem key={code} value={code}>
+                      {LOCALES[code]}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive">
               <LogOut className="mr-2 h-4 w-4" />
-              Log out
+              {t("menu.logout")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

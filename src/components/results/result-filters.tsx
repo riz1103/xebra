@@ -20,7 +20,7 @@ const SORTS: Record<ResultSortKey, { label: string; sortBy: ExamResultSortBy; so
 
 export interface ResultFilterState {
   search: string;
-  status: "all" | "passed" | "failed";
+  status: "all" | "passed" | "failed" | "pending_review";
   examId: string;
   sort: ResultSortKey;
   /** yyyy-mm-dd from the date input, in the user's local time zone */
@@ -158,6 +158,7 @@ export function ResultFilters({
             <SelectItem value="all">All statuses</SelectItem>
             <SelectItem value="passed">Passed</SelectItem>
             <SelectItem value="failed">Failed</SelectItem>
+            <SelectItem value="pending_review">Needs grading</SelectItem>
           </SelectContent>
         </Select>
         <Select value={value.sort} onValueChange={(v) => set("sort", v as ResultSortKey)}>

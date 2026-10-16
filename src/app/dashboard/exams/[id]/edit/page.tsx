@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { SourceViewableSwitch } from "@/components/exams/source-viewable-switch";
+import { CertificatesSwitch, ShuffleOptionsSwitch } from "@/components/exams/shuffle-options-switch";
 import { AnswerRevealSelect } from "@/components/exams/answer-reveal-select";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,7 +24,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Plus, Sparkles, Trash2, Save } from "lucide-react";
 import Link from "next/link";
-import { getLayoutConfig } from "@/lib/question-layout";
+import { getLayoutConfig, isPositionalLayout } from "@/lib/question-layout";
+import { emptyDraft, payloadFromDraft, type PositionalDraft } from "@/lib/positional-questions";
+import { PositionalQuestionEditor } from "@/components/questions/positional-answer";
 import { parseBlanks } from "@/lib/question-blanks";
 import { looksMathematical } from "@/lib/math-notation";
 import { MathText, MathPreview } from "@/components/math/math-text";
@@ -40,7 +43,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [newQuestions, setNewQuestions] = useState<CreateExamQuestionPayload[]>([]);
+  const [newQuestions, setNewQuestions] = useState<(CreateExamQuestionPayload & { positionalDraft?: PositionalDraft })[]>([]);
   const [parts, setParts] = useState<ExamPart[]>([]);
   const [passingConditionType, setPassingConditionType] = useState<"whole_exam" | "per_part">("whole_exam");
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
@@ -100,6 +103,8 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
       reviewableByExaminee: false,
       sourceViewableByExaminee: false,
       answerRevealTiming: "always",
+      shuffleOptions: false,
+      certificatesEnabled: true,
     },
   });
 
@@ -119,6 +124,8 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         reviewableByExaminee: exam.reviewableByExaminee ?? false,
         sourceViewableByExaminee: exam.sourceViewableByExaminee ?? false,
         answerRevealTiming: exam.answerRevealTiming ?? "always",
+        shuffleOptions: exam.shuffleOptions ?? false,
+        certificatesEnabled: exam.certificatesEnabled !== false,
       });
       if (exam.parts) {
         setParts(exam.parts);
@@ -241,6 +248,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         points: 1,
         examId: id,
         phraseId: null,
+        ...(isPositionalLayout(layout.layout) && { options: [], positionalDraft: emptyDraft(layout.layout) }),
       },
     ]);
   };
@@ -254,6 +262,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
       updated[qIndex].options = [...newLayout.defaultOptions];
       updated[qIndex].numberOfChoices = newLayout.defaultOptions.length || undefined;
       updated[qIndex].correctAnswer = newLayout.correctAnswerIsText ? "" : [];
+      updated[qIndex].positionalDraft = isPositionalLayout(newLayout.layout) ? emptyDraft(newLayout.layout) : undefined;
     }
     setNewQuestions(updated);
   };
@@ -274,6 +283,18 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
     const config = getLayoutConfig(getTypeName(q.questionTypeId));
     if (!q.questionText) {
       toast.error("Please fill in the question text.");
+      return;
+    }
+    if (isPositionalLayout(config.layout)) {
+      const { positionalDraft, ...rest } = q;
+      const fields = payloadFromDraft(config.layout, positionalDraft ?? emptyDraft(config.layout), q.metadata);
+      if ("error" in fields) {
+        toast.error(fields.error);
+        return;
+      }
+      addQuestionMutation.mutate({ ...rest, ...fields }, {
+        onSuccess: () => setNewQuestions(newQuestions.filter((_, i) => i !== index)),
+      });
       return;
     }
     if (config?.layout === "identification" && config.correctAnswerIsText) {
@@ -310,8 +331,9 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
       }
     }
     const orderedBlanks = config.correctAnswerIsText && parseBlanks(q.questionText).blankCount > 1;
+    const { positionalDraft: _draft, ...base } = q;
     const payload = {
-      ...q,
+      ...base,
       correctAnswer: finalAnswer,
       ...(orderedBlanks && { metadata: { ...q.metadata, orderedBlanks: true } }),
     };
@@ -520,6 +542,14 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
               value={form.watch("answerRevealTiming") ?? "always"}
               onValueChange={(v) => form.setValue("answerRevealTiming", v)}
               reviewable={form.watch("reviewableByExaminee") ?? false}
+            />
+            <ShuffleOptionsSwitch
+              checked={form.watch("shuffleOptions") ?? false}
+              onCheckedChange={(v) => form.setValue("shuffleOptions", v)}
+            />
+            <CertificatesSwitch
+              checked={form.watch("certificatesEnabled") ?? true}
+              onCheckedChange={(v) => form.setValue("certificatesEnabled", v)}
             />
           </CardContent>
         </Card>
@@ -751,6 +781,14 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
               value={form.watch("answerRevealTiming") ?? "always"}
               onValueChange={(v) => form.setValue("answerRevealTiming", v)}
               reviewable={form.watch("reviewableByExaminee") ?? false}
+            />
+            <ShuffleOptionsSwitch
+              checked={form.watch("shuffleOptions") ?? false}
+              onCheckedChange={(v) => form.setValue("shuffleOptions", v)}
+            />
+            <CertificatesSwitch
+              checked={form.watch("certificatesEnabled") ?? true}
+              onCheckedChange={(v) => form.setValue("certificatesEnabled", v)}
             />
           </CardContent>
         </Card>
@@ -1077,8 +1115,20 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
                   </div>
                 )}
 
+                {isPositionalLayout(layoutConfig.layout) && (
+                  <PositionalQuestionEditor
+                    layout={layoutConfig.layout}
+                    draft={q.positionalDraft ?? emptyDraft(layoutConfig.layout)}
+                    onChange={(draft) => {
+                      const updated = [...newQuestions];
+                      updated[qi] = { ...updated[qi], positionalDraft: draft };
+                      setNewQuestions(updated);
+                    }}
+                  />
+                )}
+
                 {/* Info for essay type */}
-                {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && (
+                {!layoutConfig.showCorrectAnswer && !layoutConfig.showOptions && !isPositionalLayout(layoutConfig.layout) && (
                   <p className="text-xs text-muted-foreground italic">
                     This question type will be graded manually. No options or correct answer needed.
                   </p>

@@ -14,40 +14,54 @@ import {
   Users,
   BarChart3,
   UserCheck,
+  UserPlus,
   GraduationCap,
   Settings,
   ChevronLeft,
   ChevronRight,
+  Library,
+  Dumbbell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useEffect, useState } from "react";
+import { useT, type MessageKey } from "@/lib/i18n";
 
-const proctorSectionItems = [
-  { href: "/dashboard/exams", label: "Exams", icon: FileText },
-  { href: "/dashboard/bundles", label: "Exam Bundles", icon: Package },
-  { href: "/dashboard/invitations", label: "Invitations", icon: Mail },
-  { href: "/dashboard/groups", label: "Examinee Groups", icon: Users },
-  { href: "/dashboard/results", label: "Results", icon: BarChart3 },
+interface NavItem {
+  href: string;
+  label: MessageKey;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const proctorSectionItems: NavItem[] = [
+  { href: "/dashboard/exams", label: "nav.exams", icon: FileText },
+  { href: "/dashboard/question-bank", label: "nav.questionBank", icon: Library },
+  { href: "/dashboard/bundles", label: "nav.bundles", icon: Package },
+  { href: "/dashboard/invitations", label: "nav.invitations", icon: Mail },
+  { href: "/dashboard/groups", label: "nav.groups", icon: Users },
+  { href: "/dashboard/results", label: "nav.results", icon: BarChart3 },
 ];
 
-const myExamsSectionItems = [
-  { href: "/dashboard/my-exams", label: "My Exams", icon: GraduationCap },
-  { href: "/dashboard/my-results", label: "My Results", icon: BarChart3 },
+const myExamsSectionItems: NavItem[] = [
+  { href: "/dashboard/my-exams", label: "nav.myExams", icon: GraduationCap },
+  { href: "/dashboard/my-results", label: "nav.myResults", icon: BarChart3 },
+  { href: "/dashboard/practice", label: "nav.practice", icon: Dumbbell },
 ];
 
-const adminNavItems = [
-  { href: "/dashboard/questions", label: "Question Types", icon: HelpCircle },
-  { href: "/dashboard/proctor-requests", label: "Proctor Requests", icon: UserCheck },
+const adminNavItems: NavItem[] = [
+  { href: "/dashboard/questions", label: "nav.questionTypes", icon: HelpCircle },
+  { href: "/dashboard/proctor-requests", label: "nav.proctorRequests", icon: UserCheck },
 ];
 
-const examineeNavItems = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/my-exams", label: "My Exams", icon: GraduationCap },
-  { href: "/dashboard/my-results", label: "My Results", icon: BarChart3 },
-  { href: "/dashboard/proctor-request", label: "Become a Proctor", icon: UserCheck },
+const examineeNavItems: NavItem[] = [
+  { href: "/dashboard", label: "nav.overview", icon: LayoutDashboard },
+  { href: "/dashboard/my-exams", label: "nav.myExams", icon: GraduationCap },
+  { href: "/dashboard/my-results", label: "nav.myResults", icon: BarChart3 },
+  { href: "/dashboard/practice", label: "nav.practice", icon: Dumbbell },
+  { href: "/dashboard/join", label: "nav.join", icon: UserPlus },
+  { href: "/dashboard/proctor-request", label: "nav.becomeProctor", icon: UserCheck },
 ];
 
 function NavLink({
@@ -114,13 +128,14 @@ function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: boolean; on
   const isAdmin = user?.role === "admin";
   // API returns "user" for examinees
 
-  const link = (item: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }) => (
-    <NavLink key={item.href} {...item} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} />
+  const t = useT();
+  const link = (item: NavItem) => (
+    <NavLink key={item.href} {...item} label={t(item.label)} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} />
   );
 
-  const sectionLabel = (label: string) => (
+  const sectionLabel = (label: MessageKey) => (
     <p className={cn("px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2", collapsed && "hidden")}>
-      {label}
+      {t(label)}
     </p>
   );
 
@@ -128,12 +143,12 @@ function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: boolean; on
     <nav className="space-y-1">
       {isProctorOrAdmin ? (
         <>
-          {link({ href: "/dashboard", label: "Overview", icon: LayoutDashboard })}
+          {link({ href: "/dashboard", label: "nav.overview", icon: LayoutDashboard })}
           <Separator className="my-3" />
-          {sectionLabel("Proctoring")}
+          {sectionLabel("nav.proctoring")}
           {proctorSectionItems.map(link)}
           <Separator className="my-3" />
-          {sectionLabel("My exams")}
+          {sectionLabel("nav.myExamsSection")}
           {myExamsSectionItems.map(link)}
         </>
       ) : (
@@ -143,7 +158,7 @@ function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: boolean; on
       {isProctorOrAdmin && isAdmin && (
         <>
           <Separator className="my-3" />
-          {sectionLabel("Admin")}
+          {sectionLabel("nav.admin")}
           {adminNavItems.map(link)}
         </>
       )}
@@ -151,8 +166,8 @@ function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: boolean; on
       {isProctorOrAdmin && (
         <>
           <Separator className="my-3" />
-          {sectionLabel("Account")}
-          {link({ href: "/dashboard/settings", label: "Settings", icon: Settings })}
+          {sectionLabel("nav.account")}
+          {link({ href: "/dashboard/settings", label: "nav.settings", icon: Settings })}
         </>
       )}
     </nav>

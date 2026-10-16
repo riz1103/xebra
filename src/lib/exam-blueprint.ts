@@ -31,6 +31,8 @@ export const LAYOUT_LABELS: Record<QuestionLayout, string> = {
   multiple_answer: "Multiple Answer",
   identification: "Identification",
   essay: "Essay",
+  ordering: "Ordering",
+  matching: "Matching",
 };
 
 export const LAYOUT_DESCRIPTIONS: Record<QuestionLayout, string> = {
@@ -39,6 +41,8 @@ export const LAYOUT_DESCRIPTIONS: Record<QuestionLayout, string> = {
   multiple_answer: "Select all options that apply.",
   identification: "Type the correct term, name, or value. Fill in blanks where shown.",
   essay: "Answer in complete sentences. Graded manually.",
+  ordering: "Put the items in the correct order.",
+  matching: "Match each item with its correct pair.",
 };
 
 export const EDUCATION_LEVEL_LABELS: Record<EducationLevel, string> = {
@@ -167,6 +171,8 @@ const MINUTES_PER_ITEM: Record<QuestionLayout, number> = {
   multiple_answer: 1.5,
   identification: 1,
   essay: 10,
+  ordering: 1.5,
+  matching: 2,
 };
 const MINUTES_PER_PASSAGE = 3;
 
@@ -176,6 +182,8 @@ export const DEFAULT_POINTS: Record<QuestionLayout, number> = {
   multiple_answer: 2,
   identification: 1,
   essay: 10,
+  ordering: 2,
+  matching: 2,
 };
 
 export interface ExamBlueprint {
@@ -215,7 +223,7 @@ export const MAX_POOL_PER_LAYOUT = 200;
 export const LARGE_POOL_WARNING = 200;
 
 function emptyCounts(): LayoutCounts {
-  return { multiple_choice: 0, true_false: 0, multiple_answer: 0, identification: 0, essay: 0 };
+  return { multiple_choice: 0, true_false: 0, multiple_answer: 0, identification: 0, essay: 0, ordering: 0, matching: 0 };
 }
 
 /** Splits a total item count across layouts using the preset ratio (largest-remainder rounding). */

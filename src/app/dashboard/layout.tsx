@@ -19,7 +19,8 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push("/login");
+      const target = window.location.pathname + window.location.search;
+      router.push(target === "/dashboard" ? "/login" : `/login?redirect=${encodeURIComponent(target)}`);
     }
   }, [isAuthenticated, isLoading, router]);
 
@@ -35,10 +36,14 @@ export default function DashboardLayout({
     <TooltipProvider>
       <NavigationLoadingProvider>
         <div className="flex min-h-dvh">
-          <Sidebar />
+          <div className="contents print:hidden">
+            <Sidebar />
+          </div>
           <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
-            <Header />
-            <main className="min-w-0 flex-1 p-4 pb-8 sm:p-6">{children}</main>
+            <div className="contents print:hidden">
+              <Header />
+            </div>
+            <main className="min-w-0 flex-1 p-4 pb-8 sm:p-6 print:p-0">{children}</main>
           </div>
         </div>
       </NavigationLoadingProvider>

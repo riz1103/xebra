@@ -2,12 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { use, useState, useMemo, useCallback, useEffect } from "react";
+import { use, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
-import type { ExamQuestion, QuestionResult, ExamResult, ExamReconciliation, ReconcileQuestionPayload } from "@/types";
+import type { ExamQuestion, QuestionResult, GradeQuestionPayload } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,14 +15,16 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { PageLoader } from "@/components/ui/loading";
 import { QuestionInsights } from "@/components/exam-generator/question-insights";
 import { QuestionSource } from "@/components/exam-generator/question-source";
 import { MathAnswerList, MathText } from "@/components/math/math-text";
 import { parseBlanks } from "@/lib/question-blanks";
+import { GradingPanel } from "@/components/results/grading-panel";
+import { ReconcileQuestionDialog } from "@/components/results/reconcile-question-dialog";
+import { IntegrityPanel } from "@/components/results/integrity-panel";
+import { ExplainMistake } from "@/components/study/explain-mistake";
+import { PositionalAnswerReview } from "@/components/questions/positional-answer";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -30,9 +32,9 @@ import {
   ArrowLeft,
   CheckCircle,
   XCircle,
-  Loader2,
   Scale,
-  Trash2,
+  Clock,
+  PenLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -44,11 +46,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentPart, setCurrentPart] = useState<string | null>(null);
-  const [reviewOverrides, setReviewOverrides] = useState<QuestionResult[]>([]);
   const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false);
-  const [reconcileType, setReconcileType] = useState<"new_answer" | "bonus">("new_answer");
-  const [reconcileNewAnswer, setReconcileNewAnswer] = useState<string>("");
-  const [reconcileNoAnswerCountsCorrect, setReconcileNoAnswerCountsCorrect] = useState(true);
 
   const { data: resultData, isLoading: resultLoading } = useQuery({
     queryKey: ["exam-result", resultId],
@@ -90,59 +88,17 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
     [exam?.questions]
   );
 
-  const updateResultMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Partial<ExamResult> }) =>
-      api.updateExamResult(id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["exam-result", resultId] });
-      queryClient.invalidateQueries({ queryKey: ["results"] });
-      queryClient.invalidateQueries({ queryKey: ["my-results"] });
-      setReviewOverrides([]);
-      toast.success("Review saved. Score updated.");
-    },
-    onError: (err: Error) => toast.error(err.message || "Failed to save review"),
-  });
-
-  const setQuestionCorrect = useCallback((questionId: string, isCorrect: boolean) => {
-    setReviewOverrides((prev) => {
-      const base = result?.questionResults ?? [];
-      const existing = prev.length > 0 ? prev : base;
-      const next = existing.map((r) =>
-        r.questionId === questionId
-          ? { ...r, isCorrect, score: isCorrect ? r.points : 0 }
-          : r
-      );
-      return next;
-    });
-  }, [result?.questionResults]);
-
-  const reconcileMutation = useMutation({
-    mutationFn: (payload: ReconcileQuestionPayload) =>
-      api.reconcileQuestion(result!.examId, payload),
+  const gradeMutation = useMutation({
+    mutationFn: (grade: GradeQuestionPayload) => api.gradeExamResult(resultId, [grade]),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["exam-reconciliations", result?.examId] });
+      if (data?.data) queryClient.setQueryData(["exam-result", resultId], data);
       queryClient.invalidateQueries({ queryKey: ["exam-result", resultId] });
       queryClient.invalidateQueries({ queryKey: ["results"] });
       queryClient.invalidateQueries({ queryKey: ["my-results"] });
-      const updated = data?.data?.resultsUpdated;
-      toast.success(updated != null ? `Reconciliation saved. ${updated} result(s) re-scored.` : "Reconciliation saved.");
-      setReconcileDialogOpen(false);
+      toast.success(data?.message || "Grade saved.");
     },
-    onError: (err: Error) => toast.error(err.message || "Failed to save reconciliation"),
-  });
-
-  const removeReconciliationMutation = useMutation({
-    mutationFn: (questionId: string) => api.removeReconciliation(result!.examId, questionId),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["exam-reconciliations", result?.examId] });
-      queryClient.invalidateQueries({ queryKey: ["exam-result", resultId] });
-      queryClient.invalidateQueries({ queryKey: ["results"] });
-      queryClient.invalidateQueries({ queryKey: ["my-results"] });
-      const updated = data?.data?.resultsUpdated;
-      toast.success(updated != null ? `Reconciliation removed. ${updated} result(s) re-scored.` : "Reconciliation removed.");
-      setReconcileDialogOpen(false);
-    },
-    onError: (err: Error) => toast.error(err.message || "Failed to remove reconciliation"),
+    onError: (err: Error & { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message || err.message || "Failed to save grade"),
   });
 
   const orderedQuestions = useMemo(() => {
@@ -202,43 +158,16 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
   const currentQuestion = currentQuestions[currentIndex];
 
   const answers = (result?.answers || {}) as Record<string, string | string[]>;
-  const effectiveResults = reviewOverrides.length > 0 ? reviewOverrides : (result?.questionResults ?? []);
+  const effectiveResults = result?.questionResults ?? [];
   const resultByQuestionId = effectiveResults.reduce<Record<string, QuestionResult>>((acc, r) => {
     acc[r.questionId] = r;
     return acc;
   }, {});
 
   const correctCount = effectiveResults.filter((r) => r.isCorrect).length;
-  const totalPoints = Number(result?.totalPoints) || 0;
+  const pendingCount = effectiveResults.filter((r) => r.pendingReview).length;
   const totalQuestions = orderedQuestions.length;
   const progressPercentage = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
-
-  const hasDirtyReview =
-    canGrade &&
-    reviewOverrides.length > 0 &&
-    JSON.stringify(reviewOverrides) !== JSON.stringify(result?.questionResults ?? []);
-
-  const handleSaveReview = useCallback(() => {
-    if (!resultId || !result || reviewOverrides.length === 0) return;
-    const newScore = reviewOverrides.reduce((s, r) => s + r.score, 0);
-    const newCorrectCount = reviewOverrides.filter((r) => r.isCorrect).length;
-    const newPercentage = totalPoints > 0 ? Math.round((newScore / totalPoints) * 100) : 0;
-    const passingValue =
-      result.passingScore ??
-      (result.passingCondition?.type === "percentage" ? result.passingCondition.value : undefined) ??
-      60;
-    const passed = newPercentage >= passingValue;
-    updateResultMutation.mutate({
-      id: resultId,
-      payload: {
-        questionResults: reviewOverrides,
-        score: newScore,
-        correctCount: newCorrectCount,
-        percentage: newPercentage,
-        passed,
-      },
-    });
-  }, [resultId, result, reviewOverrides, totalPoints, updateResultMutation]);
 
   const goToQuestion = (index: number) => {
     if (index >= 0 && index < currentQuestions.length) setCurrentIndex(index);
@@ -271,6 +200,22 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
     } else if (nextPartId) {
       goToPart(nextPartId);
     }
+  };
+
+  const goToNextPending = () => {
+    const positions: { partId: string | null; index: number; questionId: string }[] = questionsByPart
+      ? Object.entries(questionsByPart).flatMap(([partId, data]) =>
+          data.questions.map((q, index) => ({ partId, index, questionId: q.id }))
+        )
+      : orderedQuestions.map((q, index) => ({ partId: null, index, questionId: q.id }));
+    const here = positions.findIndex(
+      (p) => p.index === currentIndex && (p.partId === null || p.partId === currentPart)
+    );
+    const rotated = [...positions.slice(here + 1), ...positions.slice(0, here + 1)];
+    const next = rotated.find((p) => resultByQuestionId[p.questionId]?.pendingReview);
+    if (!next) return;
+    if (next.partId) setCurrentPart(next.partId);
+    setCurrentIndex(next.index);
   };
 
   useEffect(() => {
@@ -327,8 +272,10 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
   }
 
   const backHref = canGrade ? "/dashboard/results" : "/dashboard/my-results";
+  const isPositional = !!currentQuestion?.metadata?.answerFormat;
   const isMultipleAnswer =
     currentQuestion &&
+    !isPositional &&
     Array.isArray(currentQuestion.correctAnswer) &&
     currentQuestion.correctAnswer.length > 1;
   const rawUserAnswer = currentQuestion ? answers[currentQuestion.id] : null;
@@ -374,15 +321,16 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                 Proctor review
               </Badge>
             )}
-            {hasDirtyReview && (
-              <Button
-                size="sm"
-                onClick={handleSaveReview}
-                disabled={updateResultMutation.isPending}
-              >
-                {updateResultMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save<span className="max-sm:hidden">&nbsp;&amp; update score</span>
+            {canGrade && pendingCount > 0 && (
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={goToNextPending}>
+                <PenLine className="h-3.5 w-3.5" />
+                {pendingCount}<span className="max-sm:hidden">&nbsp;to grade</span>
               </Button>
+            )}
+            {!canGrade && result.gradingStatus === "pending_review" && (
+              <Badge variant="outline" className="gap-1 border-amber-500 text-amber-700 dark:text-amber-400 text-xs">
+                <Clock className="h-3 w-3" /> Awaiting grading
+              </Badge>
             )}
           </div>
         </div>
@@ -398,6 +346,18 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
         </div>
         <Progress value={progressPercentage} className="h-2" />
       </div>
+
+      {canGrade && (
+        <div className="mx-auto max-w-5xl px-3 pb-3 sm:px-4">
+          <IntegrityPanel
+            resultId={resultId}
+            questionNumber={(questionId) => {
+              const index = orderedQuestions.findIndex((q) => q.id === questionId);
+              return index >= 0 ? index + 1 : null;
+            }}
+          />
+        </div>
+      )}
 
       {/* Part Tabs */}
       {hasParts && questionsByPart && (
@@ -429,7 +389,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Jump to question</CardTitle>
               <p className="text-[10px] text-muted-foreground">
-                Click a number to go to that question. Green = correct, red = incorrect.
+                Click a number to go to that question. Green = correct, red = incorrect, amber = needs grading.
               </p>
             </CardHeader>
             <CardContent className="pt-0">
@@ -438,20 +398,23 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                   {currentQuestions.map((q, i) => {
                     const res = resultByQuestionId[q.id];
                     const correct = res?.isCorrect ?? false;
+                    const pending = res?.pendingReview === true;
                     const isCurrent = i === currentIndex;
                     return (
                       <button
                         key={q.id}
                         type="button"
                         onClick={() => goToQuestion(i)}
-                        title={`Question ${i + 1}: ${correct ? "Correct" : "Incorrect"}`}
+                        title={`Question ${i + 1}: ${pending ? "Needs grading" : correct ? "Correct" : "Incorrect"}`}
                         className={cn(
                           "relative flex h-8 w-8 items-center justify-center rounded-md text-xs font-medium transition-all hover:ring-2 hover:ring-offset-1",
                           isCurrent
                             ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1"
-                            : correct
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 hover:ring-emerald-400"
-                              : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 hover:ring-red-400"
+                            : pending
+                              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 hover:ring-amber-400"
+                              : correct
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 hover:ring-emerald-400"
+                                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 hover:ring-red-400"
                         )}
                       >
                         {i + 1}
@@ -467,6 +430,11 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                 <span className="flex items-center gap-1.5">
                   <span className="h-3 w-3 rounded bg-red-100 dark:bg-red-900/30" /> Incorrect
                 </span>
+                {pendingCount > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-3 w-3 rounded bg-amber-100 dark:bg-amber-900/30" /> Needs grading
+                  </span>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -490,13 +458,20 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                     <Badge variant="secondary" className="text-xs">
                       {currentQuestion.points} pts
                     </Badge>
-                    <Badge variant={isCorrect ? "success" : "destructive"} className="text-xs">
-                      {isCorrect ? (
-                        <><CheckCircle className="h-3 w-3 mr-1" /> Correct</>
-                      ) : (
-                        <><XCircle className="h-3 w-3 mr-1" /> Incorrect</>
-                      )}
-                    </Badge>
+                    {qResult?.pendingReview ? (
+                      <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400 text-xs">
+                        <Clock className="h-3 w-3 mr-1" /> Needs grading
+                      </Badge>
+                    ) : (
+                      <Badge variant={isCorrect ? "success" : "destructive"} className="text-xs">
+                        {isCorrect ? (
+                          <><CheckCircle className="h-3 w-3 mr-1" /> Correct</>
+                        ) : (
+                          <><XCircle className="h-3 w-3 mr-1" /> Incorrect</>
+                        )}
+                        {qResult?.manual && ` · ${qResult.score}/${qResult.points}`}
+                      </Badge>
+                    )}
                     {canGrade && result?.examId && (
                       <div className="flex items-center gap-1.5">
                         {reconciliations.some((r) => r.questionId === currentQuestion.id) && (
@@ -507,19 +482,7 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                           variant="outline"
                           size="sm"
                           className="gap-1.5"
-                          onClick={() => {
-                            const existing = reconciliations.find((r) => r.questionId === currentQuestion.id);
-                            if (existing) {
-                              setReconcileType(existing.type);
-                              setReconcileNewAnswer(Array.isArray(existing.newCorrectAnswer) ? existing.newCorrectAnswer[0] ?? "" : (existing.newCorrectAnswer ?? ""));
-                              setReconcileNoAnswerCountsCorrect(existing.noAnswerCountsCorrect ?? true);
-                            } else {
-                              setReconcileType("new_answer");
-                              setReconcileNewAnswer("");
-                              setReconcileNoAnswerCountsCorrect(true);
-                            }
-                            setReconcileDialogOpen(true);
-                          }}
+                          onClick={() => setReconcileDialogOpen(true)}
                         >
                           <Scale className="h-3.5 w-3.5" /> Reconcile
                         </Button>
@@ -535,7 +498,13 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                 )}
               </CardHeader>
               <CardContent className="space-y-3">
-                {isMultipleAnswer ? (
+                {isPositional ? (
+                  <PositionalAnswerReview
+                    question={currentQuestion}
+                    answer={userAnswerArr.map(String)}
+                    label={canGrade ? "Examinee's answer" : "Your answer"}
+                  />
+                ) : isMultipleAnswer ? (
                   <div className="space-y-3">
                     {currentQuestion.options.map((option, i) => {
                       const isUserSelected = userAnswerArr.includes(option);
@@ -626,19 +595,40 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                   </div>
                 )}
                 {canGrade ? (
-                  <QuestionInsights
-                    explanation={currentQuestion.explanation}
-                    metadata={currentQuestion.metadata}
-                    className="mt-4"
-                  />
+                  <>
+                    <GradingPanel
+                      question={currentQuestion}
+                      answer={rawUserAnswer}
+                      questionResult={qResult ?? undefined}
+                      manualGrade={result.manualGrades?.[currentQuestion.id]}
+                      saving={gradeMutation.isPending}
+                      onSave={(grade) => gradeMutation.mutate(grade)}
+                    />
+                    <QuestionInsights
+                      explanation={currentQuestion.explanation}
+                      metadata={currentQuestion.metadata}
+                      className="mt-4"
+                    />
+                  </>
                 ) : (
                   <>
+                    {qResult?.pendingReview && (
+                      <p className="mt-4 rounded-md border border-dashed border-amber-400 p-3 text-xs text-muted-foreground">
+                        Your proctor hasn&apos;t graded this answer yet. Your score will update once they do.
+                      </p>
+                    )}
+                    {qResult?.feedback && (
+                      <div className="mt-4 rounded-md border bg-muted/30 p-3 text-sm">
+                        <p className="font-medium mb-1">Proctor feedback</p>
+                        <p className="text-muted-foreground whitespace-pre-wrap break-words">{qResult.feedback}</p>
+                      </div>
+                    )}
                     {correctAnswers.length === 0 && exam?.answerRevealTiming === "after_last_attempt" && (
                       <p className="mt-4 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
                         Correct answers and explanations will be shown once you pass this exam or use up your attempts.
                       </p>
                     )}
-                    {!isCorrect && correctAnswerLabels.length > 0 && (
+                    {!isCorrect && !isPositional && correctAnswerLabels.length > 0 && (
                       <div className="mt-4 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-800 dark:bg-emerald-950/30">
                         <span className="font-medium text-emerald-800 dark:text-emerald-300">
                           Correct answer{correctAnswers.length > 1 ? "s" : ""}:{" "}
@@ -655,6 +645,17 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                         <p className="font-medium mb-1">Explanation</p>
                         <p className="text-muted-foreground whitespace-pre-wrap break-words"><MathText text={explanation} /></p>
                       </div>
+                    )}
+                    {isExaminee && !isCorrect && !qResult?.pendingReview && !qResult?.manual && correctAnswers.length > 0 && (
+                      <ExplainMistake
+                        resultId={result.id}
+                        questionId={currentQuestion.id}
+                        questionText={currentQuestion.questionText}
+                        options={currentQuestion.options}
+                        userAnswer={userAnswerArr.map(String)}
+                        correctAnswers={correctAnswers.map(String)}
+                        explanation={explanation}
+                      />
                     )}
                     {examineeCanViewSources && currentQuestion.metadata?.ai && (
                       <QuestionSource source={currentQuestion.metadata.ai} className="mt-3 rounded-md bg-muted/40 p-2.5" />
@@ -716,116 +717,15 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
         </div>
       </div>
 
-      {/* Reconcile question dialog */}
-      <Dialog open={reconcileDialogOpen} onOpenChange={setReconcileDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Scale className="h-5 w-5" /> Reconcile question
-            </DialogTitle>
-            <DialogDescription>
-              Override the correct answer or mark this question as bonus (everyone correct). All submitted results for this exam will be re-scored.
-            </DialogDescription>
-          </DialogHeader>
-          {currentQuestion && result?.examId && (() => {
-            const existingRec = reconciliations.find((r) => r.questionId === currentQuestion.id);
-            return (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground line-clamp-2"><MathText text={currentQuestion.questionText} /></p>
-                {existingRec && (
-                  <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-                    <p className="font-medium text-muted-foreground mb-1">Current reconciliation</p>
-                    <p>
-                      {existingRec.type === "new_answer"
-                        ? `Correct answer set to: ${Array.isArray(existingRec.newCorrectAnswer) ? existingRec.newCorrectAnswer.join(", ") : existingRec.newCorrectAnswer}`
-                        : `Bonus (no answer counts correct: ${existingRec.noAnswerCountsCorrect ?? "—"})`}
-                    </p>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      className="mt-2 gap-1"
-                      disabled={removeReconciliationMutation.isPending}
-                      onClick={() => removeReconciliationMutation.mutate(currentQuestion.id)}
-                    >
-                      {removeReconciliationMutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-                      <Trash2 className="h-3 w-3" /> Remove reconciliation
-                    </Button>
-                  </div>
-                )}
-                {!existingRec && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>Type</Label>
-                      <Select value={reconcileType} onValueChange={(v) => setReconcileType(v as "new_answer" | "bonus")}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="new_answer">New correct answer</SelectItem>
-                          <SelectItem value="bonus">Bonus (everyone correct)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {reconcileType === "new_answer" && (
-                      <div className="space-y-2">
-                        <Label>Correct answer</Label>
-                        <Select value={reconcileNewAnswer} onValueChange={setReconcileNewAnswer}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select option" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {currentQuestion.options.map((opt, i) => (
-                              <SelectItem key={i} value={opt}>
-                                {String.fromCharCode(65 + i)}. <MathText text={opt} />
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                    {reconcileType === "bonus" && (
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="noAnswerCountsCorrect"
-                          checked={reconcileNoAnswerCountsCorrect}
-                          onCheckedChange={(v) => setReconcileNoAnswerCountsCorrect(v === true)}
-                        />
-                        <Label htmlFor="noAnswerCountsCorrect" className="text-sm font-normal">
-                          Count no answer as correct
-                        </Label>
-                      </div>
-                    )}
-                  </>
-                )}
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setReconcileDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  {!existingRec && (
-                    <Button
-                      disabled={
-                        reconcileMutation.isPending ||
-                        (reconcileType === "new_answer" && !reconcileNewAnswer)
-                      }
-                      onClick={() => {
-                        const payload: ReconcileQuestionPayload =
-                          reconcileType === "new_answer"
-                            ? { questionId: currentQuestion.id, type: "new_answer", newCorrectAnswer: reconcileNewAnswer }
-                            : { questionId: currentQuestion.id, type: "bonus", noAnswerCountsCorrect: reconcileNoAnswerCountsCorrect };
-                        reconcileMutation.mutate(payload);
-                      }}
-                    >
-                      {reconcileMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Save reconciliation
-                    </Button>
-                  )}
-                </DialogFooter>
-              </div>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+      {result?.examId && (
+        <ReconcileQuestionDialog
+          open={reconcileDialogOpen}
+          onOpenChange={setReconcileDialogOpen}
+          examId={result.examId}
+          question={currentQuestion ?? null}
+          existing={currentQuestion ? reconciliations.find((r) => r.questionId === currentQuestion.id) ?? null : null}
+        />
+      )}
     </div>
   );
 }

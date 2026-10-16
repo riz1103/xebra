@@ -17,6 +17,16 @@ export interface User {
   lastLogin?: string | FirestoreTimestamp;
   createdAt: string | FirestoreTimestamp;
   updatedAt: string | FirestoreTimestamp;
+  notificationPrefs?: NotificationPrefs;
+}
+
+export interface NotificationPrefs {
+  /** Email when a result is final (after any essay grading) */
+  resultEmails: boolean;
+  /** Email before a scheduled exam opens or an unused invitation expires */
+  reminderEmails: boolean;
+  /** Proctors: daily digest of new results and essays to grade */
+  dailySummary: boolean;
 }
 
 export interface AuthState {
@@ -115,6 +125,14 @@ export interface AiQuestionMetadata {
 export interface QuestionMetadata {
   /** Multiple blanks are graded in order (blank 1, blank 2, ...) */
   orderedBlanks?: boolean;
+  /** Essay grading guide for manually written questions (AI questions use ai.rubric); never returned to examinees */
+  rubric?: string;
+  /** Ordering: correctAnswer is the items in order. Matching: correctAnswer[i] answers matchPrompts[i]. */
+  answerFormat?: "ordering" | "matching";
+  /** Left-hand prompts of a matching question (visible to examinees) */
+  matchPrompts?: string[];
+  /** Topic used by study reports when there is no AI topic (e.g. from the question bank) */
+  topic?: string;
   ai?: AiQuestionMetadata;
   [key: string]: unknown;
 }
@@ -136,8 +154,106 @@ export interface ExamQuestion {
   metadata?: QuestionMetadata;
   /** 'active' (default) = included in question pool; 'disabled' = excluded from new sessions */
   status?: "active" | "disabled";
+  /** Sent to examinees instead of correctAnswer when more than one choice is correct */
+  multipleAnswers?: boolean;
+  /** Set when the question was drawn from the question bank */
+  bankQuestionId?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ============ Question Bank ============
+export type QuestionDifficulty = "easy" | "medium" | "hard";
+
+export interface BankQuestion {
+  id: string;
+  questionTypeId: string;
+  questionText: string;
+  options: string[];
+  correctAnswer: string | string[];
+  points: number;
+  explanation?: string;
+  metadata?: QuestionMetadata;
+  topic: string | null;
+  difficulty: QuestionDifficulty | null;
+  cognitiveLevel: string | null;
+  tags: string[];
+  ownerId: string;
+  ownerEmail?: string | null;
+  usageCount: number;
+  lastUsedAt?: string;
+  sourceExamId: string | null;
+  sourceQuestionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BankQuestionPayload {
+  questionTypeId: string;
+  questionText: string;
+  options?: string[];
+  correctAnswer: string | string[];
+  points?: number;
+  explanation?: string;
+  metadata?: QuestionMetadata;
+  topic?: string | null;
+  difficulty?: QuestionDifficulty | null;
+  cognitiveLevel?: string | null;
+  tags?: string[];
+}
+
+export interface BankFacetValue {
+  value: string;
+  count: number;
+}
+
+export interface BankFacets {
+  total: number;
+  topics: BankFacetValue[];
+  difficulties: BankFacetValue[];
+  tags: BankFacetValue[];
+  cognitiveLevels: BankFacetValue[];
+}
+
+export interface BankListParams {
+  search?: string;
+  topic?: string;
+  difficulty?: QuestionDifficulty;
+  tag?: string;
+  cognitiveLevel?: string;
+  questionTypeId?: string;
+  scope?: "all";
+  page?: number;
+  size?: number;
+}
+
+export interface BankDrawRule {
+  count: number;
+  topic?: string | null;
+  difficulty?: QuestionDifficulty | null;
+  cognitiveLevel?: string | null;
+  tags?: string[];
+  questionTypeId?: string | null;
+}
+
+export interface BankAssembleRuleResult extends Required<BankDrawRule> {
+  available: number;
+  drawn: number;
+  shortBy: number;
+}
+
+export interface BankAssembleResult {
+  dryRun: boolean;
+  rules: BankAssembleRuleResult[];
+  totalDrawn: number;
+  questionIds?: string[];
+  bankSize: number;
+}
+
+export interface BankImportResult {
+  imported: number;
+  skippedExisting: number;
+  skippedPhraseBound: number;
 }
 
 /** Question in exam session response: same as ExamQuestion with optional embedded phrase */
@@ -226,9 +342,20 @@ export interface Exam {
   sourceViewableByExaminee?: boolean;
   /** When reviewing examinees see correct answers, explanations, and sources; defaults to "always". */
   answerRevealTiming?: AnswerRevealTiming;
+  /** Each examinee sees answer choices in a different order */
+  shuffleOptions?: boolean;
+  /** Examinees who pass can get a verifiable certificate (default true) */
+  certificatesEnabled?: boolean;
+  /** Proctors the creator shared the exam with (co-owners) */
+  collaboratorIds?: string[];
+  /** Created by the onboarding "Try a sample exam" action */
+  isSample?: boolean;
+  /** Source exam ID when this exam was created with Duplicate */
+  duplicatedFrom?: string;
   status: "draft" | "active" | "archived";
   createdBy: string;
   createdByName?: string;
+  createdByEmail?: string | null;
   questionCount?: number;
   questions?: ExamQuestion[];
   bundleId?: string;
@@ -250,6 +377,8 @@ export interface CreateExamPayload {
   reviewableByExaminee?: boolean;
   sourceViewableByExaminee?: boolean;
   answerRevealTiming?: AnswerRevealTiming;
+  shuffleOptions?: boolean;
+  certificatesEnabled?: boolean;
   origin?: ExamOrigin;
   questions?: CreateExamQuestionPayload[];
 }
@@ -269,6 +398,8 @@ export interface UpdateExamPayload {
   reviewableByExaminee?: boolean;
   sourceViewableByExaminee?: boolean;
   answerRevealTiming?: AnswerRevealTiming;
+  shuffleOptions?: boolean;
+  certificatesEnabled?: boolean;
   status?: "draft" | "active" | "archived";
 }
 
@@ -372,6 +503,10 @@ export interface ExamSession {
   currentQuestionIndex: number;
   answers: Record<string, string | string[] | null>;
   timeRemainingSeconds: number;
+  /** Extra time granted by a proctor during the session */
+  extraTimeSeconds?: number;
+  /** Extra-time accommodation already applied to the time limits (1 when none) */
+  timeMultiplier?: number;
   /** Session questions (ordered); may include phraseId and embedded phrase for display */
   questions?: SessionQuestion[];
   /** Map of phrase id -> phrase data (also available on each question.phrase) */
@@ -425,6 +560,31 @@ export interface QuestionResult {
   isCorrect: boolean;
   score: number;
   points: number;
+  /** Answered essay that still needs a proctor grade (scored 0 until graded) */
+  pendingReview?: boolean;
+  /** Score was set by a proctor; correct when at least half the points were earned */
+  manual?: boolean;
+  /** Proctor feedback for this question */
+  feedback?: string;
+}
+
+export interface ManualGrade {
+  score: number;
+  feedback: string | null;
+  aiSuggested: boolean;
+  gradedBy: string;
+  gradedAt: string | FirestoreTimestamp;
+}
+
+/** "pending_review" while answered essays await a proctor grade */
+export type GradingStatus = "pending_review" | "complete";
+
+export interface GradeQuestionPayload {
+  questionId: string;
+  /** null removes the manual grade so the question is auto-graded again */
+  score: number | null;
+  feedback?: string;
+  aiSuggested?: boolean;
 }
 
 export interface ExamResult {
@@ -438,7 +598,11 @@ export interface ExamResult {
   score: number;
   totalPoints: number;
   percentage: number;
-  passed: boolean;
+  /** null for examinees while gradingStatus is "pending_review" */
+  passed: boolean | null;
+  gradingStatus?: GradingStatus;
+  pendingReviewCount?: number;
+  manualGrades?: Record<string, ManualGrade>;
   correctAnswers?: number; // Legacy field
   correctCount?: number; // New field from API
   incorrectCount?: number;
@@ -470,6 +634,10 @@ export interface ExamResult {
   reviewableByExaminee?: boolean;
   /** When true, examinee can view AI questions' source material while reviewing (from exam setting). */
   sourceViewableByExaminee?: boolean;
+  /** From the exam setting; passed results can get a certificate */
+  certificatesEnabled?: boolean;
+  /** Set once a certificate was issued */
+  certificateCode?: string;
   /** Passing threshold (e.g. percentage value). Used when recalculating after proctor review. */
   passingScore?: number;
   passingCondition?: PassingCondition;
@@ -505,9 +673,17 @@ export interface ExamInvitation {
   scheduledStartTime?: string;
   /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
   scheduledEndTime?: string;
+  accommodations?: InvitationAccommodations | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface InvitationAccommodations {
+  /** 1–3; every time limit of sessions started from this invitation is multiplied by it */
+  timeMultiplier: number;
+  /** Visible to the examinee on their invitation */
+  note?: string | null;
 }
 
 export interface CreateExamInvitationPayload {
@@ -519,6 +695,7 @@ export interface CreateExamInvitationPayload {
   scheduledStartTime?: string;
   /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
   scheduledEndTime?: string;
+  accommodations?: InvitationAccommodations | null;
 }
 
 export interface CreateGroupInvitationPayload {
@@ -530,6 +707,7 @@ export interface CreateGroupInvitationPayload {
   scheduledStartTime?: string;
   /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
   scheduledEndTime?: string;
+  accommodations?: InvitationAccommodations | null;
 }
 
 export interface CreateBundleInvitationPayload {
@@ -541,6 +719,7 @@ export interface CreateBundleInvitationPayload {
   scheduledStartTime?: string;
   /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
   scheduledEndTime?: string;
+  accommodations?: InvitationAccommodations | null;
 }
 
 export interface CreateBundleGroupInvitationPayload {
@@ -552,6 +731,7 @@ export interface CreateBundleGroupInvitationPayload {
   scheduledStartTime?: string;
   /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
   scheduledEndTime?: string;
+  accommodations?: InvitationAccommodations | null;
 }
 
 // ============ Examinee Groups ============
@@ -562,9 +742,29 @@ export interface ExamineeGroup {
   memberIds: string[];
   members?: User[];
   memberCount?: number;
+  /** 8-character code examinees use to join; null when joining by code is off */
+  joinCode?: string | null;
+  joinEnabled?: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GroupJoinPreview {
+  id: string;
+  name: string;
+  description: string;
+  createdByEmail: string | null;
+  memberCount: number;
+  alreadyMember: boolean;
+}
+
+export interface GroupJoinResult {
+  id: string;
+  name: string;
+  alreadyMember: boolean;
+  /** Group invitations copied to the new member */
+  invitationsCreated: number;
 }
 
 export interface CreateExamineeGroupPayload {
@@ -612,7 +812,9 @@ export type AiTier = "primary" | "fallback";
 
 export interface AiUsageStatus {
   tier: AiTier;
-  reason: "monthly_budget" | "daily_user_limit" | null;
+  reason: "monthly_budget" | "daily_user_limit" | "daily_practice_limit" | "monthly_cap" | "plan_quota" | null;
+  /** False when an examinee used up their daily AI requests or the monthly cap is reached */
+  allowed?: boolean;
   month: {
     period: string;
     primaryCostUsd: number;
@@ -628,7 +830,105 @@ export interface AiUsageStatus {
     primaryRequestsToday: number;
     fallbackRequestsToday: number;
     primaryDailyLimit: number;
+    /** Examinees' daily AI request cap; null for staff */
+    dailyRequestLimit?: number | null;
   };
+  plan?: AiPlan & { requestsThisMonth: number };
+}
+
+export type AiPlanId = "free" | "pro" | "school";
+
+export interface AiPlan {
+  id: AiPlanId;
+  name: string;
+  monthlyRequests: number;
+}
+
+// ============ Sharing, activity log & webhooks ============
+export interface ExamCollaborator {
+  uid: string;
+  email: string | null;
+  name: string | null;
+  addedAt: string | null;
+  addedBy: string | null;
+}
+
+export interface ExamCollaborators {
+  owner: { uid: string | null; email: string | null };
+  collaborators: ExamCollaborator[];
+  canManageSharing: boolean;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  summary: string;
+  details: Record<string, unknown> | null;
+  actorId: string | null;
+  actorEmail: string | null;
+  createdAt: string | null;
+}
+
+export type WebhookEvent = "result.submitted" | "result.graded";
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: WebhookEvent[];
+  active: boolean;
+  /** Only present right after creation */
+  secret: string | null;
+  secretPreview: string | null;
+  createdAt: string | null;
+  lastDeliveryAt: string | null;
+  lastEvent: string | null;
+  lastStatus: number | null;
+  lastError: string | null;
+}
+
+// ============ Study feedback & certificates ============
+export interface StudyTopic {
+  topic: string;
+  questions: number;
+  graded: number;
+  correct: number;
+  incorrect: number;
+  unanswered: number;
+  pendingReview: number;
+  score: number;
+  points: number;
+  /** null until something in the topic is graded */
+  percentage: number | null;
+  weak: boolean;
+  missedQuestionIds?: string[];
+  lastSeenAt?: string | null;
+}
+
+export interface StudyReport {
+  resultId: string;
+  examId: string;
+  examTitle: string | null;
+  threshold: number;
+  topics: StudyTopic[];
+  weakTopics: string[];
+}
+
+export interface StudyTopicsSummary {
+  threshold: number;
+  resultsConsidered: number;
+  topics: StudyTopic[];
+}
+
+export interface Certificate {
+  code: string;
+  valid: boolean;
+  reason: string | null;
+  examineeName: string | null;
+  examTitle: string | null;
+  percentage: number | null;
+  completedAt: string | null;
+  issuedAt: string | null;
+  issuerName: string | null;
 }
 
 export interface RecordAiUsagePayload {
@@ -647,7 +947,7 @@ export interface ExamResultListParams {
   examId?: string;
   examineeId?: string;
   search?: string;
-  status?: "passed" | "failed";
+  status?: "passed" | "failed" | "pending_review";
   /** ISO date-time, inclusive */
   from?: string;
   /** ISO date-time, inclusive */
@@ -662,7 +962,181 @@ export interface ExamResultSummary {
   total: number;
   passed: number;
   failed: number;
+  /** Results awaiting essay grading, counted before the status filter */
+  pendingReview?: number;
   averagePercentage: number;
+}
+
+export interface TimeExtension {
+  minutes: number;
+  by: string;
+  byEmail: string | null;
+  at: string;
+}
+
+export interface LiveSession {
+  id: string;
+  examineeId: string;
+  examineeName: string | null;
+  examineeEmail: string | null;
+  invitationId: string | null;
+  startedAt: string | null;
+  expiresAt: string | null;
+  scheduledEndTime: string | null;
+  lastActivityAt: string | null;
+  timeRemainingSeconds: number | null;
+  answeredCount: number;
+  totalQuestions: number;
+  currentQuestionIndex: number;
+  extraTimeSeconds: number;
+  /** Extra-time accommodation from the invitation (1 when none) */
+  timeMultiplier: number;
+  timeExtensions: TimeExtension[];
+  integrityEventCount: number;
+}
+
+export interface LiveRecentResult {
+  id: string;
+  sessionId: string | null;
+  examineeName: string | null;
+  examineeEmail: string | null;
+  percentage: number;
+  passed: boolean;
+  gradingStatus: GradingStatus;
+  submittedAt: string;
+  autoSubmitted: boolean;
+  forceSubmittedBy: string | null;
+}
+
+export interface LiveExamMonitor {
+  examId: string;
+  examTitle: string | null;
+  examStatus: string | null;
+  serverTime: string;
+  inProgress: number;
+  /** Sessions whose time ran out and were submitted while loading this view */
+  autoSubmitted: number;
+  sessions: LiveSession[];
+  recentResults: LiveRecentResult[];
+}
+
+export type IntegrityEventType = "tab_hidden" | "window_blur" | "fullscreen_exit" | "paste" | "copy";
+
+/** Sent from the exam screen; text is never included, only its length */
+export interface IntegrityEventInput {
+  type: IntegrityEventType;
+  at: string;
+  durationMs?: number;
+  questionId?: string;
+  length?: number;
+}
+
+export interface IntegrityEvent {
+  type: IntegrityEventType;
+  at: string | null;
+  offsetSeconds: number | null;
+  durationMs: number | null;
+  questionId: string | null;
+  length: number | null;
+}
+
+export interface ResultIntegrity {
+  resultId: string;
+  sessionId: string | null;
+  /** False for sessions started before integrity logging existed */
+  tracked: boolean;
+  total: number;
+  summary: Record<IntegrityEventType, number>;
+  awayMs: number;
+  events: IntegrityEvent[];
+  truncated: boolean;
+}
+
+export type ItemAnalysisFlag =
+  | "too_hard"
+  | "too_easy"
+  | "negative_discrimination"
+  | "low_discrimination"
+  | "distractor_beats_key"
+  | "key_not_in_options"
+  | "few_attempts";
+
+export interface ItemAnalysisItem {
+  questionId: string;
+  questionText: string;
+  questionTypeId: string | null;
+  partId: string | null;
+  partName: string | null;
+  status: string;
+  points: number;
+  options: string[];
+  correctAnswer: string | string[] | null;
+  reconciliation: Pick<ExamReconciliation, "type" | "newCorrectAnswer" | "noAnswerCountsCorrect"> | null;
+  attempts: number;
+  answered: number;
+  correct: number;
+  pendingReview: number;
+  unansweredRate: number | null;
+  /** Share of graded attempts answered correctly (0–1) */
+  difficulty: number | null;
+  /** Upper-group minus lower-group correct rate (-1 to 1); null with fewer than 5 results */
+  discrimination: number | null;
+  averageScoreRate: number | null;
+  optionDistribution: { option: string; count: number; isCorrect: boolean }[];
+  otherAnswers: number;
+  topTextAnswers: { answer: string; count: number; correct: boolean }[];
+  flags: ItemAnalysisFlag[];
+}
+
+export interface ItemAnalysis {
+  examId: string;
+  totalResults: number;
+  averagePercentage: number | null;
+  standardDeviation: number | null;
+  groupSize: number;
+  flaggedCount: number;
+  items: ItemAnalysisItem[];
+}
+
+export interface ScoreBucket {
+  range: string;
+  min: number;
+  max: number;
+  count: number;
+  passed: number;
+}
+
+export interface WeeklyResultTrend {
+  /** Monday of the week (UTC), YYYY-MM-DD */
+  weekStart: string;
+  count: number;
+  passed: number;
+  passRate: number | null;
+  averagePercentage: number | null;
+}
+
+export interface ScoreHistoryPoint {
+  id: string;
+  examId: string;
+  examTitle: string | null;
+  percentage: number;
+  passed: boolean;
+  submittedAt: string;
+}
+
+export interface ExamResultStats {
+  scope: "mine" | "managed";
+  total: number;
+  graded: number;
+  passed: number;
+  failed: number;
+  pendingReview: number;
+  averagePercentage: number;
+  passRate: number;
+  distribution: ScoreBucket[];
+  trend: WeeklyResultTrend[];
+  /** Only for scope "mine": up to 50 most recent graded results, oldest first */
+  history?: ScoreHistoryPoint[];
 }
 
 export interface PaginationMeta {

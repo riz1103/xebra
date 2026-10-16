@@ -8,7 +8,15 @@ export type QuestionLayout =
   | "true_false"
   | "multiple_answer"
   | "identification"
-  | "essay";
+  | "essay"
+  | "ordering"
+  | "matching";
+
+/** Layouts whose answer is an array compared position by position (see metadata.answerFormat) */
+export const POSITIONAL_LAYOUTS = ["ordering", "matching"] as const;
+export type PositionalLayout = (typeof POSITIONAL_LAYOUTS)[number];
+export const isPositionalLayout = (layout: QuestionLayout): layout is PositionalLayout =>
+  (POSITIONAL_LAYOUTS as readonly string[]).includes(layout);
 
 export interface LayoutConfig {
   layout: QuestionLayout;
@@ -35,6 +43,20 @@ export interface LayoutConfig {
  */
 export function getQuestionLayout(typeName: string): QuestionLayout {
   const name = typeName.toLowerCase().trim();
+
+  if (name.includes("matching") || name.includes("match the") || name.includes("pairing")) {
+    return "matching";
+  }
+
+  if (
+    name.includes("ordering") ||
+    name.includes("sequenc") ||
+    name.includes("arrange") ||
+    name.includes("put in order") ||
+    name.includes("ranking")
+  ) {
+    return "ordering";
+  }
 
   if (name.includes("true") && name.includes("false")) {
     return "true_false";
@@ -125,6 +147,21 @@ export function getLayoutConfig(typeName: string): LayoutConfig {
       };
 
     case "essay":
+      return {
+        layout,
+        showOptions: false,
+        editableOptions: false,
+        showCorrectAnswer: false,
+        correctAnswerIsText: false,
+        multipleCorrectAnswers: false,
+        defaultOptions: [],
+        correctAnswerLabel: "",
+        correctAnswerPlaceholder: "",
+      };
+
+    // Ordering and matching use their own editor (PositionalQuestionEditor) instead of options/answer fields
+    case "ordering":
+    case "matching":
       return {
         layout,
         showOptions: false,

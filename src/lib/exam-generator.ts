@@ -137,7 +137,7 @@ const transcriptionSchema = Schema.object({
  * How math must be written in everything the model returns. The app renders this notation like a
  * printed exam (see math-notation.ts); LaTeX would show up as raw backslashes and braces.
  */
-const MATH_NOTATION = `Never use LaTeX or Markdown math: no $...$, \\(...\\), \\frac, \\times, \\div, \\sqrt, or braces. Write math in this plain-text notation, which the app displays like a printed exam:
+export const MATH_NOTATION = `Never use LaTeX or Markdown math: no $...$, \\(...\\), \\frac, \\times, \\div, \\sqrt, or braces. Write math in this plain-text notation, which the app displays like a printed exam:
   - Multiplication: × (e.g. 3 × 4). Division: ÷ (e.g. 12 ÷ 4). Never use * for multiplication.
   - Fractions: a/b with no spaces around the slash; it is displayed stacked. Whenever the top or bottom has more than one number or letter, wrap it in parentheses: (2x^3y)/(3x^2), (x+1)/2, 5/(2x). Letters written right after the denominator belong to it (3x/10x^2 is 3x over 10x²), so write a fraction times a variable as (1/2)x. Mixed numbers: 1 1/2.
   - Never write a spaced slash or chain slashes and ÷ ambiguously. Dividing fractions: (2x^3y)/(3x^2) ÷ (5y^2)/(18xy), not 2x^3y/3x^2 ÷ 5y^2 / 18xy.
@@ -559,6 +559,10 @@ function layoutRules(layout: QuestionLayout, choices: number, points: number): s
       return `options and correctOptions are empty. Either ask for a specific term, name, date, or value, or write a fill-in-the-blank sentence using "_____" (five underscores) for each blank. For fill-in-the-blank, acceptedAnswers has exactly one answer per blank, in order. Otherwise acceptedAnswers lists the expected answer first, then up to 3 accepted variants (abbreviations, alternate spellings). Answers should be 1-4 words.`;
     case "essay":
       return `options, correctOptions, and acceptedAnswers are empty. Ask open-ended questions that require explaining, comparing, or evaluating ideas from the material. Provide a rubric listing the key points expected and how to award ${points} points.`;
+    case "ordering":
+    case "matching":
+      // Not in QUESTION_LAYOUTS, so the generator never requests these
+      return "";
   }
 }
 

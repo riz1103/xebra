@@ -26,7 +26,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Loader2, Mail, XCircle, Search, Package, FileText } from "lucide-react";
+import { Plus, Loader2, Mail, XCircle, Search, Package, FileText, FileUp, Timer, Accessibility } from "lucide-react";
+import { BulkInviteDialog } from "@/components/invitations/bulk-invite-dialog";
+import { AccommodationsDialog } from "@/components/invitations/accommodations-dialog";
+import { formatMultiplier } from "@/components/invitations/time-multiplier-select";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 import type { ExamInvitation } from "@/types";
@@ -38,6 +41,8 @@ const CANCELLABLE_STATUSES = ["pending", "accepted", "active"];
 
 export default function InvitationsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [accommodationsTarget, setAccommodationsTarget] = useState<ExamInvitation | null>(null);
   const [inviteTarget, setInviteTarget] = useState<InviteTarget>("exam");
   const [inviteRecipient, setInviteRecipient] = useState<InviteRecipient>("individual");
   const [search, setSearch] = useState("");
@@ -224,10 +229,18 @@ export default function InvitationsPage() {
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Invitations</h1>
           <p className="text-muted-foreground">Invite examinees to take exams or exam bundles.</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" /> Send Invitation
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button variant="outline" onClick={() => setBulkOpen(true)} className="w-full sm:w-auto">
+            <FileUp className="mr-2 h-4 w-4" /> Bulk invite (CSV)
+          </Button>
+          <Button onClick={() => setDialogOpen(true)} className="w-full sm:w-auto">
+            <Plus className="mr-2 h-4 w-4" /> Send Invitation
+          </Button>
+        </div>
       </div>
+
+      <BulkInviteDialog open={bulkOpen} onOpenChange={setBulkOpen} exams={exams} bundles={bundles} />
+      <AccommodationsDialog invitation={accommodationsTarget} onOpenChange={(open) => !open && setAccommodationsTarget(null)} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <div className="relative flex-1 sm:max-w-sm">
@@ -270,6 +283,11 @@ export default function InvitationsPage() {
                         <Package className="mr-1 h-3 w-3" /> Bundle
                       </Badge>
                     )}
+                    {inv.accommodations && inv.accommodations.timeMultiplier > 1 && (
+                      <Badge variant="secondary" className="text-xs" title={inv.accommodations.note || undefined}>
+                        <Timer className="mr-1 h-3 w-3" /> {formatMultiplier(inv.accommodations.timeMultiplier)}
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Exam: {inv.examTitle || inv.examId} &middot; Attempts: {inv.currentAttempts ?? inv.attemptsUsed ?? 0}/{inv.maxAttempts} &middot; Expires: {formatDate(inv.expiresAt)}
@@ -282,6 +300,10 @@ export default function InvitationsPage() {
                   </p>
                 </div>
                 {canCancel(inv) && (
+                  <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setAccommodationsTarget(inv)}>
+                    <Accessibility className="mr-1 h-3 w-3" /> Accommodations
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -296,6 +318,7 @@ export default function InvitationsPage() {
                     )}
                     Cancel invitation
                   </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>

@@ -29,6 +29,7 @@ import type {
   ExamResult,
   ExamResultListParams,
   ExamResultSummary,
+  GradeQuestionPayload,
   ExamInvitation,
   CreateExamInvitationPayload,
   CreateGroupInvitationPayload,
@@ -41,6 +42,31 @@ import type {
   CreateProctorRequestPayload,
   AiUsageStatus,
   RecordAiUsagePayload,
+  ExamResultStats,
+  NotificationPrefs,
+  LiveExamMonitor,
+  ItemAnalysis,
+  GroupJoinPreview,
+  GroupJoinResult,
+  IntegrityEventInput,
+  ResultIntegrity,
+  BankQuestion,
+  BankQuestionPayload,
+  BankFacets,
+  BankListParams,
+  BankDrawRule,
+  BankAssembleResult,
+  BankImportResult,
+  StudyReport,
+  StudyTopicsSummary,
+  Certificate,
+  AiPlan,
+  AiPlanId,
+  ExamCollaborators,
+  ExamCollaborator,
+  AuditLogEntry,
+  Webhook,
+  WebhookEvent,
 } from "@/types";
 
 /** List response with optional pagination metadata from API */
@@ -48,11 +74,24 @@ export interface ListResponse<T> extends ApiResponse<T[]> {
   pagination?: PaginationMeta;
 }
 
+export interface BankListResponse extends ListResponse<BankQuestion> {
+  facets?: BankFacets;
+}
+
 export interface ExamResultListResponse extends ListResponse<ExamResult> {
   /** Totals across every result matching the filters, not just the current page */
   summary?: ExamResultSummary;
   /** Exams with results in the current scope; omitted when filtering by examId */
   exams?: { id: string; title: string }[];
+}
+
+/** The API's own error message when there is one, otherwise the transport error. */
+export function apiErrorMessage(err: unknown, fallback = "Something went wrong"): string {
+  if (axios.isAxiosError(err)) {
+    const message = (err.response?.data as { message?: unknown } | undefined)?.message;
+    if (typeof message === "string" && message) return message;
+  }
+  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 const API_BASE_URL =
@@ -110,6 +149,14 @@ class ApiClient {
   async getMe() {
     const { data } = await this.client.get<ApiResponse<User>>("/api/auth/me");
     return this.unwrap(data);
+  }
+
+  async updatePreferences(notificationPrefs: Partial<NotificationPrefs>) {
+    const { data } = await this.client.put<ApiResponse<{ notificationPrefs: NotificationPrefs }>>(
+      "/api/auth/me/preferences",
+      { notificationPrefs }
+    );
+    return data;
   }
 
   // ============ Question Types ============
@@ -261,6 +308,109 @@ class ApiClient {
     return data;
   }
 
+  async recordIntegrityEvents(sessionId: string, events: IntegrityEventInput[]) {
+    const { data } = await this.client.post<ApiResponse<{ recorded: number }>>(
+      `/api/exam-sessions/${sessionId}/integrity-events`,
+      { events }
+    );
+    return data;
+  }
+
+  async getResultIntegrity(resultId: string) {
+    const { data } = await this.client.get<ApiResponse<ResultIntegrity>>(`/api/exam-results/${resultId}/integrity`);
+    return data;
+  }
+
+  async getItemAnalysis(examId: string) {
+    const { data } = await this.client.get<ApiResponse<ItemAnalysis>>(`/api/exams/${examId}/item-analysis`);
+    return data;
+  }
+
+  // Study feedback & certificates
+  async getStudyReport(resultId: string) {
+    const { data } = await this.client.get<ApiResponse<StudyReport>>(`/api/exam-results/${resultId}/study-report`);
+    return data;
+  }
+
+  async getStudyTopics() {
+    const { data } = await this.client.get<ApiResponse<StudyTopicsSummary>>("/api/exam-results/study-topics");
+    return data;
+  }
+
+  async issueCertificate(resultId: string) {
+    const { data } = await this.client.post<ApiResponse<Certificate>>(`/api/exam-results/${resultId}/certificate`);
+    return data;
+  }
+
+  async verifyCertificate(code: string) {
+    const { data } = await this.client.get<ApiResponse<Certificate>>(`/api/certificates/${encodeURIComponent(code)}`);
+    return data;
+  }
+
+  // Question bank
+  async getBankQuestions(params?: BankListParams) {
+    const { data } = await this.client.get<BankListResponse>("/api/question-bank", { params });
+    return data;
+  }
+
+  async createBankQuestion(payload: BankQuestionPayload) {
+    const { data } = await this.client.post<ApiResponse<BankQuestion>>("/api/question-bank", payload);
+    return data;
+  }
+
+  async updateBankQuestion(id: string, payload: Partial<BankQuestionPayload>) {
+    const { data } = await this.client.put<ApiResponse<BankQuestion>>(`/api/question-bank/${id}`, payload);
+    return data;
+  }
+
+  async deleteBankQuestion(id: string) {
+    const { data } = await this.client.delete<ApiResponse>(`/api/question-bank/${id}`);
+    return data;
+  }
+
+  async importExamToBank(payload: { examId: string; questionIds?: string[]; tags?: string[] }) {
+    const { data } = await this.client.post<ApiResponse<BankImportResult>>("/api/question-bank/import", payload);
+    return data;
+  }
+
+  async assembleFromBank(payload: { examId: string; partId?: string | null; rules: BankDrawRule[]; dryRun?: boolean }) {
+    const { data } = await this.client.post<ApiResponse<BankAssembleResult>>("/api/question-bank/assemble", payload);
+    return data;
+  }
+
+  async getLiveSessions(examId: string) {
+    const { data } = await this.client.get<ApiResponse<LiveExamMonitor>>(`/api/exams/${examId}/live`);
+    return data;
+  }
+
+  async extendSessionTime(sessionId: string, minutes: number) {
+    const { data } = await this.client.post<
+      ApiResponse<{ id: string; expiresAt: string | null; extraTimeSeconds: number; timeRemainingSeconds: number | null }>
+    >(`/api/exam-sessions/${sessionId}/extend`, { minutes });
+    return data;
+  }
+
+  async forceSubmitSession(sessionId: string, reason?: string) {
+    const { data } = await this.client.post<ApiResponse<{ sessionId: string; resultId: string | null }>>(
+      `/api/exam-sessions/${sessionId}/force-submit`,
+      reason ? { reason } : {}
+    );
+    return data;
+  }
+
+  async createSampleExam() {
+    const { data } = await this.client.post<ApiResponse<Exam>>("/api/exams/sample");
+    return data;
+  }
+
+  async duplicateExam(id: string, title?: string) {
+    const { data } = await this.client.post<ApiResponse<Exam & { phraseCount?: number }>>(
+      `/api/exams/${id}/duplicate`,
+      title ? { title } : {}
+    );
+    return data;
+  }
+
   async getExamReconciliations(examId: string) {
     const { data } = await this.client.get<ApiResponse<ExamReconciliation[]>>(
       `/api/exams/${examId}/reconciliations`
@@ -371,6 +521,11 @@ class ApiClient {
     return data;
   }
 
+  async getExamResultStats(params?: { scope?: "mine" | "managed"; examId?: string; weeks?: number }) {
+    const { data } = await this.client.get<ApiResponse<ExamResultStats>>("/api/exam-results/stats", { params });
+    return data;
+  }
+
   async getExamResult(id: string) {
     const { data } = await this.client.get<ApiResponse<ExamResult>>(`/api/exam-results/${id}`);
     return data;
@@ -378,6 +533,11 @@ class ApiClient {
 
   async updateExamResult(id: string, payload: Partial<ExamResult>) {
     const { data } = await this.client.put<ApiResponse<ExamResult>>(`/api/exam-results/${id}`, payload);
+    return data;
+  }
+
+  async gradeExamResult(id: string, grades: GradeQuestionPayload[]) {
+    const { data } = await this.client.put<ApiResponse<ExamResult>>(`/api/exam-results/${id}/grades`, { grades });
     return data;
   }
 
@@ -482,6 +642,30 @@ class ApiClient {
     return data;
   }
 
+  async regenerateGroupJoinCode(id: string) {
+    const { data } = await this.client.post<ApiResponse<{ id: string; joinCode: string; joinEnabled: boolean }>>(
+      `/api/examinee-groups/${id}/join-code`
+    );
+    return data;
+  }
+
+  async disableGroupJoinCode(id: string) {
+    const { data } = await this.client.delete<ApiResponse>(`/api/examinee-groups/${id}/join-code`);
+    return data;
+  }
+
+  async previewGroupJoinCode(code: string) {
+    const { data } = await this.client.get<ApiResponse<GroupJoinPreview>>(
+      `/api/examinee-groups/join/${encodeURIComponent(code)}`
+    );
+    return data;
+  }
+
+  async joinGroupByCode(code: string) {
+    const { data } = await this.client.post<ApiResponse<GroupJoinResult>>("/api/examinee-groups/join", { code });
+    return data;
+  }
+
   async deleteExamineeGroup(id: string) {
     const { data } = await this.client.delete<ApiResponse>(`/api/examinee-groups/${id}`);
     return data;
@@ -530,6 +714,73 @@ class ApiClient {
 
   async recordAiUsage(payload: RecordAiUsagePayload) {
     const { data } = await this.client.post<ApiResponse<AiUsageStatus>>("/api/ai-usage", payload);
+    return data;
+  }
+
+  async getPlans() {
+    const { data } = await this.client.get<ApiResponse<AiPlan[]>>("/api/ai-usage/plans");
+    return data;
+  }
+
+  async setUserPlan(email: string, plan: AiPlanId) {
+    const { data } = await this.client.put<ApiResponse<{ userId: string; email: string; plan: AiPlan }>>(
+      "/api/ai-usage/plan",
+      { email, plan }
+    );
+    return data;
+  }
+
+  // Exam sharing & activity
+  async getSharedExams() {
+    const { data } = await this.client.get<ApiResponse<Exam[]>>("/api/exams/shared");
+    return data;
+  }
+
+  async getExamCollaborators(examId: string) {
+    const { data } = await this.client.get<ApiResponse<ExamCollaborators>>(`/api/exams/${examId}/collaborators`);
+    return data;
+  }
+
+  async addExamCollaborator(examId: string, email: string) {
+    const { data } = await this.client.post<ApiResponse<ExamCollaborator>>(`/api/exams/${examId}/collaborators`, { email });
+    return data;
+  }
+
+  async removeExamCollaborator(examId: string, uid: string) {
+    const { data } = await this.client.delete<ApiResponse<null>>(`/api/exams/${examId}/collaborators/${uid}`);
+    return data;
+  }
+
+  async getExamAuditLog(examId: string) {
+    const { data } = await this.client.get<ApiResponse<AuditLogEntry[]>>(`/api/exams/${examId}/audit-log`);
+    return data;
+  }
+
+  // Webhooks
+  async getWebhooks() {
+    const { data } = await this.client.get<ApiResponse<Webhook[]> & { events?: WebhookEvent[] }>("/api/webhooks");
+    return data;
+  }
+
+  async createWebhook(payload: { url: string; events?: WebhookEvent[] }) {
+    const { data } = await this.client.post<ApiResponse<Webhook>>("/api/webhooks", payload);
+    return data;
+  }
+
+  async updateWebhook(id: string, payload: { active?: boolean; events?: WebhookEvent[] }) {
+    const { data } = await this.client.put<ApiResponse<Webhook>>(`/api/webhooks/${id}`, payload);
+    return data;
+  }
+
+  async deleteWebhook(id: string) {
+    const { data } = await this.client.delete<ApiResponse<null>>(`/api/webhooks/${id}`);
+    return data;
+  }
+
+  async testWebhook(id: string) {
+    const { data } = await this.client.post<ApiResponse<{ ok: boolean; status: number | null; error: string | null }>>(
+      `/api/webhooks/${id}/test`
+    );
     return data;
   }
 }

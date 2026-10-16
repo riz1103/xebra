@@ -6,7 +6,6 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { DataTableSkeleton } from "@/components/ui/loading";
 import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
@@ -20,7 +19,10 @@ import {
   type ResultFilterState,
 } from "@/components/results/result-filters";
 import Link from "next/link";
-import { BarChart3, Eye } from "lucide-react";
+import { BarChart3, Download, Eye, Loader2, PenLine, Printer } from "lucide-react";
+import { toast } from "sonner";
+import { buildResultsCsv, downloadCsv, fetchAllResults, resultsCsvFilename } from "@/lib/results-export";
+import { ResultOutcomeBadge, isAwaitingGrading } from "@/components/results/result-outcome-badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn, formatDate } from "@/lib/utils";
 import type { ExamResult } from "@/types";
@@ -29,6 +31,7 @@ export default function ResultsPage() {
   const { user } = useAuthStore();
   const [filters, setFilters] = useState<ResultFilterState>(DEFAULT_RESULT_FILTERS);
   const [selectedResult, setSelectedResult] = useState<ExamResult | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const isProctorOrAdmin = user?.role === "proctor" || user?.role === "admin";
   const queryParams = useResultQueryParams(filters);
@@ -71,11 +74,41 @@ export default function ResultsPage() {
   const passRate = totalResults > 0 ? Math.round((passedCount / totalResults) * 100) : 0;
   const filtersActive = !isDefaultResultFilters(filters);
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const all = await fetchAllResults({ scope: "managed", ...queryParams });
+      if (all.length === 0) {
+        toast.info("No results to export.");
+        return;
+      }
+      const examTitle = filters.examId ? all.find((r) => r.examId === filters.examId)?.examTitle : undefined;
+      downloadCsv(resultsCsvFilename(examTitle), buildResultsCsv(all));
+      toast.success(`Exported ${all.length} result${all.length === 1 ? "" : "s"}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to export results");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Exam Results</h1>
-        <p className="text-muted-foreground">View and analyze examination results.</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Exam Results</h1>
+          <p className="text-muted-foreground">View and analyze examination results.</p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={handleExport}
+          disabled={exporting || totalResults === 0}
+          className="w-full sm:w-auto"
+          title={filtersActive ? "Export the results matching the current filters" : "Export all results"}
+        >
+          {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+          {exporting ? "Exporting…" : filtersActive ? "Export filtered CSV" : "Export CSV"}
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -101,6 +134,20 @@ export default function ResultsPage() {
           <CardContent><div className="text-xl sm:text-2xl font-bold">{avgPercentage}%</div></CardContent>
         </Card>
       </div>
+
+      {(summary?.pendingReview ?? 0) > 0 && filters.status !== "pending_review" && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+          <span className="flex items-center gap-2">
+            <PenLine className="h-4 w-4 text-amber-600" />
+            {summary!.pendingReview === 1
+              ? "1 result has essay answers waiting for your grade."
+              : `${summary!.pendingReview} results have essay answers waiting for your grade.`}
+          </span>
+          <Button size="sm" variant="outline" onClick={() => setFilters({ ...filters, status: "pending_review" })}>
+            Show them
+          </Button>
+        </div>
+      )}
 
       <ResultFilters
         value={filters}
@@ -134,9 +181,7 @@ export default function ResultsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-sm truncate">{result.examineeName || "Examinee"}</p>
-                    <Badge variant={result.passed ? "success" : "destructive"} className="text-xs shrink-0">
-                      {result.passed ? "Passed" : "Failed"}
-                    </Badge>
+                    <ResultOutcomeBadge result={result} className="text-xs shrink-0" />
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                     {result.examTitle || "Exam"} &middot; {formatDate(result.submittedAt || result.createdAt)}
@@ -199,9 +244,7 @@ export default function ResultsPage() {
                     <p className="text-xs text-muted-foreground">Score</p>
                   </div>
                   <div className="rounded-lg border p-3 text-center">
-                    <Badge variant={displayResult.passed ? "success" : "destructive"} className="text-sm">
-                      {displayResult.passed ? "PASSED" : "FAILED"}
-                    </Badge>
+                    <ResultOutcomeBadge result={displayResult} uppercase className="text-sm" />
                     <p className="text-xs text-muted-foreground mt-1">Status</p>
                   </div>
                 </div>
@@ -256,13 +299,24 @@ export default function ResultsPage() {
                 <Progress value={percentageSafe} className="h-3" />
 
                 {canShowReviewButton && (
-                  <Button variant="outline" className="w-full" asChild>
+                  <Button variant={isAwaitingGrading(displayResult) ? "default" : "outline"} className="w-full" asChild>
                     <Link href={`/dashboard/results/${displayResult.id}/review`}>
                       <Eye className="mr-2 h-4 w-4" />
-                      {isProctorOrAdmin ? "Review answers" : "View my answers"}
+                      {!isProctorOrAdmin
+                        ? "View my answers"
+                        : isAwaitingGrading(displayResult)
+                          ? displayResult.pendingReviewCount === 1
+                            ? "Grade 1 essay answer"
+                            : `Grade ${displayResult.pendingReviewCount ?? ""} essay answers`
+                          : "Review answers"}
                     </Link>
                   </Button>
                 )}
+                <Button variant="ghost" className="w-full" asChild>
+                  <Link href={`/dashboard/results/${displayResult.id}/slip`}>
+                    <Printer className="mr-2 h-4 w-4" /> Print result slip
+                  </Link>
+                </Button>
               </div>
             );
           })()}

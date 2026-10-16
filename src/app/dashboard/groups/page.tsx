@@ -26,6 +26,7 @@ import { Plus, Trash2, Loader2, Users, UserPlus, Eye, X, Search, Mail } from "lu
 import { toast } from "sonner";
 import { getInitials } from "@/lib/utils";
 import type { ExamineeGroup, User } from "@/types";
+import { GroupJoinCode } from "@/components/groups/group-join-code";
 
 export default function GroupsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -180,7 +181,9 @@ export default function GroupsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Examinee Groups</h1>
-          <p className="text-muted-foreground">Organize examinees into groups for bulk invitations.</p>
+          <p className="text-muted-foreground">
+            Organize examinees into groups for bulk invitations. Share a join code so examinees can add themselves.
+          </p>
         </div>
         <Button onClick={openCreate} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" /> Create Group
@@ -233,6 +236,7 @@ export default function GroupsPage() {
                     <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Add Members
                   </Button>
                 </div>
+                <GroupJoinCode group={group} />
               </CardContent>
             </Card>
           ))}

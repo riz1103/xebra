@@ -15,7 +15,8 @@ export function QuestionInsights({
   className?: string;
 }) {
   const ai = metadata?.ai;
-  if (!explanation?.trim() && !ai) return null;
+  const rubric = ai?.rubric || metadata?.rubric;
+  if (!explanation?.trim() && !ai && !rubric) return null;
 
   return (
     <div className={`space-y-1.5 rounded-md bg-muted/40 p-2.5 text-xs ${className}`}>
@@ -35,10 +36,10 @@ export function QuestionInsights({
           <MathText text={explanation} className="text-muted-foreground" />
         </p>
       )}
-      {ai?.rubric && (
+      {rubric && (
         <p className="whitespace-pre-wrap">
           <span className="font-medium">Rubric: </span>
-          <span className="text-muted-foreground">{ai.rubric}</span>
+          <span className="text-muted-foreground">{rubric}</span>
         </p>
       )}
       {ai && <QuestionSource source={ai} />}

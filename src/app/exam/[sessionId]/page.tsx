@@ -5,7 +5,7 @@ import { use, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { ExamQuestion, SessionQuestion, PhraseBlock } from "@/types";
+import type { ExamQuestion, ExamSession, SessionQuestion, PhraseBlock } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +28,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { toast } from "sonner";
 import {
   Clock, ChevronLeft, ChevronRight, Flag, CheckCircle,
-  AlertTriangle, Send, Loader2, Info, LayoutGrid,
+  AlertTriangle, Send, Loader2, Info, LayoutGrid, WifiOff, Cloud, CloudOff,
 } from "lucide-react";
 import { cn, formatDuration } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -37,16 +37,29 @@ import { getQuestionLayout } from "@/lib/question-layout";
 import { Textarea } from "@/components/ui/textarea";
 import { MathText, MathPreview } from "@/components/math/math-text";
 import { MathKeypad } from "@/components/math/math-keypad";
+import { MatchingInput, OrderingInput } from "@/components/questions/positional-answer";
 import { looksMathematical } from "@/lib/math-notation";
+import { clearExamBackup, mergeWithBackup, readExamBackup, writeExamBackup } from "@/lib/exam-backup";
+import { useExamDisplayPrefs } from "@/lib/exam-display";
+import { useIntegrityLogger } from "@/lib/integrity-logger";
+import { ExamDisplayMenu } from "@/components/exam/exam-display-menu";
+import { useT } from "@/lib/i18n";
+
+type AnswerValue = string | string[] | null;
+const sameAnswer = (a: AnswerValue | undefined, b: AnswerValue | undefined) =>
+  JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 const UNASSIGNED_PART_ID = "__unassigned";
 const TEXT_SAVE_DELAY_MS = 800;
+/** How often to check for proctor changes (extra time, ending the exam) */
+const STATUS_POLL_MS = 15_000;
 /** Answer boxes need visible borders on white backgrounds, especially on phone screens */
 const ANSWER_FIELD_CLASS =
   "border-2 border-foreground/30 bg-background text-base shadow-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 dark:border-foreground/25 dark:bg-muted/40";
 
 export default function ExamPage({ params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = use(params);
+  const t = useT();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isLoading: authLoading, isAuthenticated } = useAuthStore();
@@ -65,6 +78,38 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const [mathKeypadPref, setMathKeypadPref] = useState<boolean | null>(null);
   const answerScopeRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
+  /** Answers changed locally that the server hasn't confirmed yet */
+  const unsyncedRef = useRef<Set<string>>(new Set());
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
+  const currentPartRef = useRef(currentPart);
+  currentPartRef.current = currentPart;
+  const positionRestoredRef = useRef(false);
+  /** Proctor-granted extra time last seen from the server; null until the session loads */
+  const extraTimeRef = useRef<number | null>(null);
+  const { prefs: displayPrefs, setPrefs: setDisplayPrefs } = useExamDisplayPrefs();
+  const questionCardRef = useRef<HTMLDivElement>(null);
+  /** Set when a keyboard shortcut changes the question, so focus follows to the new question */
+  const focusQuestionRef = useRef(false);
+  const [timeAnnouncement, setTimeAnnouncement] = useState("");
+  const announcedThresholdsRef = useRef<Set<string>>(new Set());
+
+  const markUnsynced = useCallback((questionId: string) => {
+    unsyncedRef.current.add(questionId);
+    setUnsyncedCount(unsyncedRef.current.size);
+  }, []);
+
+  /** Clears questions whose current answer matches what the server just confirmed. */
+  const markConfirmed = useCallback((confirmed: Record<string, AnswerValue>) => {
+    for (const questionId of Object.keys(confirmed)) {
+      if (sameAnswer(answersRef.current[questionId], confirmed[questionId])) unsyncedRef.current.delete(questionId);
+    }
+    setUnsyncedCount(unsyncedRef.current.size);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -165,18 +210,35 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const phraseForBlock: PhraseBlock | undefined =
     rawPhrase && rawPhrase !== null && typeof rawPhrase === "object" ? (rawPhrase as PhraseBlock) : undefined;
 
-  // Initialize state from session
+  // Initialize state from session. Refetches (e.g. on window focus) must not drop answers the server
+  // hasn't confirmed yet, so those come from the local backup.
   useEffect(() => {
     if (session) {
-      setCurrentIndex(session.currentQuestionIndex || 0);
-      setAnswers(session.answers || {});
+      const backup = readExamBackup(sessionId);
+      const pendingLocal = Object.fromEntries(
+        [...unsyncedRef.current].map((id) => [id, answersRef.current[id] ?? null])
+      );
+      const merged = mergeWithBackup(session.answers || {}, backup);
+      const mergedAnswers = { ...merged.answers, ...pendingLocal };
+      unsyncedRef.current = new Set([...merged.unsynced, ...Object.keys(pendingLocal)]);
+      setUnsyncedCount(unsyncedRef.current.size);
+      setAnswers(mergedAnswers);
       setTimeRemaining(session.timeRemainingSeconds || 0);
+
+      const firstLoad = !positionRestoredRef.current;
+      positionRestoredRef.current = true;
+      if (firstLoad) {
+        const restorePart =
+          backup?.currentPart && questionsByPart?.[backup.currentPart] ? backup.currentPart : null;
+        setCurrentIndex(backup ? backup.currentIndex : session.currentQuestionIndex || 0);
+        if (restorePart) setCurrentPart(restorePart);
+      }
       
       // Initialize selected indices from session answers
       if (session.questions) {
         const initialIndices: Record<string, number> = {};
         session.questions.forEach((q) => {
-          const answer = session.answers?.[q.id];
+          const answer = mergedAnswers[q.id];
           if (answer && typeof answer === "string") {
             const index = q.options.findIndex((opt) => opt === answer);
             if (index >= 0) {
@@ -190,21 +252,25 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       // Initialize part selection
       if (hasParts && questionsByPart) {
         const firstPartId = Object.keys(questionsByPart)[0];
-        if (!currentPart) {
+        if (!currentPart && !(firstLoad && backup?.currentPart && questionsByPart[backup.currentPart])) {
           setCurrentPart(firstPartId);
         }
       }
       
-      // Initialize part time limits
+      if (extraTimeRef.current === null) extraTimeRef.current = session.extraTimeSeconds ?? 0;
+
+      // Part timers run on this device; refetches must not reset parts that already started counting down
       if (partTimeLimits) {
-        const initialPartTimes: Record<string, number> = {};
-        Object.keys(partTimeLimits).forEach((partId) => {
-          initialPartTimes[partId] = partTimeLimits[partId].timeLimitSeconds;
+        setPartTimeRemaining((prev) => {
+          const next = { ...prev };
+          Object.keys(partTimeLimits).forEach((partId) => {
+            if (next[partId] === undefined) next[partId] = partTimeLimits[partId].timeLimitSeconds;
+          });
+          return next;
         });
-        setPartTimeRemaining(initialPartTimes);
       }
     }
-  }, [session, hasParts, questionsByPart, partTimeLimits]);
+  }, [session, sessionId, hasParts, questionsByPart, partTimeLimits]);
 
   // Timer countdown
   useEffect(() => {
@@ -258,7 +324,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
               clearInterval(timerRef.current);
               timerRef.current = null;
             }
-            handleSubmit();
+            handleTimeUp();
             return 0;
           }
           return prev - 1;
@@ -291,7 +357,16 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const answerMutation = useMutation({
     mutationFn: ({ questionId, answer }: { questionId: string; answer: string | string[] | null }) =>
       api.answerQuestion(sessionId, questionId, { answer }),
-    onError: (err: Error) => toast.error("Failed to save answer: " + err.message),
+    onSuccess: (_data, { questionId, answer }) => markConfirmed({ [questionId]: answer }),
+    // Offline failures are shown by the banner; the answer stays in the local backup and resyncs later
+    onError: (err: Error) => {
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        toast.error("Couldn't save your answer yet. It's kept on this device and will retry automatically.", {
+          id: "answer-save-failed",
+          description: err.message,
+        });
+      }
+    },
   });
 
   // Typed answers (identification without blanks, essays) save after a pause instead of on every keystroke
@@ -309,6 +384,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const handleTextAnswer = (questionId: string, value: string) => {
     const answer = value.trim() ? value : null;
     setAnswers((prev) => ({ ...prev, [questionId]: answer }));
+    markUnsynced(questionId);
     if (pendingTextSave.current && pendingTextSave.current.questionId !== questionId) flushTextAnswer();
     if (pendingTextSave.current) clearTimeout(pendingTextSave.current.timer);
     pendingTextSave.current = { timer: setTimeout(flushTextAnswer, TEXT_SAVE_DELAY_MS), questionId, answer };
@@ -319,24 +395,17 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const saveMutation = useMutation({
     mutationFn: (payload: { currentQuestionIndex: number; answers: Record<string, string | string[] | null> }) =>
       api.updateExamSession(sessionId, payload),
-    onSuccess: (response) => {
+    onSuccess: (response, variables) => {
+      markConfirmed(variables.answers);
       const updated = response?.data;
-      if (updated) {
-        setTimeRemaining(updated.timeRemainingSeconds ?? 0);
-        if (updated.partTimeLimits) {
-          const next: Record<string, number> = {};
-          Object.keys(updated.partTimeLimits).forEach((partId) => {
-            next[partId] = updated.partTimeLimits![partId].timeLimitSeconds;
-          });
-          setPartTimeRemaining(next);
-        }
-      }
+      if (updated) setTimeRemaining(updated.timeRemainingSeconds ?? 0);
     },
   });
 
   const submitMutation = useMutation({
     mutationFn: () => api.submitExamSession(sessionId),
-    onSuccess: (data) => {
+    onSuccess: () => {
+      clearExamBackup(sessionId);
       queryClient.invalidateQueries({ queryKey: ["my-sessions"] });
       queryClient.invalidateQueries({ queryKey: ["my-results"] });
       toast.success("Exam submitted successfully!");
@@ -350,9 +419,11 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       if (!currentQuestion) return;
       const newAnswers = { ...answers, [currentQuestion.id]: answer };
       setAnswers(newAnswers);
+      answersRef.current = newAnswers;
+      markUnsynced(currentQuestion.id);
       answerMutation.mutate({ questionId: currentQuestion.id, answer });
     },
-    [currentQuestion, answers, answerMutation]
+    [currentQuestion, answers, answerMutation, markUnsynced]
   );
 
   const handleSingleAnswer = (indexStr: string) => {
@@ -428,10 +499,140 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     }
   };
 
-  const handleSubmit = useCallback(() => {
+  const { mutateAsync: saveSessionAsync } = saveMutation;
+  /** Sends every answer the server hasn't confirmed. Resolves false if they couldn't be saved. */
+  const resyncAnswers = useCallback(async (): Promise<boolean> => {
+    flushTextAnswer();
+    if (unsyncedRef.current.size === 0) return true;
+    const pending = Object.fromEntries(
+      [...unsyncedRef.current].map((id) => [id, answersRef.current[id] ?? null])
+    );
+    try {
+      await saveSessionAsync({ currentQuestionIndex: currentIndexRef.current, answers: pending });
+      return true;
+    } catch {
+      return false;
+    }
+  }, [flushTextAnswer, saveSessionAsync]);
+
+  const currentQuestionIdRef = useRef<string | undefined>(undefined);
+  currentQuestionIdRef.current = currentQuestion?.id;
+  const flushIntegrity = useIntegrityLogger(
+    sessionId,
+    !showInstructions && (session?.status === "in_progress" || session?.status === "in-progress"),
+    currentQuestionIdRef
+  );
+
+  const handleSubmit = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    const synced = await resyncAnswers();
+    if (!synced && typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You're offline, so the exam can't be submitted yet. Your answers are saved on this device; reconnect and submit again.");
+      return;
+    }
+    await flushIntegrity();
     submitMutation.mutate();
-  }, [submitMutation]);
+  }, [resyncAnswers, submitMutation, flushIntegrity]);
+
+  const inProgress = session?.status === "in_progress" || session?.status === "in-progress";
+
+  /** Applies extra time a proctor granted since the last check. Returns false once the session has ended. */
+  const applyServerTime = useCallback((latest: ExamSession) => {
+    if (latest.status !== "in_progress" && latest.status !== "in-progress") {
+      queryClient.invalidateQueries({ queryKey: ["exam-session", sessionId] });
+      return false;
+    }
+    if (typeof latest.timeRemainingSeconds === "number") setTimeRemaining(latest.timeRemainingSeconds);
+    const extra = latest.extraTimeSeconds ?? 0;
+    const previous = extraTimeRef.current;
+    extraTimeRef.current = extra;
+    if (previous !== null && extra > previous) {
+      const delta = extra - previous;
+      const part = currentPartRef.current;
+      if (part) {
+        setPartTimeRemaining((prev) => (prev[part] !== undefined ? { ...prev, [part]: prev[part] + delta } : prev));
+      }
+      const minutes = Math.round(delta / 60);
+      toast.success(`Your proctor gave you ${minutes} more minute${minutes === 1 ? "" : "s"}.`, { id: "extra-time" });
+    }
+    return true;
+  }, [queryClient, sessionId]);
+
+  // Pick up extra time or a proctor ending the exam without reloading the questions
+  useEffect(() => {
+    if (!inProgress) return;
+    const timer = setInterval(() => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      api.getExamSession(sessionId).then((res) => {
+        if (!res.data) return;
+        if (!applyServerTime(res.data)) {
+          toast.info("This exam has ended. Your saved answers were submitted.", { id: "exam-ended" });
+        }
+      }).catch(() => {});
+    }, STATUS_POLL_MS);
+    return () => clearInterval(timer);
+  }, [inProgress, sessionId, applyServerTime]);
+
+  /** The local clock ran out: confirm with the server first, since a proctor may have added time. */
+  const handleTimeUp = async () => {
+    try {
+      const res = await api.getExamSession(sessionId);
+      if (res.data && applyServerTime(res.data) && (res.data.timeRemainingSeconds ?? 0) > 0) return;
+    } catch {
+      // Fall through: submitting handles the offline case
+    }
+    handleSubmit();
+  };
+
+  // Keep a local copy of the answers so a crash, reload, or lost connection doesn't lose work
+  useEffect(() => {
+    if (!inProgress || !positionRestoredRef.current) return;
+    writeExamBackup(sessionId, {
+      answers,
+      unsynced: [...unsyncedRef.current],
+      currentIndex,
+      currentPart,
+    });
+  }, [inProgress, sessionId, answers, currentIndex, currentPart, unsyncedCount]);
+
+  useEffect(() => {
+    if (session?.status === "completed") clearExamBackup(sessionId);
+  }, [session?.status, sessionId]);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const goOnline = () => {
+      setIsOnline(true);
+      resyncAnswers().then((ok) => {
+        if (ok) toast.success("Back online. Your answers are synced.", { id: "exam-connection" });
+      });
+    };
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, [resyncAnswers]);
+
+  // Retry unsynced answers periodically while online (e.g. after a server hiccup)
+  useEffect(() => {
+    if (!inProgress || unsyncedCount === 0 || !isOnline) return;
+    const retry = setTimeout(() => void resyncAnswers(), 10_000);
+    return () => clearTimeout(retry);
+  }, [inProgress, unsyncedCount, isOnline, resyncAnswers]);
+
+  useEffect(() => {
+    if (!inProgress) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      flushTextAnswer();
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [inProgress, flushTextAnswer]);
 
   const toggleFlag = (questionId: string) => {
     setFlagged((prev) => {
@@ -455,11 +656,16 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   const answeredCount = getAnsweredCount();
   const progressPercentage = currentQuestions.length > 0 ? (answeredCount / currentQuestions.length) * 100 : 0;
-  const isMultipleAnswer = Array.isArray(currentQuestion?.correctAnswer) && currentQuestion.correctAnswer.length > 1;
+  // Examinees never receive correctAnswer, so the backend flags multi-answer questions instead
+  const isMultipleAnswer =
+    !!currentQuestion &&
+    (currentQuestion.multipleAnswers === true ||
+      (Array.isArray(currentQuestion.correctAnswer) && currentQuestion.correctAnswer.length > 1));
 
+  const positionalFormat = currentQuestion?.metadata?.answerFormat;
   const blankResult = currentQuestion ? parseBlanks(currentQuestion.questionText) : { segments: [], blankCount: 0 };
   const blankCount = blankResult.blankCount;
-  const isFillInTheBlank = blankCount > 0;
+  const isFillInTheBlank = blankCount > 0 && !positionalFormat;
   const hasOptionsForBlank = isFillInTheBlank && currentQuestion?.options?.length > 0;
   const currentLayout = currentQuestion ? layoutByTypeId.get(currentQuestion.questionTypeId) : undefined;
   // Questions without choices or blanks (direct identification, essay) still need somewhere to type
@@ -500,6 +706,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
             onPick?.();
           }}
           aria-label={`Question ${i + 1}${isAnswered ? ", answered" : ""}${isFlagged ? ", flagged" : ""}`}
+          aria-current={isCurrent ? "step" : undefined}
           className={cn(
             "relative flex items-center justify-center rounded-md text-xs font-medium transition-all",
             sizeClass,
@@ -527,10 +734,73 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         <span className="h-3 w-3 rounded bg-muted" /> Unanswered
       </span>
       <span className="flex items-center gap-1">
-        <Flag className="h-3 w-3 text-amber-500 fill-amber-500" /> Flagged
+        <Flag className="h-3 w-3 text-amber-500 fill-amber-500" /> {t("exam.flagged")}
       </span>
     </div>
   );
+
+  // Screen readers hear the time only at a few thresholds, not every second
+  const timerRunning = !showInstructions && inProgress;
+  useEffect(() => {
+    if (!timerRunning || currentPartTimeRemaining <= 0) return;
+    const scope = currentPart ?? "exam";
+    for (const [seconds, label] of [[300, "5 minutes"], [60, "1 minute"]] as const) {
+      const key = `${scope}:${seconds}`;
+      if (currentPartTimeRemaining <= seconds && !announcedThresholdsRef.current.has(key)) {
+        announcedThresholdsRef.current.add(key);
+        setTimeAnnouncement(`${label} remaining${currentPart ? " in this part" : ""}.`);
+        break;
+      }
+    }
+  }, [timerRunning, currentPartTimeRemaining, currentPart]);
+
+  useEffect(() => {
+    if (!focusQuestionRef.current) return;
+    focusQuestionRef.current = false;
+    questionCardRef.current?.focus();
+  }, [currentIndex, currentPart]);
+
+  const shortcutHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  shortcutHandlerRef.current = (e: KeyboardEvent) => {
+    if (!timerRunning || !currentQuestion || e.defaultPrevented) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (showSubmitDialog || navigatorOpen || submitMutation.isPending) return;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']")) return;
+    const isArrow = e.key === "ArrowRight" || e.key === "ArrowLeft";
+    // Arrow keys already move between options and part tabs
+    if (isArrow && target?.closest("[role='radiogroup'], [role='tablist'], [role='slider']")) return;
+
+    const key = e.key.toLowerCase();
+    if ((key === "n" || e.key === "ArrowRight") && canGoNext) {
+      e.preventDefault();
+      focusQuestionRef.current = true;
+      goNext();
+    } else if ((key === "p" || e.key === "ArrowLeft") && canGoPrevious) {
+      e.preventDefault();
+      focusQuestionRef.current = true;
+      goPrevious();
+    } else if (key === "f") {
+      e.preventDefault();
+      toggleFlag(currentQuestion.id);
+    } else if (/^[1-9]$/.test(e.key) && !isTextAnswer && !isFillInTheBlank && !positionalFormat) {
+      const index = Number(e.key) - 1;
+      const option = currentQuestion.options?.[index];
+      if (option === undefined) return;
+      e.preventDefault();
+      if (isMultipleAnswer) {
+        const current = (answers[currentQuestion.id] as string[]) || [];
+        handleMultipleAnswer(option, !current.includes(option));
+      } else {
+        handleSingleAnswer(String(index));
+      }
+    }
+  };
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => shortcutHandlerRef.current(e);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   if (authLoading || isLoading) return <PageLoader />;
   if (!authLoading && !isAuthenticated) return <PageLoader />;
@@ -600,6 +870,19 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                 </ul>
               </div>
             )}
+            {(session.timeMultiplier ?? 1) > 1 && (
+              <p className="rounded-md border bg-muted/50 p-3 text-sm">
+                Your time limits include an extra-time accommodation ({Number(session.timeMultiplier!.toFixed(2))}× the standard time).
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Use the display menu next to Submit to make text larger, turn on high contrast, or go full screen. Keyboard: N
+              and P move between questions, 1–9 choose an option, F flags a question.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              For exam integrity, switching tabs or windows, leaving full screen, and pasting or copying are noted for your
+              proctor. What you paste or copy is not recorded.
+            </p>
           </div>
           <DialogFooter>
             <Button onClick={() => setShowInstructions(false)} className="h-11 w-full sm:h-9">
@@ -614,14 +897,18 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   return (
     <div className="min-h-dvh bg-background">
       {/* Top Bar */}
-      <div className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-2 px-3 sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <Image src="/xevra-logo.png" alt="Xevra" width={32} height={32} className="rounded-lg shrink-0" />
-            <span className="text-sm font-semibold hidden truncate sm:inline">{session.exam?.title || "Exam"}</span>
+            <h1 className="text-sm font-semibold hidden truncate sm:inline">{session.exam?.title || "Exam"}</h1>
           </div>
-          <div className={cn("flex items-center gap-1.5 font-mono text-base font-bold tabular-nums sm:gap-2 sm:text-lg", timerColor)}>
-            <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+          <div
+            role="timer"
+            aria-label={`Time remaining${hasParts && currentPart ? ` in ${questionsByPart?.[currentPart]?.part.name ?? "this part"}` : ""}`}
+            className={cn("flex items-center gap-1.5 font-mono text-base font-bold tabular-nums sm:gap-2 sm:text-lg", timerColor)}
+          >
+            <Clock className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
             {formatDuration(currentPartTimeRemaining)}
             {hasParts && currentPart && partTimeLimits && (
               <span className="hidden text-xs font-normal ml-2 sm:inline">
@@ -629,22 +916,53 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
               </span>
             )}
           </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-9 shrink-0 sm:h-8"
-            onClick={() => setShowSubmitDialog(true)}
-          >
-            <Send className="mr-1 h-3 w-3" /> Submit
-          </Button>
+          <p className="sr-only" aria-live="assertive">
+            {timeAnnouncement}
+          </p>
+          <div className="flex shrink-0 items-center gap-1">
+            <ExamDisplayMenu prefs={displayPrefs} onChange={setDisplayPrefs} />
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-9 shrink-0 sm:h-8"
+              onClick={() => setShowSubmitDialog(true)}
+            >
+              <Send className="mr-1 h-3 w-3" /> {t("exam.submit")}
+            </Button>
+          </div>
         </div>
-      </div>
+      </header>
+
+      {!isOnline && (
+        <div role="status" className="border-b border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40">
+          <div className="mx-auto flex max-w-5xl items-start gap-2 px-3 py-2 text-sm text-amber-900 dark:text-amber-200 sm:px-4">
+            <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              You&apos;re offline. Keep answering; your answers are saved on this device and will sync when the connection returns.
+              The timer keeps running.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Progress */}
       <div className="mx-auto max-w-5xl px-3 py-3 sm:px-4">
         <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
           <span>{answeredCount} of {currentQuestions.length} answered</span>
-          <span>{Math.round(progressPercentage)}%</span>
+          <span className="flex items-center gap-3">
+            <span aria-live="polite" className="flex items-center gap-1">
+              {unsyncedCount > 0 ? (
+                isOnline ? (
+                  <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>
+                ) : (
+                  <><CloudOff className="h-3 w-3 text-amber-600" /> {unsyncedCount} saved on this device</>
+                )
+              ) : (
+                <><Cloud className="h-3 w-3 text-emerald-600" /> All answers saved</>
+              )}
+            </span>
+            <span>{Math.round(progressPercentage)}%</span>
+          </span>
         </div>
         <Progress value={progressPercentage} className="h-2" />
       </div>
@@ -713,7 +1031,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         </Sheet>
 
         {/* Question Content */}
-        <div className="flex-1 min-w-0 pb-24 lg:pb-0">
+        <main className="flex-1 min-w-0 pb-24 lg:pb-0">
           {currentQuestion ? (
             <>
             {shouldShowPhraseBlock && phraseForBlock && (
@@ -740,11 +1058,17 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                 </CardContent>
               </Card>
             )}
-            <Card>
+            <Card
+              ref={questionCardRef}
+              role="region"
+              tabIndex={-1}
+              aria-labelledby={`question-label-${currentQuestion.id}`}
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
             <CardHeader>
               <div className="flex items-center justify-between gap-2">
                 <Badge variant="outline" className="text-xs min-w-0">
-                  <span className="truncate">
+                  <span id={`question-label-${currentQuestion.id}`} className="truncate">
                     Question {currentIndex + 1} of {currentQuestions.length}
                     {hasParts && currentPart && questionsByPart && (
                       <span className="ml-2">
@@ -768,7 +1092,10 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                   </div>
                 </div>
                 {!isFillInTheBlank && (
-                  <CardTitle className="text-base sm:text-lg mt-3 leading-relaxed break-words whitespace-pre-wrap">
+                  <CardTitle
+                    id={`question-text-${currentQuestion.id}`}
+                    className="text-base sm:text-lg mt-3 leading-relaxed break-words whitespace-pre-wrap"
+                  >
                     <MathText text={currentQuestion.questionText} />
                   </CardTitle>
                 )}
@@ -777,7 +1104,20 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                 )}
               </CardHeader>
               <CardContent className="space-y-3">
-                {isFillInTheBlank ? (
+                {positionalFormat === "ordering" ? (
+                  <OrderingInput
+                    items={currentQuestion.options}
+                    value={Array.isArray(currentAnswer) ? (currentAnswer as string[]) : null}
+                    onChange={(order) => handleAnswer(order)}
+                  />
+                ) : positionalFormat === "matching" ? (
+                  <MatchingInput
+                    prompts={currentQuestion.metadata?.matchPrompts ?? []}
+                    options={currentQuestion.options}
+                    value={Array.isArray(currentAnswer) ? (currentAnswer as string[]) : null}
+                    onChange={(answer) => handleAnswer(answer.some(Boolean) ? answer : null)}
+                  />
+                ) : isFillInTheBlank ? (
                   // Fill in the blank: stem with one input/dropdown per blank
                   <div ref={answerScopeRef} className="space-y-3">
                     <p className="text-base sm:text-lg leading-relaxed flex flex-wrap items-baseline gap-x-1 gap-y-2">
@@ -861,7 +1201,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                   </div>
                 ) : isMultipleAnswer ? (
                   // Multiple answer (checkboxes)
-                  <div className="space-y-3">
+                  <div role="group" aria-labelledby={`question-text-${currentQuestion.id}`} className="space-y-3">
                     {currentQuestion.options.map((option, i) => {
                       const currentAnswers = (answers[currentQuestion.id] as string[]) || [];
                       const isChecked = currentAnswers.includes(option);
@@ -902,6 +1242,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                       <RadioGroup
                         value={radioValue}
                         onValueChange={handleSingleAnswer}
+                        aria-labelledby={`question-text-${currentQuestion.id}`}
                       >
                         {currentQuestion.options.map((option, i) => {
                           const isSelected = selectedIndex === i;
@@ -939,7 +1280,10 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
           )}
 
           {/* Navigation */}
-          <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-3 pt-2 pb-safe backdrop-blur lg:static lg:mt-4 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+          <nav
+            aria-label="Question navigation"
+            className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-3 pt-2 pb-safe backdrop-blur lg:static lg:mt-4 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none"
+          >
             <div className="mx-auto flex max-w-5xl items-center justify-between gap-2">
               <Button
                 variant="outline"
@@ -947,7 +1291,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
                 disabled={!canGoPrevious}
                 className="h-11 flex-1 lg:h-9 lg:flex-none"
               >
-                <ChevronLeft className="mr-1 h-4 w-4" /> <span className="max-[359px]:hidden">Previous</span>
+                <ChevronLeft className="mr-1 h-4 w-4" /> <span className="max-[359px]:hidden">{t("exam.previous")}</span>
               </Button>
 
               {/* Mobile question indicator */}
@@ -963,16 +1307,16 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
               {canGoNext ? (
                 <Button onClick={goNext} className="h-11 flex-1 lg:h-9 lg:flex-none">
-                  Next <ChevronRight className="ml-1 h-4 w-4" />
+                  {t("exam.next")} <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
               ) : (
                 <Button onClick={() => setShowSubmitDialog(true)} variant="default" className="h-11 flex-1 lg:h-9 lg:flex-none">
-                  <Send className="mr-1 h-4 w-4" /> Finish<span className="max-sm:hidden">&nbsp;&amp; Submit</span>
+                  <Send className="mr-1 h-4 w-4" /> {t("exam.finish")}<span className="max-sm:hidden whitespace-pre">{t("exam.andSubmit")}</span>
                 </Button>
               )}
             </div>
-          </div>
-        </div>
+          </nav>
+        </main>
       </div>
 
       {/* Submit Confirmation Dialog */}
@@ -984,36 +1328,40 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Submit Exam?</AlertDialogTitle>
+            <AlertDialogTitle>{t("exam.submitTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              You have answered {answeredCount} out of {currentQuestions.length} questions in {hasParts && currentPart && questionsByPart ? questionsByPart[currentPart]?.part.name : "this exam"}.
+              {t("exam.answeredOf", {
+                answered: answeredCount,
+                total: currentQuestions.length,
+                scope: (hasParts && currentPart && questionsByPart ? questionsByPart[currentPart]?.part.name : null) || t("exam.thisExam"),
+              })}
               {answeredCount < currentQuestions.length && (
                 <span className="block mt-1 text-amber-600 dark:text-amber-400 font-medium">
-                  Warning: {currentQuestions.length - answeredCount} question(s) are unanswered.
+                  {t("exam.unansweredWarning", { count: currentQuestions.length - answeredCount })}
                 </span>
               )}
               {hasParts && questionsByPart && Object.keys(questionsByPart).length > 1 && (
                 <span className="block mt-2 text-sm">
-                  Note: You can switch between parts using the tabs above.
+                  {t("exam.partsNote")}
                 </span>
               )}
               {flagged.size > 0 && (
                 <span className="block mt-1 text-amber-600 dark:text-amber-400">
-                  You have {flagged.size} flagged question(s).
+                  {t("exam.flaggedCount", { count: flagged.size })}
                 </span>
               )}
-              <span className="block mt-2">This action cannot be undone.</span>
+              <span className="block mt-2">{t("exam.cannotUndo")}</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Continue Exam</AlertDialogCancel>
+            <AlertDialogCancel>{t("exam.continue")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleSubmit}
               disabled={submitMutation.isPending}
               className="bg-primary"
             >
               {submitMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Submit Exam
+              {t("exam.submitExam")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1030,10 +1378,8 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
           <div className="flex flex-col items-center gap-4 max-w-sm px-6 text-center">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <div className="space-y-1">
-              <p className="text-base font-semibold">Submitting your exam</p>
-              <p className="text-sm text-muted-foreground">
-                Your exam is still being submitted. Please wait and do not close this page or navigate away.
-              </p>
+              <p className="text-base font-semibold">{t("exam.submitting")}</p>
+              <p className="text-sm text-muted-foreground">{t("exam.submittingWait")}</p>
             </div>
           </div>
         </div>

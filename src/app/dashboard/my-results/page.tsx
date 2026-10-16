@@ -13,14 +13,15 @@ import {
   useResultQueryParams,
   type ResultFilterState,
 } from "@/components/results/result-filters";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScoreHistoryChart } from "@/components/results/result-charts";
 import { Progress } from "@/components/ui/progress";
 import { DataTableSkeleton } from "@/components/ui/loading";
 import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
-import { BarChart3, Trophy, Target, ArrowLeft } from "lucide-react";
+import { BarChart3, Trophy, Target, ArrowLeft, TrendingUp } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import Link from "next/link";
+import { ResultOutcomeBadge, isAwaitingGrading } from "@/components/results/result-outcome-badge";
 
 export default function MyResultsPage() {
   const router = useRouter();
@@ -49,6 +50,11 @@ export default function MyResultsPage() {
         ...queryParams,
       }),
     placeholderData: keepPreviousData,
+  });
+
+  const { data: statsData } = useQuery({
+    queryKey: ["my-results", "stats", examIdFilter ?? "all"],
+    queryFn: () => api.getExamResultStats({ scope: "mine", examId: examIdFilter }),
   });
 
   const results = data?.data || [];
@@ -131,6 +137,22 @@ export default function MyResultsPage() {
         </Card>
       </div>
 
+      {(statsData?.data?.history?.length ?? 0) > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> {examIdFilter ? "Progress on this exam" : "Score history"}
+            </CardTitle>
+            <CardDescription>
+              Your graded results over time. Green dots passed, red dots failed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScoreHistoryChart data={statsData!.data!.history!} />
+          </CardContent>
+        </Card>
+      )}
+
       <ResultFilters
         value={filters}
         onChange={handleFiltersChange}
@@ -172,18 +194,18 @@ export default function MyResultsPage() {
               <Card className="transition-shadow hover:shadow-md cursor-pointer">
                 <CardContent className="flex items-center gap-3 py-4 sm:gap-4 sm:py-5">
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold sm:text-lg ${
-                  result.passed
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                    : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                  isAwaitingGrading(result)
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                    : result.passed
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                 }`}>
                   {result.percentage}%
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold truncate">{result.examTitle || "Exam"}</h3>
-                    <Badge variant={result.passed ? "success" : "destructive"} className="shrink-0">
-                      {result.passed ? "Passed" : "Failed"}
-                    </Badge>
+                    <ResultOutcomeBadge result={result} className="shrink-0" />
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Points: {result.score}/{result.totalPoints} &middot;

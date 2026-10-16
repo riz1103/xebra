@@ -34,7 +34,10 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const defaultTab = searchParams.get("tab") || "login";
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const redirectParam = searchParams.get("redirect");
+  // Only same-site paths; "//host" and "/\host" would leave the app
+  const redirectTo =
+    redirectParam && redirectParam.startsWith("/") && !/^\/[/\\]/.test(redirectParam) ? redirectParam : "/dashboard";
   const { setUser } = useAuthStore();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);

@@ -7,6 +7,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { getInitials, formatDate } from "@/lib/utils";
 import { User, Shield, Mail, Calendar } from "lucide-react";
+import { NotificationSettings } from "@/components/settings/notification-settings";
+import { PlanSettings } from "@/components/settings/plan-settings";
+import { WebhookSettings } from "@/components/settings/webhook-settings";
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
@@ -71,6 +74,12 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <NotificationSettings />
+
+      <PlanSettings />
+
+      {(user?.role === "proctor" || user?.role === "admin") && <WebhookSettings />}
 
       <Card>
         <CardHeader>

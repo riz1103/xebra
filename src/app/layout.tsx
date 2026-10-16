@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/providers/theme-provider";
 import { QueryProvider } from "@/providers/query-provider";
 import { AuthProvider } from "@/providers/auth-provider";
 import { Toaster } from "sonner";
+import { PwaRegister } from "@/components/pwa/pwa-register";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,8 +20,14 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "32x32" },
-      { url: "/xevra-logo.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
     ],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Xevra",
+    statusBarStyle: "default",
   },
 };
 
@@ -52,6 +59,7 @@ export default function RootLayout({
             <AuthProvider>
               {children}
               <Toaster richColors position="top-right" closeButton mobileOffset={{ top: 64 }} />
+              <PwaRegister />
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>

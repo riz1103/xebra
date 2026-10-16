@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Clock, FileText, Users, Settings, CheckCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, FileText, Users, Settings, CheckCircle, Loader2, Radio, Shuffle, Library } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
@@ -18,10 +18,19 @@ import { MathAnswerList, MathText } from "@/components/math/math-text";
 import { parseBlanks } from "@/lib/question-blanks";
 import { ExamOriginBadge } from "@/components/exam-generator/exam-origin-badge";
 import { ShareExamCard } from "@/components/exams/share-exam-card";
+import { DuplicateExamButton } from "@/components/exams/duplicate-exam-button";
+import { ItemAnalysisPanel } from "@/components/exams/item-analysis-panel";
+import { AssembleFromBankDialog } from "@/components/question-bank/assemble-from-bank-dialog";
+import { ImportToBankDialog } from "@/components/question-bank/import-to-bank-dialog";
+import { PositionalAnswerKey } from "@/components/questions/positional-answer";
+import { ExamCollaboratorsCard } from "@/components/exams/exam-collaborators-card";
+import { ExamActivityLog } from "@/components/exams/exam-activity-log";
 
 export default function ExamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const queryClient = useQueryClient();
+  const [assembleOpen, setAssembleOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["exam", id],
@@ -100,9 +109,17 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
               <span className={isUpdatingStatus ? "ml-2" : ""}>Reactivate</span>
             </Button>
           )}
+          {exam.status === "active" && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/dashboard/exams/${exam.id}/live`}>
+                <Radio className="mr-2 h-4 w-4 text-emerald-500" /> Live
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" size="sm" asChild>
             <Link href={`/dashboard/exams/${exam.id}/edit`}>Edit</Link>
           </Button>
+          <DuplicateExamButton examId={exam.id} />
         </div>
       </div>
 
@@ -119,6 +136,8 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="questions">Questions ({exam.questions?.length || exam.questionCount || 0})</TabsTrigger>
+            <TabsTrigger value="analysis">Item analysis</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -191,6 +210,7 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
             </Card>
 
             <ShareExamCard exam={exam} />
+            <ExamCollaboratorsCard examId={exam.id} />
           </div>
         </TabsContent>
 
@@ -198,11 +218,21 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
           <Card>
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
               <CardTitle className="text-base">Exam Questions</CardTitle>
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/dashboard/exams/${exam.id}/edit`}>
-                  <Users className="mr-1 h-3 w-3" /> Manage Questions
-                </Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => setAssembleOpen(true)}>
+                  <Shuffle className="mr-1 h-3 w-3" /> Add from bank
+                </Button>
+                {(exam.questions?.length ?? 0) > 0 && (
+                  <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+                    <Library className="mr-1 h-3 w-3" /> Save to bank
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/dashboard/exams/${exam.id}/edit`}>
+                    <Users className="mr-1 h-3 w-3" /> Manage Questions
+                  </Link>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {!exam.questions || exam.questions.length === 0 ? (
@@ -217,6 +247,14 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
                         <span className="min-w-0 break-words text-sm font-medium">Q{i + 1}. <MathText text={q.questionText} /></span>
                         <Badge variant="outline" className="text-xs shrink-0 ml-2">{q.points} pts</Badge>
                       </div>
+                      {q.metadata?.answerFormat ? (
+                        <div className="mt-3">
+                          <p className="mb-1 text-xs text-muted-foreground">
+                            {q.metadata.answerFormat === "matching" ? "Correct matches" : "Correct order"}
+                          </p>
+                          <PositionalAnswerKey question={q} />
+                        </div>
+                      ) : (
                       <div className="grid gap-1.5 mt-3">
                         {q.options.map((opt, oi) => {
                           const isCorrect = Array.isArray(q.correctAnswer)
@@ -231,7 +269,8 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
                           );
                         })}
                       </div>
-                      {q.options.length === 0 && [q.correctAnswer].flat().some(Boolean) && (
+                      )}
+                      {q.options.length === 0 && !q.metadata?.answerFormat && [q.correctAnswer].flat().some(Boolean) && (
                         <p className="mt-2 text-sm">
                           <span className="text-xs text-muted-foreground">Answer: </span>
                           <MathAnswerList
@@ -249,8 +288,19 @@ export default function ExamDetailPage({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="analysis">
+          <ItemAnalysisPanel examId={exam.id} questionOrder={(exam.questions ?? []).map((q) => q.id)} />
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <ExamActivityLog examId={exam.id} />
+        </TabsContent>
         </Tabs>
       </div>
+
+      <AssembleFromBankDialog open={assembleOpen} onOpenChange={setAssembleOpen} examId={exam.id} parts={exam.parts ?? undefined} />
+      <ImportToBankDialog open={importOpen} onOpenChange={setImportOpen} examId={exam.id} examTitle={exam.title} />
     </div>
   );
 }

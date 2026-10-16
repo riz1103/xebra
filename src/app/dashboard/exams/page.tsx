@@ -26,10 +26,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { DataTableSkeleton } from "@/components/ui/loading";
 import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
-import { Plus, Search, Pencil, Trash2, Eye, Clock, FileText } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Eye, Clock, FileText, Users } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { EXAM_ORIGIN_LABELS, ExamOriginBadge, examOrigin } from "@/components/exam-generator/exam-origin-badge";
+import { DuplicateExamButton } from "@/components/exams/duplicate-exam-button";
 import type { Exam, ExamOrigin } from "@/types";
 
 export default function ExamsPage() {
@@ -49,6 +50,13 @@ export default function ExamsPage() {
         status: statusFilter === "all" ? undefined : statusFilter,
       }),
   });
+
+  const { data: sharedData } = useQuery({
+    queryKey: ["exams", "shared"],
+    queryFn: () => api.getSharedExams(),
+    retry: false,
+  });
+  const sharedExams = (sharedData?.data ?? []).filter((exam) => exam.title.toLowerCase().includes(search.toLowerCase()));
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteExam(id),
@@ -185,6 +193,7 @@ export default function ExamsPage() {
                       <Pencil className="h-3 w-3" />
                     </Link>
                   </Button>
+                  <DuplicateExamButton examId={exam.id} iconOnly className="h-9 sm:h-8" />
                   <Button
                     variant="outline"
                     size="sm"
@@ -203,6 +212,44 @@ export default function ExamsPage() {
 
       {pagination && (
         <Pagination pagination={pagination} onPageChange={setPage} />
+      )}
+
+      {sharedExams.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <Users className="h-4 w-4" /> Shared with me
+            </h2>
+            <p className="text-sm text-muted-foreground">Exams other proctors made you a co-owner of.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {sharedExams.map((exam) => (
+              <Card key={exam.id} className="transition-shadow hover:shadow-md">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base line-clamp-2 leading-snug">{exam.title}</CardTitle>
+                    <Badge variant={statusColors[exam.status] || "outline"} className="shrink-0">{exam.status}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">Owner: {exam.createdByEmail || "another proctor"}</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" asChild className="h-9 flex-1 sm:h-8">
+                      <Link href={`/dashboard/exams/${exam.id}`}>
+                        <Eye className="mr-1 h-3 w-3" /> View
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild className="h-9 sm:h-8" aria-label="Edit exam">
+                      <Link href={`/dashboard/exams/${exam.id}/edit`}>
+                        <Pencil className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Delete Confirmation */}

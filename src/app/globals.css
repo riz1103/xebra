@@ -134,6 +134,50 @@
   --sidebar-border: oklch(0.3 0.015 265);
 }
 
+/* Exam screen high-contrast option: pure black/white, solid borders, strong focus ring */
+:root.high-contrast {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0 0 0);
+  --primary: oklch(0.32 0.2 265);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.92 0 0);
+  --secondary-foreground: oklch(0 0 0);
+  --muted: oklch(0.94 0 0);
+  --muted-foreground: oklch(0.2 0 0);
+  --accent: oklch(0.9 0 0);
+  --accent-foreground: oklch(0 0 0);
+  --border: oklch(0 0 0);
+  --input: oklch(0 0 0);
+  --ring: oklch(0.32 0.2 265);
+}
+:root.dark.high-contrast {
+  --background: oklch(0 0 0);
+  --foreground: oklch(1 0 0);
+  --card: oklch(0 0 0);
+  --card-foreground: oklch(1 0 0);
+  --popover: oklch(0 0 0);
+  --popover-foreground: oklch(1 0 0);
+  --primary: oklch(0.85 0.17 95);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.2 0 0);
+  --secondary-foreground: oklch(1 0 0);
+  --muted: oklch(0.15 0 0);
+  --muted-foreground: oklch(0.9 0 0);
+  --accent: oklch(0.25 0 0);
+  --accent-foreground: oklch(1 0 0);
+  --border: oklch(1 0 0);
+  --input: oklch(1 0 0);
+  --ring: oklch(0.85 0.17 95);
+}
+:root.high-contrast *:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
 /* Card and dialog padding: tighter on phones so nested content keeps usable width */
 :root {
   --card-pad: 1rem;
