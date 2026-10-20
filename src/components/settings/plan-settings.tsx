@@ -28,8 +28,8 @@ function formatPhp(centavos: number) {
 /** The user's plan, this month's AI requests against its quota, QR Ph upgrades, and admin assignment. */
 export function PlanSettings() {
   const { user } = useAuthStore();
-  const isAdmin = user?.role === "admin" || user?.role === "owner";
-  const canPay = user?.role === "proctor" || user?.role === "admin" || user?.role === "owner";
+  const isAdmin = user?.role === "admin";
+  const canPay = user?.role === "proctor" || user?.role === "admin";
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [planId, setPlanId] = useState<AiPlanId>("pro");
