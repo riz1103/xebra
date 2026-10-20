@@ -1,6 +1,7 @@
 import { Schema, type Part } from "firebase/ai";
 import { generateJson } from "@/lib/ai";
 import { MATH_NOTATION } from "@/lib/exam-generator";
+import { mathAnswersMatch } from "@/lib/math-notation";
 import type { ExtractedSource } from "@/lib/source-extract";
 import type { QuestionDifficulty } from "@/types";
 
@@ -145,6 +146,8 @@ export function practiceAnswerIsCorrect(question: PracticeQuestion, answer: stri
     .map(normalize)
     .filter(Boolean);
   if (keys.some((key) => key === given)) return true;
+  const rawKeys = [question.answer, ...(question.acceptedAnswers ?? [])];
+  if (rawKeys.some((key) => mathAnswersMatch(answer, key))) return true;
   if (question.type !== "identification") return false;
   return keys.some((key) => {
     const [a, b] = given.length >= key.length ? [given, key] : [key, given];

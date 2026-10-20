@@ -439,3 +439,274 @@ export function normalizeAnswer(value: unknown): string {
   s = s.replace(/(\d)\s+(?=[a-z(])/g, "$1");
   return s.replace(/\s+/g, " ");
 }
+
+/**
+ * True when two answers are the same math with pieces moved, not a different value.
+ * Addition and multiplication commute, so (x+8)(x-8) matches (x−8)(x+8), 8+x matches x+8,
+ * and 3×4 matches 4*3. Subtraction, division, and powers do not: 8−x is not x−8, and a factored
+ * answer is not the expanded polynomial. Words that are not expressions are left unchanged.
+ * Keep in sync with mathAnswersMatch in the backend's src/services/mathAnswerMatch.js.
+ */
+const MATH_FUNCS = new Set(["sqrt", "cbrt", "root4", "sin", "cos", "tan", "log", "ln", "abs", "exp", "pi"]);
+
+type Sign = 1 | -1;
+type Expr =
+  | { k: "atom"; v: string }
+  | { k: "sum"; terms: { sign: Sign; e: Expr }[] }
+  | { k: "prod"; sign: Sign; factors: Expr[] }
+  | { k: "div"; a: Expr; b: Expr }
+  | { k: "pow"; a: Expr; b: Expr }
+  | { k: "rel"; op: "<" | ">" | "<=" | ">="; a: Expr; b: Expr }
+  | { k: "eq"; op: "=" | "!=" | "~="; sides: Expr[] }
+  | { k: "call"; name: string; args: Expr[] };
+
+function negateExpr(e: Expr): Expr {
+  if (e.k === "prod") return { ...e, sign: e.sign === 1 ? -1 : 1 };
+  if (e.k === "sum") return { k: "sum", terms: e.terms.map((t) => ({ sign: (t.sign === 1 ? -1 : 1) as Sign, e: t.e })) };
+  return { k: "prod", sign: -1, factors: [e] };
+}
+
+function flattenExpr(e: Expr): Expr {
+  if (e.k === "sum") {
+    const terms: { sign: Sign; e: Expr }[] = [];
+    const walk = (sign: Sign, node: Expr) => {
+      const n = flattenExpr(node);
+      if (n.k === "sum") n.terms.forEach((t) => walk((sign * t.sign) as Sign, t.e));
+      else if (n.k === "prod" && n.sign === 1 && n.factors.length === 1) walk(sign, n.factors[0]);
+      else if (n.k === "prod" && n.sign === -1) walk((sign === 1 ? -1 : 1) as Sign, { ...n, sign: 1 });
+      else terms.push({ sign, e: n });
+    };
+    e.terms.forEach((t) => walk(t.sign, t.e));
+    return { k: "sum", terms };
+  }
+  if (e.k === "prod") {
+    let sign: Sign = e.sign;
+    const factors: Expr[] = [];
+    const walk = (node: Expr) => {
+      const n = flattenExpr(node);
+      if (n.k === "prod") {
+        if (n.sign === -1) sign = sign === 1 ? -1 : 1;
+        n.factors.forEach(walk);
+      } else factors.push(n);
+    };
+    e.factors.forEach(walk);
+    return { k: "prod", sign, factors };
+  }
+  if (e.k === "div") return { k: "div", a: flattenExpr(e.a), b: flattenExpr(e.b) };
+  if (e.k === "pow") return { k: "pow", a: flattenExpr(e.a), b: flattenExpr(e.b) };
+  if (e.k === "rel") return { k: "rel", op: e.op, a: flattenExpr(e.a), b: flattenExpr(e.b) };
+  if (e.k === "eq") return { k: "eq", op: e.op, sides: e.sides.map(flattenExpr) };
+  if (e.k === "call") return { k: "call", name: e.name, args: e.args.map(flattenExpr) };
+  return e;
+}
+
+function prepareMathInput(normalized: string): string | null {
+  if (!normalized || !/[0-9+\-*/^=<>()!]/.test(normalized)) return null;
+  if (/->|=>|<->|<=>/.test(normalized)) return null;
+  let s = normalized;
+  for (const name of MATH_FUNCS) {
+    if (name === "pi") continue;
+    s = s.split(`${name}(`).join(`\u0000${name}\u0000(`);
+  }
+  s = s.replace(/\)(?=[\da-z(])/g, ")*");
+  s = s.replace(/(\d)(?=[a-z(])/g, "$1*");
+  s = s.replace(/([a-z])(?=\()/g, "$1*");
+  s = s.replace(/\u0000([a-z0-9]+)\u0000/g, "$1");
+  return s;
+}
+
+class MathExprParser {
+  private i = 0;
+  private s: string;
+  constructor(source: string) {
+    this.s = source;
+  }
+
+  parse(): Expr {
+    const expr = this.parseRel();
+    if (this.i < this.s.length) throw new Error("math");
+    return expr;
+  }
+
+  private peek() {
+    return this.s[this.i] ?? "";
+  }
+
+  private starts(token: string) {
+    return this.s.startsWith(token, this.i);
+  }
+
+  private parseRel(): Expr {
+    const left = this.parseSum();
+    const op = this.relation();
+    if (!op) return left;
+    this.i += op.length;
+    const right = this.parseSum();
+    if (this.relation()) throw new Error("math");
+    if (op === "=" || op === "!=" || op === "~=") return { k: "eq", op, sides: [left, right] };
+    return { k: "rel", op, a: left, b: right };
+  }
+
+  private relation(): "=" | "!=" | "~=" | "<=" | ">=" | "<" | ">" | null {
+    if (this.starts("<=>") || this.starts("<->") || this.starts("->") || this.starts("=>")) throw new Error("math");
+    if (this.starts("!=")) return "!=";
+    if (this.starts("~=")) return "~=";
+    if (this.starts("<=")) return "<=";
+    if (this.starts(">=")) return ">=";
+    if (this.peek() === "=") return "=";
+    if (this.peek() === "<") return "<";
+    if (this.peek() === ">") return ">";
+    return null;
+  }
+
+  private parseSum(): Expr {
+    const terms: { sign: Sign; e: Expr }[] = [];
+    let sign: Sign = 1;
+    if (this.peek() === "+") this.i += 1;
+    else if (this.peek() === "-") {
+      sign = -1;
+      this.i += 1;
+    }
+    terms.push({ sign, e: this.parseProd() });
+    while (this.peek() === "+" || this.peek() === "-") {
+      const next: Sign = this.peek() === "+" ? 1 : -1;
+      this.i += 1;
+      terms.push({ sign: next, e: this.parseProd() });
+    }
+    if (terms.length === 1 && terms[0].sign === 1) return terms[0].e;
+    return { k: "sum", terms };
+  }
+
+  private parseProd(): Expr {
+    let expr = this.parsePow();
+    for (;;) {
+      if (this.peek() === "*") {
+        this.i += 1;
+        expr = { k: "prod", sign: 1, factors: [expr, this.parsePow()] };
+      } else if (this.peek() === "/") {
+        this.i += 1;
+        expr = { k: "div", a: expr, b: this.parsePow() };
+      } else break;
+    }
+    return expr;
+  }
+
+  private parsePow(): Expr {
+    const base = this.parseUnary();
+    if (this.peek() !== "^") return base;
+    this.i += 1;
+    return { k: "pow", a: base, b: this.parsePow() };
+  }
+
+  private parseUnary(): Expr {
+    if (this.peek() === "+") {
+      this.i += 1;
+      return this.parseUnary();
+    }
+    if (this.peek() === "-") {
+      this.i += 1;
+      return negateExpr(this.parseUnary());
+    }
+    return this.parsePrimary();
+  }
+
+  private parsePrimary(): Expr {
+    if (this.peek() === "(") {
+      this.i += 1;
+      const inner = this.parseRel();
+      if (this.peek() !== ")") throw new Error("math");
+      this.i += 1;
+      return inner;
+    }
+    if (/[\d.]/.test(this.peek())) {
+      const match = /^(\d*\.?\d+)/.exec(this.s.slice(this.i));
+      if (!match || match[1] === "" || match[1] === ".") throw new Error("math");
+      this.i += match[1].length;
+      return { k: "atom", v: match[1] };
+    }
+    if (/[a-z]/.test(this.peek())) {
+      const match = /^[a-z]+/.exec(this.s.slice(this.i));
+      if (!match) throw new Error("math");
+      const name = match[0];
+      if (name.length > 1 && !MATH_FUNCS.has(name)) throw new Error("math");
+      this.i += name.length;
+      if (this.peek() === "(" && name !== "pi") {
+        this.i += 1;
+        const args = [this.parseRel()];
+        while (this.peek() === ",") {
+          this.i += 1;
+          args.push(this.parseRel());
+        }
+        if (this.peek() !== ")") throw new Error("math");
+        this.i += 1;
+        return { k: "call", name, args };
+      }
+      return { k: "atom", v: name };
+    }
+    throw new Error("math");
+  }
+}
+
+function parenExpr(e: Expr, slot: "factor" | "term" | "pow" | "exp" | "divl" | "divr"): string {
+  const flat = flattenExpr(e);
+  const text = canonicalExpr(flat);
+  if (flat.k === "sum" || flat.k === "eq" || flat.k === "rel") return `(${text})`;
+  if ((slot === "factor" || slot === "exp" || slot === "divr" || slot === "pow") && (flat.k === "div" || flat.k === "pow" || flat.k === "prod")) {
+    return `(${text})`;
+  }
+  if (slot === "divl" && (flat.k === "div" || flat.k === "prod")) return `(${text})`;
+  return text;
+}
+
+function canonicalExpr(e: Expr): string {
+  e = flattenExpr(e);
+  if (e.k === "atom") return /^-?\d+(\.\d+)?$/.test(e.v) && Number.isFinite(Number(e.v)) ? String(Number(e.v)) : e.v;
+  if (e.k === "call") return `${e.name}(${e.args.map((arg) => canonicalExpr(arg)).join(",")})`;
+  if (e.k === "pow") return `${parenExpr(e.a, "pow")}^${parenExpr(e.b, "exp")}`;
+  if (e.k === "div") return `${parenExpr(e.a, "divl")}/${parenExpr(e.b, "divr")}`;
+  if (e.k === "prod") {
+    if (e.factors.length === 1 && e.sign === 1) return canonicalExpr(e.factors[0]);
+    const parts = e.factors.map((factor) => parenExpr(factor, "factor"));
+    if (e.sign === -1) parts.push("-1");
+    parts.sort((a, b) => a.localeCompare(b));
+    return parts.join("*");
+  }
+  if (e.k === "sum") {
+    if (e.terms.length === 1 && e.terms[0].sign === 1) return canonicalExpr(e.terms[0].e);
+    if (e.terms.length === 1) return canonicalExpr(negateExpr(e.terms[0].e));
+    const parts = e.terms.map((term) => ({ sign: term.sign, s: parenExpr(term.e, "term") }));
+    parts.sort((a, b) => a.s.localeCompare(b.s) || a.sign - b.sign);
+    return parts
+      .map((part, index) => (index === 0 ? (part.sign === -1 ? `-${part.s}` : part.s) : part.sign === -1 ? `-${part.s}` : `+${part.s}`))
+      .join("");
+  }
+  if (e.k === "eq") return e.sides.map((side) => canonicalExpr(side)).sort((a, b) => a.localeCompare(b)).join(e.op);
+  let op = e.op;
+  let left = canonicalExpr(e.a);
+  let right = canonicalExpr(e.b);
+  if (left.localeCompare(right) > 0) {
+    [left, right] = [right, left];
+    op = op === "<" ? ">" : op === ">" ? "<" : op === "<=" ? ">=" : "<=";
+  }
+  return `${left}${op}${right}`;
+}
+
+function canonicalMath(normalized: string): string | null {
+  const prepared = prepareMathInput(normalized);
+  if (!prepared) return null;
+  try {
+    return canonicalExpr(new MathExprParser(prepared).parse());
+  } catch {
+    return null;
+  }
+}
+
+export function mathAnswersMatch(a: unknown, b: unknown): boolean {
+  const left = normalizeAnswer(a);
+  const right = normalizeAnswer(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const canonicalLeft = canonicalMath(left);
+  const canonicalRight = canonicalMath(right);
+  return canonicalLeft != null && canonicalLeft === canonicalRight;
+}

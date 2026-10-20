@@ -868,7 +868,13 @@ export interface AiUsageStatus {
     /** Examinees' daily AI request cap; null for staff */
     dailyRequestLimit?: number | null;
   };
-  plan?: AiPlan & { requestsThisMonth: number };
+  plan?: AiPlan & {
+    requestsThisMonth: number;
+    /** When the current 30-day paid period ends. Null on the free plan. */
+    expiresAt?: string | null;
+    /** Purchased requests left after the plan quota is used. */
+    extraRequests?: number;
+  };
 }
 
 export type AiPlanId = "free" | "pro" | "school";
@@ -882,15 +888,26 @@ export interface AiPlan {
   currency?: "PHP" | null;
 }
 
+export interface AiPack {
+  id: "10" | "25" | "50";
+  requests: number;
+  priceCentavos: number;
+  currency: "PHP";
+}
+
 export interface PaymongoCheckout {
   paymentIntentId: string;
-  plan: "pro" | "school";
+  /** `pro` or `school` for a plan, or `pack:10` style for extra requests. */
+  plan: string;
+  kind?: "subscription" | "pack";
+  requests?: number | null;
   amount: number;
   currency: "PHP";
   status: "pending" | "paid" | "expired" | "failed";
   qrImageUrl: string | null;
   /** Present only for a test-mode secret key. Opens PayMongo's Authorize / Fail page. */
   testUrl?: string | null;
+  /** When this QR code expires, not when the plan expires. */
   expiresAt: string;
 }
 

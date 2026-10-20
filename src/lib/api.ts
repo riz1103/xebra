@@ -62,6 +62,7 @@ import type {
   StudyTopicsSummary,
   Certificate,
   AiPlan,
+  AiPack,
   PaymongoCheckout,
   AiPlanId,
   ExamCollaborators,
@@ -724,7 +725,7 @@ class ApiClient {
   }
 
   async getPlans() {
-    const { data } = await this.client.get<ApiResponse<AiPlan[]>>("/api/ai-usage/plans");
+    const { data } = await this.client.get<ApiResponse<AiPlan[]> & { packs?: AiPack[] }>("/api/ai-usage/plans");
     return data;
   }
 
@@ -886,8 +887,8 @@ class ApiClient {
     return data;
   }
 
-  async startPaymongoCheckout(plan: "pro" | "school") {
-    const { data } = await this.client.post<ApiResponse<PaymongoCheckout>>("/api/integrations/paymongo/checkout", { plan });
+  async startPaymongoCheckout(body: { plan: "pro" | "school" } | { pack: "10" | "25" | "50" }) {
+    const { data } = await this.client.post<ApiResponse<PaymongoCheckout>>("/api/integrations/paymongo/checkout", body);
     return data;
   }
 

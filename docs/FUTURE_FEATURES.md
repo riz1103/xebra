@@ -63,7 +63,7 @@ These are the foundation; keep listed so we don’t re-propose them.
 | Status | Feature | Notes | Where |
 |--------|---------|-------|-------|
 | `inc` | Integrations status UI | Shows configured vs not; Connect actions hit stubs | FE `IntegrationsSettings`; BE `integrationsController` |
-| `inc` | PayMongo QR Ph (pro / school plans) | Checkout, status poll, and webhook are wired. Needs `PAYMONGO_*` env on the API and a dashboard webhook before it can charge | `POST /api/integrations/paymongo/checkout` |
+| `inc` | PayMongo QR Ph (30-day plans and extra AI requests) | Checkout, status poll, and webhook are wired. A payment covers 30 days; paying again renews it. Needs `PAYMONGO_*` env on the API and a dashboard webhook before it can charge | `POST /api/integrations/paymongo/checkout` |
 | `not-started` | Invoices, seat limits, plan expiry | QR Ph upgrade stays until an admin changes it | — |
 | `not-started` | Paid AI budget top-ups | Plans upgrade via QR Ph; extra quota packs do not | BE `ai-usage` |
 | `inc` | Web push subscribe API | Saves subscription when VAPID set; sending/scheduling limited under Netlify | `push/subscribe`, SW push listener |
@@ -144,5 +144,6 @@ These are the foundation; keep listed so we don’t re-propose them.
 |------|--------|
 | 2026-04-16 | Initial inventory from current FE + BE codebase |
 | 2026-10-20 | Replaced Stripe Checkout with PayMongo QR Ph (code wired; env and webhook still required to charge) |
+| 2026-10-20 | QR Ph plans last 30 days and can be renewed; extra AI request packs are 10/₱30, 25/₱75, and 50/₱150; free quota default is 8 |
 
 When you implement something, add a row here and flip the table status above.

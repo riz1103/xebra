@@ -25,6 +25,25 @@ function formatPhp(centavos: number) {
   return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(centavos / 100);
 }
 
+type CheckoutTarget = { plan: "pro" | "school" } | { pack: "10" | "25" | "50" };
+
+function targetKey(target: CheckoutTarget) {
+  return "plan" in target ? target.plan : `pack:${target.pack}`;
+}
+
+function isPackCheckout(checkout: PaymongoCheckout) {
+  return checkout.kind === "pack" || checkout.plan.startsWith("pack:");
+}
+
+function checkoutTitle(checkout: PaymongoCheckout) {
+  if (isPackCheckout(checkout)) {
+    const count = checkout.requests ?? checkout.plan.replace("pack:", "");
+    return `${formatPhp(checkout.amount)} for ${count} extra AI requests`;
+  }
+  const name = checkout.plan === "school" ? "School" : "Pro";
+  return `${formatPhp(checkout.amount)} for 30 days of the ${name} plan`;
+}
+
 /** The user's plan, this month's AI requests against its quota, QR Ph upgrades, and admin assignment. */
 export function PlanSettings() {
   const { user } = useAuthStore();
@@ -45,7 +64,7 @@ export function PlanSettings() {
     queryKey: ["ai-plans"],
     queryFn: () => api.getPlans(),
     retry: false,
-    staleTime: 60 * 60 * 1000,
+    staleTime: 60 * 1000,
   });
   const { data: integrations } = useQuery({
     queryKey: ["integrations-status"],
@@ -55,6 +74,7 @@ export function PlanSettings() {
   });
   const plan = usageData?.data?.plan;
   const plans = plansData?.data ?? [];
+  const packs = plansData?.packs ?? [];
   const paymongoReady = !!integrations?.data?.paymongo;
 
   const statusQuery = useQuery({
@@ -71,7 +91,11 @@ export function PlanSettings() {
   useEffect(() => {
     if (live?.status !== "paid" || celebrated.current === live.paymentIntentId) return;
     celebrated.current = live.paymentIntentId;
-    toast.success(`You're on the ${live.plan === "school" ? "School" : "Pro"} plan`);
+    toast.success(
+      isPackCheckout(live)
+        ? `Added ${live.requests ?? ""} extra AI requests`
+        : `You're on the ${live.plan === "school" ? "School" : "Pro"} plan for 30 days`
+    );
     queryClient.invalidateQueries({ queryKey: ["ai-usage"] });
   }, [live, queryClient]);
 
@@ -85,7 +109,7 @@ export function PlanSettings() {
   });
 
   const payMutation = useMutation({
-    mutationFn: (next: "pro" | "school") => api.startPaymongoCheckout(next),
+    mutationFn: (target: CheckoutTarget) => api.startPaymongoCheckout(target),
     onSuccess: (res) => {
       if (res.data) setCheckout(res.data);
     },
@@ -101,7 +125,7 @@ export function PlanSettings() {
         <CardTitle className="flex items-center gap-2">
           <Gauge className="h-4 w-4" /> Plan & AI usage
         </CardTitle>
-        <CardDescription>AI exam generation, grading suggestions and practice quizzes count toward your monthly quota.</CardDescription>
+        <CardDescription>AI exam generation, grading suggestions, and practice quizzes count toward your quota.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         {isLoading ? (
@@ -111,10 +135,16 @@ export function PlanSettings() {
             <div className="flex items-center justify-between">
               <Badge variant="outline">{plan.name} plan</Badge>
               <span className="text-muted-foreground">
-                {plan.requestsThisMonth} / {plan.monthlyRequests} AI requests this month
+                {plan.requestsThisMonth} / {plan.monthlyRequests} AI requests {plan.expiresAt ? "this period" : "this month"}
+                {(plan.extraRequests ?? 0) > 0 ? ` · ${plan.extraRequests} extra left` : ""}
               </span>
             </div>
             <Progress value={used} className={cn("h-2", used >= 90 && "[&>div]:bg-red-500")} />
+            {plan.expiresAt ? (
+              <p className="text-xs text-muted-foreground">
+                Access until {new Date(plan.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}. Pay again before then to keep this plan.
+              </p>
+            ) : null}
           </div>
         ) : (
           <p className="text-muted-foreground">Usage is unavailable right now.</p>
@@ -123,29 +153,33 @@ export function PlanSettings() {
         {plans.length > 0 && (
           <div className="grid gap-2 sm:grid-cols-3">
             {plans.map((p) => {
-              const upgrade = canPay && paymongoReady && p.id !== "free" && (PLAN_RANK[p.id] ?? 0) > currentRank && p.priceCentavos;
+              const renew = canPay && paymongoReady && p.id !== "free" && p.id === plan?.id && !!plan?.expiresAt && !!p.priceCentavos;
+              const upgrade = canPay && paymongoReady && p.id !== "free" && (PLAN_RANK[p.id] ?? 0) > currentRank && !!p.priceCentavos;
+              const target: CheckoutTarget | null = renew || upgrade ? { plan: p.id as "pro" | "school" } : null;
               return (
                 <div
                   key={p.id}
                   className={cn("rounded-lg border p-3", p.id === plan?.id && "border-primary bg-primary/5")}
                 >
                   <p className="font-semibold">{p.name}</p>
-                  <p className="text-xs text-muted-foreground">{p.monthlyRequests.toLocaleString()} AI requests / month</p>
+                  <p className="text-xs text-muted-foreground">
+                    {p.monthlyRequests.toLocaleString()} AI requests {p.id === "free" ? "/ month" : "/ 30 days"}
+                  </p>
                   {p.priceCentavos ? (
-                    <p className="mt-1 text-xs font-medium">{formatPhp(p.priceCentavos)}</p>
+                    <p className="mt-1 text-xs font-medium">{formatPhp(p.priceCentavos)} / 30 days</p>
                   ) : null}
-                  {upgrade ? (
+                  {target ? (
                     <Button
                       size="sm"
                       className="mt-2 w-full"
                       variant="outline"
                       disabled={payMutation.isPending}
-                      onClick={() => payMutation.mutate(p.id as "pro" | "school")}
+                      onClick={() => payMutation.mutate(target)}
                     >
-                      {payMutation.isPending && payMutation.variables === p.id ? (
+                      {payMutation.isPending && payMutation.variables && targetKey(payMutation.variables) === targetKey(target) ? (
                         <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                       ) : null}
-                      Pay with QR Ph
+                      {renew ? "Renew 30 days" : "Pay with QR Ph"}
                     </Button>
                   ) : null}
                 </div>
@@ -153,9 +187,33 @@ export function PlanSettings() {
             })}
           </div>
         )}
+        {canPay && paymongoReady && packs.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium">Extra AI requests</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {packs.map((pack) => {
+                const target: CheckoutTarget = { pack: pack.id };
+                return (
+                  <Button
+                    key={pack.id}
+                    size="sm"
+                    variant="outline"
+                    disabled={payMutation.isPending}
+                    onClick={() => payMutation.mutate(target)}
+                  >
+                    {payMutation.isPending && payMutation.variables && targetKey(payMutation.variables) === targetKey(target) ? (
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    ) : null}
+                    {pack.requests} for {formatPhp(pack.priceCentavos)}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">
           {canPay
-            ? "A QR Ph payment upgrades this account until an admin changes the plan. It is not a monthly subscription."
+            ? "A QR Ph payment covers 30 days. Pay again before it ends to keep the plan. Nothing is charged automatically. Extra requests stay on the account until they are used."
             : "To change your plan, contact your Xebra administrator."}
         </p>
 
@@ -203,20 +261,32 @@ export function PlanSettings() {
             <DialogDescription>
               {live
                 ? live.testUrl
-                  ? `${formatPhp(live.amount)} for the ${live.plan === "school" ? "School" : "Pro"} plan. Test mode does not use GCash.`
-                  : `${formatPhp(live.amount)} for the ${live.plan === "school" ? "School" : "Pro"} plan. Scan with any bank or e-wallet app.`
+                  ? `${checkoutTitle(live)}. Test mode does not use GCash.`
+                  : `${checkoutTitle(live)}. Scan with any bank or e-wallet app.`
                 : ""}
             </DialogDescription>
           </DialogHeader>
           {live?.status === "paid" ? (
-            <p className="text-sm">Payment received. This account is on the {live.plan === "school" ? "School" : "Pro"} plan.</p>
+            <p className="text-sm">
+              {isPackCheckout(live)
+                ? `Payment received. ${live.requests ?? ""} extra AI requests were added.`
+                : `Payment received. This account is on the ${live.plan === "school" ? "School" : "Pro"} plan for 30 days.`}
+            </p>
           ) : live?.status === "expired" || live?.status === "failed" ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">This code is no longer payable. Generate a new one to try again.</p>
               <Button
                 className="w-full"
                 disabled={payMutation.isPending}
-                onClick={() => live && payMutation.mutate(live.plan)}
+                onClick={() => {
+                  if (!live) return;
+                  if (isPackCheckout(live)) {
+                    const id = (live.plan.startsWith("pack:") ? live.plan.slice(5) : "") as "10" | "25" | "50";
+                    if (id) payMutation.mutate({ pack: id });
+                  } else if (live.plan === "pro" || live.plan === "school") {
+                    payMutation.mutate({ plan: live.plan });
+                  }
+                }}
               >
                 {payMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 New QR code
