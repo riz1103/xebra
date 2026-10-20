@@ -14,7 +14,14 @@ const INSTALL_DISMISSED_KEY = "xebra:pwa-install-dismissed";
 /** Registers the service worker (production only) and offers a one-time "Install app" prompt. */
 export function PwaRegister() {
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
+    if (!("serviceWorker" in navigator)) return;
+    // A worker left over from a production session cache-firsts dev chunks and hides new UI.
+    if (process.env.NODE_ENV !== "production") {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => reg.unregister());
+      });
+      return;
+    }
     // Query param helps the browser pick up a new worker when BUILD_ID changes
     navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(BUILD_ID)}`).catch(() => {
       // Installability is optional; the app works the same without the worker

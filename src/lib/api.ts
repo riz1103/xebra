@@ -62,6 +62,7 @@ import type {
   StudyTopicsSummary,
   Certificate,
   AiPlan,
+  PaymongoCheckout,
   AiPlanId,
   ExamCollaborators,
   ExamCollaborator,
@@ -863,7 +864,8 @@ class ApiClient {
   async getIntegrationStatus() {
     const { data } = await this.client.get<
       ApiResponse<{
-        stripe: boolean;
+        paymongo: boolean;
+        paymongoWebhook: boolean;
         push: boolean;
         googleClassroom: boolean;
         lti: boolean;
@@ -881,6 +883,18 @@ class ApiClient {
 
   async subscribePush(payload: { endpoint: string; keys: { p256dh: string; auth: string } }) {
     const { data } = await this.client.post<ApiResponse<null>>("/api/integrations/push/subscribe", payload);
+    return data;
+  }
+
+  async startPaymongoCheckout(plan: "pro" | "school") {
+    const { data } = await this.client.post<ApiResponse<PaymongoCheckout>>("/api/integrations/paymongo/checkout", { plan });
+    return data;
+  }
+
+  async getPaymongoCheckout(paymentIntentId: string) {
+    const { data } = await this.client.get<ApiResponse<PaymongoCheckout>>(
+      `/api/integrations/paymongo/checkout/${paymentIntentId}`
+    );
     return data;
   }
 }

@@ -877,6 +877,21 @@ export interface AiPlan {
   id: AiPlanId;
   name: string;
   monthlyRequests: number;
+  /** QR Ph price in centavos. Null until the server has a price for this plan. */
+  priceCentavos?: number | null;
+  currency?: "PHP" | null;
+}
+
+export interface PaymongoCheckout {
+  paymentIntentId: string;
+  plan: "pro" | "school";
+  amount: number;
+  currency: "PHP";
+  status: "pending" | "paid" | "expired" | "failed";
+  qrImageUrl: string | null;
+  /** Present only for a test-mode secret key. Opens PayMongo's Authorize / Fail page. */
+  testUrl?: string | null;
+  expiresAt: string;
 }
 
 // ============ Sharing, activity log & webhooks ============

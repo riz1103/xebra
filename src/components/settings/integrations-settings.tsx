@@ -69,11 +69,15 @@ export function IntegrationsSettings() {
       ) : null,
     },
     {
-      id: "stripe",
+      id: "paymongo",
       icon: Plug,
-      title: "Paid plans (Stripe)",
-      detail: "Checkout for Pro/School. Needs STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO, STRIPE_PRICE_SCHOOL.",
-      ok: !!status?.stripe,
+      title: "Paid plans (QR Ph)",
+      detail: status?.paymongo
+        ? status.paymongoWebhook
+          ? "QR Ph is ready. Proctors pay from Plan & AI usage."
+          : "Checkout works on this page. Add PAYMONGO_WEBHOOK_SECRET so a plan still applies if the buyer closes the tab."
+        : "Needs PAYMONGO_SECRET_KEY plus PAYMONGO_PRICE_PRO_CENTAVOS and PAYMONGO_PRICE_SCHOOL_CENTAVOS (centavos, PHP 1.00 = 100).",
+      ok: !!status?.paymongo,
       action: null,
     },
     {
