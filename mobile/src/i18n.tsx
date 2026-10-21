@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { staffEn, staffFil, type StaffKey } from "./staff-messages";
 
 export const LOCALES = { en: "English", fil: "Filipino" } as const;
 export type Locale = keyof typeof LOCALES;
@@ -272,9 +273,9 @@ const en = {
   "proctor.submitError": "Could not submit the request.",
 } as const;
 
-export type MessageKey = keyof typeof en;
+export type MessageKey = keyof typeof en | StaffKey;
 
-const fil: Record<MessageKey, string> = {
+const fil: Record<keyof typeof en, string> = {
   "login.lead": "Sagutan ang iyong mga pagsusulit sa telepono.",
   "login.light": "Maliwanag",
   "login.dark": "Madilim",
@@ -542,7 +543,10 @@ const fil: Record<MessageKey, string> = {
   "proctor.submitError": "Hindi maisumite ang kahilingan.",
 };
 
-const MESSAGES: Record<Locale, Record<MessageKey, string>> = { en, fil };
+const MESSAGES: Record<Locale, Record<MessageKey, string>> = {
+  en: { ...en, ...staffEn },
+  fil: { ...fil, ...staffFil },
+};
 const STORAGE_KEY = "xevra-locale";
 
 interface LocaleValue {
@@ -571,7 +575,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback(
     (key: MessageKey, vars?: Record<string, string | number>) => {
-      const template = MESSAGES[locale][key] ?? en[key];
+      const template = MESSAGES[locale][key] ?? MESSAGES.en[key];
       if (!vars) return template;
       return template.replace(/\{(\w+)\}/g, (match, name) => (name in vars ? String(vars[name]) : match));
     },

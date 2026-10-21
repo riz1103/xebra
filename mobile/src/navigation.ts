@@ -1,4 +1,5 @@
 export type RootStackParamList = {
+  Landing: undefined;
   Login: undefined;
   Home: undefined;
   Profile: undefined;
@@ -9,4 +10,21 @@ export type RootStackParamList = {
   Certificate: { resultId: string };
   Verify: { code: string };
   ProctorRequest: undefined;
+  Overview: undefined;
+  ProctorHub: undefined;
+  ManagedExams: undefined;
+  ExamForm: { examId?: string };
+  LiveMonitor: { examId: string };
+  QuestionBank: undefined;
+  Bundles: undefined;
+  Invitations: undefined;
+  Groups: undefined;
+  ManagedResults: undefined;
+  StaffReview: { resultId: string };
+  ScoreSlip: { resultId: string };
+  Organizations: undefined;
+  OrgDetail: { orgId: string };
+  Settings: undefined;
+  QuestionTypes: undefined;
+  AdminRequests: undefined;
 };

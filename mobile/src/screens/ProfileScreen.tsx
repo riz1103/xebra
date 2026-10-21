@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
+import type { RootStackParamList } from "../navigation";
 import { formatWhen } from "../format";
 import { LOCALES, roleLabel, useLocale, useT } from "../i18n";
 import { useColors, useTheme, type Palette } from "../theme";
@@ -17,6 +20,7 @@ export function ProfileScreen() {
   const { colors, scheme, toggle } = useTheme();
   const { locale, setLocale } = useLocale();
   const t = useT();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const name = user?.name || user?.displayName || t("profile.account");
 
@@ -49,6 +53,10 @@ export function ProfileScreen() {
       <Pressable style={styles.row} onPress={toggle}>
         <Text style={styles.rowLabel}>{t("profile.appearance")}</Text>
         <Text style={styles.rowValue}>{scheme === "dark" ? t("login.dark") : t("login.light")}</Text>
+      </Pressable>
+
+      <Pressable style={styles.row} onPress={() => navigation.navigate("Settings")}>
+        <Text style={styles.rowLabel}>{t("profile.settings")}</Text>
       </Pressable>
 
       <Pressable style={styles.signOut} onPress={() => signOut()}>

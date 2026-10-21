@@ -10,6 +10,13 @@ export interface User {
   photoURL?: string;
   role: Role;
   createdAt?: string | { _seconds: number };
+  notificationPrefs?: NotificationPrefs;
+}
+
+export interface NotificationPrefs {
+  resultEmails: boolean;
+  reminderEmails: boolean;
+  dailySummary: boolean;
 }
 
 export interface ApiResponse<T> {
@@ -141,6 +148,9 @@ export interface ExamResult {
   id: string;
   examId: string;
   examTitle?: string;
+  examineeName?: string;
+  examineeEmail?: string;
+  passingCondition?: PassingCondition | null;
   score: number;
   totalPoints: number;
   percentage: number;
@@ -189,6 +199,8 @@ export interface Certificate {
 
 export interface ProctorRequest {
   id: string;
+  userName?: string;
+  userEmail?: string;
   reason: string;
   additionalInfo?: string;
   status: "pending" | "approved" | "rejected";
@@ -245,4 +257,218 @@ export interface GroupJoinResult {
 export interface SubmitPayload {
   session: ExamSession;
   result: ExamResult;
+}
+
+export interface PassingCondition {
+  type: "percentage" | "points" | "items";
+  value: number;
+}
+
+export interface Exam {
+  id: string;
+  title: string;
+  description?: string;
+  instruction?: string | null;
+  questionOrder?: "random" | "fixed";
+  timeLimit?: number;
+  passingCondition?: PassingCondition;
+  passingScore?: number;
+  isPublic?: boolean;
+  reviewableByExaminee?: boolean;
+  certificatesEnabled?: boolean;
+  shuffleOptions?: boolean;
+  status: "draft" | "active" | "archived";
+  questionCount?: number;
+  questions?: ExamQuestion[];
+  parts?: { id: string; name: string; description?: string; timeLimit?: number | null }[] | null;
+  origin?: string;
+  isSample?: boolean;
+  createdAt?: string;
+}
+
+export interface ExamQuestion {
+  id: string;
+  questionTypeId: string;
+  questionTypeName?: string;
+  questionText: string;
+  options: string[];
+  correctAnswer: string | string[];
+  points: number;
+  explanation?: string;
+  status?: string;
+  partId?: string | null;
+  phraseId?: string | null;
+  metadata?: {
+    answerFormat?: "ordering" | "matching" | "hotspot";
+    matchPrompts?: string[];
+    audioUrl?: string;
+    audioStoragePath?: string;
+    maxPlays?: number;
+    hotspotImageUrl?: string;
+    hotspotImageStoragePath?: string;
+    hotspotRegions?: { id: string; x: number; y: number; radius: number; label?: string }[];
+  };
+}
+
+export interface BankQuestion {
+  id: string;
+  questionTypeId: string;
+  questionText: string;
+  options: string[];
+  correctAnswer: string | string[];
+  points: number;
+  explanation?: string;
+  topic: string | null;
+  difficulty: "easy" | "medium" | "hard" | null;
+  tags: string[];
+}
+
+export interface ExamBundle {
+  id: string;
+  name: string;
+  description: string;
+  examIds: string[];
+  createdAt?: string;
+}
+
+export interface ExamInvitation {
+  id: string;
+  examId?: string;
+  examTitle?: string;
+  bundleId?: string;
+  bundleName?: string;
+  examineeEmail?: string;
+  examineeName?: string;
+  groupId?: string;
+  groupName?: string;
+  status: string;
+  maxAttempts: number;
+  attemptsUsed?: number;
+  expiresAt: string;
+}
+
+export interface ExamineeGroup {
+  id: string;
+  name: string;
+  description: string;
+  memberIds?: string[];
+  members?: { id?: string; uid?: string; email?: string; name?: string }[];
+  memberCount?: number;
+  joinCode?: string | null;
+  joinEnabled?: boolean;
+}
+
+export interface OrganizationMember {
+  uid: string;
+  email: string | null;
+  name: string | null;
+  role: "owner" | "admin" | "member";
+  department: string;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  description: string | null;
+  memberCount: number;
+  myRole: "owner" | "admin" | "member" | null;
+  canManage?: boolean;
+  members?: OrganizationMember[];
+}
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: ("result.submitted" | "result.graded")[];
+  active: boolean;
+  secret: string | null;
+  secretPreview: string | null;
+  lastStatus: number | null;
+}
+
+export interface LiveSession {
+  id: string;
+  examineeName: string | null;
+  examineeEmail: string | null;
+  startedAt: string | null;
+  timeRemainingSeconds: number | null;
+  answeredCount: number;
+  totalQuestions: number;
+  extraTimeSeconds: number;
+  integrityEventCount: number;
+}
+
+export interface LiveExamMonitor {
+  examTitle: string | null;
+  inProgress: number;
+  autoSubmitted: number;
+  sessions: LiveSession[];
+}
+
+export interface AiPlan {
+  id: "free" | "pro" | "school";
+  name: string;
+  monthlyRequests: number;
+  priceCentavos?: number | null;
+}
+
+export interface AiPack {
+  id: "10" | "25" | "50";
+  requests: number;
+  priceCentavos: number;
+}
+
+export interface PaymongoCheckout {
+  paymentIntentId: string;
+  plan: string;
+  kind?: "subscription" | "pack";
+  requests?: number | null;
+  amount: number;
+  currency: "PHP";
+  status: "pending" | "paid" | "expired" | "failed";
+  qrImageUrl: string | null;
+  testUrl?: string | null;
+  expiresAt: string;
+}
+
+export interface ScoreBucket {
+  range: string;
+  count: number;
+  passed: number;
+}
+
+export interface WeeklyResultTrend {
+  weekStart: string;
+  count: number;
+  passed: number;
+  passRate: number | null;
+  averagePercentage: number | null;
+}
+
+export interface ExamResultStats {
+  total: number;
+  graded: number;
+  passed: number;
+  failed: number;
+  pendingReview: number;
+  averagePercentage: number;
+  passRate: number;
+  distribution?: ScoreBucket[];
+  trend?: WeeklyResultTrend[];
+}
+
+export interface Phrase {
+  id: string;
+  title?: string | null;
+  body: string;
+  examId?: string | null;
+}
+
+export interface IntegrationStatus {
+  paymongo: boolean;
+  push: boolean;
+  googleClassroom: boolean;
+  lti: boolean;
+  googleSheets: boolean;
+  webhooks: boolean;
 }

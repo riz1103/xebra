@@ -64,10 +64,16 @@ export function HomeScreen() {
             <Text style={[styles.tabText, tab === id && styles.tabTextOn]}>{label}</Text>
           </Pressable>
         ))}
+        <Pressable style={styles.tab} onPress={() => navigation.navigate("Overview")}>
+          <Text style={styles.tabText}>{t("home.overview")}</Text>
+        </Pressable>
         <Pressable style={styles.tab} onPress={() => navigation.navigate("Practice")}>
           <Text style={styles.tabText}>{t("home.practice")}</Text>
         </Pressable>
-        <Pressable style={styles.tab} onPress={() => navigation.navigate("ProctorRequest")}>
+        <Pressable
+          style={styles.tab}
+          onPress={() => navigation.navigate(user?.role === "proctor" || user?.role === "admin" ? "ProctorHub" : "ProctorRequest")}
+        >
           <Text style={styles.tabText}>{t("home.proctor")}</Text>
         </Pressable>
       </ScrollView>

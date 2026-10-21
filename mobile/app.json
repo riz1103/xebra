@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "com.xevra.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -45,6 +46,7 @@
         }
       ],
       "expo-audio",
+      "expo-notifications",
       "expo-web-browser",
       [
         "react-native-nitro-google-signin",

@@ -7,15 +7,33 @@ import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./src/auth";
 import { LocaleProvider, useT } from "./src/i18n";
 import { parseAppLink, type AppLink } from "./src/links";
+import { AdminRequestsScreen } from "./src/screens/AdminRequestsScreen";
+import { BundlesScreen } from "./src/screens/BundlesScreen";
 import { CertificateScreen } from "./src/screens/CertificateScreen";
 import { ExamEntryScreen } from "./src/screens/ExamEntryScreen";
+import { ExamFormScreen } from "./src/screens/ExamFormScreen";
 import { ExamScreen } from "./src/screens/ExamScreen";
+import { GroupsScreen } from "./src/screens/GroupsScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
+import { InvitationsScreen } from "./src/screens/InvitationsScreen";
+import { LandingScreen } from "./src/screens/LandingScreen";
+import { LiveMonitorScreen } from "./src/screens/LiveMonitorScreen";
+import { ManagedExamsScreen } from "./src/screens/ManagedExamsScreen";
+import { ManagedResultsScreen } from "./src/screens/ManagedResultsScreen";
+import { OrgDetailScreen } from "./src/screens/OrgDetailScreen";
+import { OrganizationsScreen } from "./src/screens/OrganizationsScreen";
+import { OverviewScreen } from "./src/screens/OverviewScreen";
 import { PracticeScreen } from "./src/screens/PracticeScreen";
+import { ProctorHubScreen } from "./src/screens/ProctorHubScreen";
 import { ProctorRequestScreen } from "./src/screens/ProctorRequestScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { QuestionBankScreen } from "./src/screens/QuestionBankScreen";
+import { QuestionTypesScreen } from "./src/screens/QuestionTypesScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { ResultScreen } from "./src/screens/ResultScreen";
+import { ScoreSlipScreen } from "./src/screens/ScoreSlipScreen";
+import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { StaffReviewScreen } from "./src/screens/StaffReviewScreen";
 import { VerifyScreen } from "./src/screens/VerifyScreen";
 import type { RootStackParamList } from "./src/navigation";
 import { ThemeProvider, useTheme } from "./src/theme";
@@ -106,9 +124,27 @@ function Root() {
             <Stack.Screen name="Certificate" component={CertificateScreen} options={{ title: t("cert.title") }} />
             <Stack.Screen name="Verify" component={VerifyScreen} options={{ title: t("verify.title") }} />
             <Stack.Screen name="ProctorRequest" component={ProctorRequestScreen} options={{ title: t("proctor.title") }} />
+            <Stack.Screen name="Overview" component={OverviewScreen} options={{ title: t("overview.title") }} />
+            <Stack.Screen name="ProctorHub" component={ProctorHubScreen} options={{ title: t("hub.title") }} />
+            <Stack.Screen name="ManagedExams" component={ManagedExamsScreen} options={{ title: t("exams.title") }} />
+            <Stack.Screen name="ExamForm" component={ExamFormScreen} options={{ title: t("form.edit") }} />
+            <Stack.Screen name="LiveMonitor" component={LiveMonitorScreen} options={{ title: t("live.title") }} />
+            <Stack.Screen name="QuestionBank" component={QuestionBankScreen} options={{ title: t("bank.title") }} />
+            <Stack.Screen name="Bundles" component={BundlesScreen} options={{ title: t("bundles.title") }} />
+            <Stack.Screen name="Invitations" component={InvitationsScreen} options={{ title: t("invites.title") }} />
+            <Stack.Screen name="Groups" component={GroupsScreen} options={{ title: t("groups.title") }} />
+            <Stack.Screen name="ManagedResults" component={ManagedResultsScreen} options={{ title: t("results.title") }} />
+            <Stack.Screen name="StaffReview" component={StaffReviewScreen} options={{ title: t("review.title") }} />
+            <Stack.Screen name="ScoreSlip" component={ScoreSlipScreen} options={{ title: t("slip.title") }} />
+            <Stack.Screen name="Organizations" component={OrganizationsScreen} options={{ title: t("orgs.title") }} />
+            <Stack.Screen name="OrgDetail" component={OrgDetailScreen} options={{ title: t("orgs.members") }} />
+            <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings.title") }} />
+            <Stack.Screen name="QuestionTypes" component={QuestionTypesScreen} options={{ title: t("types.title") }} />
+            <Stack.Screen name="AdminRequests" component={AdminRequestsScreen} options={{ title: t("requests.title") }} />
           </>
         ) : (
           <>
+            <Stack.Screen name="Landing" component={LandingScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Verify" component={VerifyScreen} options={{ title: t("verify.title") }} />
           </>

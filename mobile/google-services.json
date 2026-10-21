@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "634489382731",
+    "project_id": "xebra-486713",
+    "storage_bucket": "xebra-486713.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:634489382731:android:e41c44f5abd806af1beace",
+        "android_client_info": {
+          "package_name": "com.xevra.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "634489382731-5q3kbs4853thte9j84bc0lvdcvlmso1p.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.xevra.app",
+            "certificate_hash": "215c963dc3793dd2b99e1e0cebb026eafe121017"
+          }
+        },
+        {
+          "client_id": "634489382731-j9s3t5l95aomdphgbbe1t2etj9i59vgc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.xevra.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "634489382731-h6ld2gsjk3ch518gg4vosg2mebdao5rn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAh1oy_wQrUYMqsBn7tuGlCfd-Rb2Rc7N8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "634489382731-h6ld2gsjk3ch518gg4vosg2mebdao5rn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
