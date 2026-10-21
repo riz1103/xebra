@@ -313,7 +313,7 @@ function ExamineeDashboard() {
                     </p>
                   </div>
                   <Button asChild size="sm" className="w-full sm:w-auto">
-                    <Link href={`/dashboard/my-exams?start=${inv.id}`}>
+                    <Link href={`/exams/${inv.examId}?invitation=${encodeURIComponent(inv.id)}`}>
                       Start Exam <ArrowRight className="ml-1 h-3 w-3" />
                     </Link>
                   </Button>

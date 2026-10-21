@@ -1,0 +1,17 @@
+---
+description: Keep the Android app matched to website features
+alwaysApply: true
+---
+
+# Android feature parity
+
+The website (`src/`) and the Android app (`mobile/`) are separate code. Shipping a website feature includes the Android version in the same change.
+
+Before finishing a change to a page, flow, or user-visible behavior under `src/`:
+
+1. Read `docs/ANDROID_FEATURE_MATCHUP.md`.
+2. Add the same behavior under `mobile/` (React Navigation screens in `mobile/src/screens/`, routes in `mobile/src/navigation.ts`, API in `mobile/src/api.ts`). Do not follow `mobile/AGENTS.md` for navigation; it is the unused Expo Router template.
+3. Update that feature's row in `docs/ANDROID_FEATURE_MATCHUP.md` (status `matched`, `partial`, or `missing`, plus **Gap** and **Android**). Add a new `F-0xx` row when the feature is new.
+4. `docs/FUTURE_FEATURES.md` saying authoring stays on the website is outdated. This matchup is the list to follow.
+
+`mobile/Xevra.apk` does not pick up source edits. Rebuild and reinstall it only when the user asks to ship the app.

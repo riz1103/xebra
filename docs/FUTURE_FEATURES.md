@@ -98,6 +98,7 @@ These are the foundation; keep listed so we don’t re-propose them.
 | `not-started` | Spaced email/push reminders before scheduled exams | Prefs exist; schedulers limited on serverless | notification prefs + cron |
 | `not-started` | Peer review / formative self-assessment modes | | new exam mode |
 | `inc` | Answer review / explanation UX | Works when exam allows; polish + consistency TBD | post-submit review |
+| `inc` | Android examinee app | Expo app in `mobile/`: email sign-in, invitations, exam taking, results, and group join codes. Authoring stays on the website | `mobile/` |
 | `not-started` | Mobile-first exam-taking UX pass | Functional; optimize for phones | `/exam/[sessionId]` |
 | `not-started` | Accessibility pass (exam UI: focus, contrast, screen readers) | | exam + dashboard |
 
@@ -145,5 +146,6 @@ These are the foundation; keep listed so we don’t re-propose them.
 | 2026-04-16 | Initial inventory from current FE + BE codebase |
 | 2026-10-20 | Replaced Stripe Checkout with PayMongo QR Ph (code wired; env and webhook still required to charge) |
 | 2026-10-20 | QR Ph plans last 30 days and can be renewed; extra AI request packs are 10/₱30, 25/₱75, and 50/₱150; free quota default is 8 |
+| 2026-10-20 | Added an Expo Android examinee app under `mobile/` |
 
 When you implement something, add a row here and flip the table status above.

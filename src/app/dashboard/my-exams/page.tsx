@@ -12,6 +12,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTableSkeleton } from "@/components/ui/loading";
 import { Pagination, DEFAULT_PAGE_SIZE } from "@/components/ui/pagination";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { examAppUrl, OpenInAppButton } from "@/components/exams/open-in-app";
+import {
   GraduationCap,
   Clock,
   Loader2,
@@ -141,11 +149,13 @@ function PendingExamCard({
   expiresAt,
   scheduledStartTime,
   startSessionMutation,
+  onTake,
 }: {
   exam: ExamForExaminee;
   expiresAt: string | undefined;
   scheduledStartTime: string | undefined;
   startSessionMutation: UseMutationResult<any, unknown, string, unknown>;
+  onTake: () => void;
 }) {
   const { timeRemaining, isReady } = useCountdown(scheduledStartTime);
   const canStart = exam.status === "active" && (!scheduledStartTime || isReady);
@@ -202,9 +212,7 @@ function PendingExamCard({
           )}
           <Button
             onClick={() => {
-              if (exam.invitationId && canStart) {
-                startSessionMutation.mutate(exam.invitationId);
-              }
+              if (exam.invitationId && canStart) onTake();
             }}
             disabled={
               startSessionMutation.isPending ||
@@ -338,6 +346,7 @@ export default function MyExamsPage() {
   const completedExamEntries = Array.from(completedExamMap.values());
 
   const isLoading = forExamineeLoading || sessLoading;
+  const [takeWhere, setTakeWhere] = useState<{ title: string; href: string; run: () => void } | null>(null);
 
   const startSessionMutation = useMutation({
     mutationFn: (invitationId: string) => api.createExamSession({ invitationId }),
@@ -427,6 +436,14 @@ export default function MyExamsPage() {
                   expiresAt={expiresAt}
                   scheduledStartTime={scheduledStartTime}
                   startSessionMutation={startSessionMutation}
+                  onTake={() =>
+                    exam.invitationId &&
+                    setTakeWhere({
+                      title: exam.title || "this exam",
+                      href: examAppUrl({ examId: exam.id, invitationId: exam.invitationId }),
+                      run: () => startSessionMutation.mutate(exam.invitationId!),
+                    })
+                  }
                 />
               );
             })
@@ -468,7 +485,16 @@ export default function MyExamsPage() {
                         />
                       </div>
                     </div>
-                    <Button onClick={() => router.push(`/exam/${session.id}`)} className="w-full sm:w-auto">
+                    <Button
+                      onClick={() =>
+                        setTakeWhere({
+                          title: session.examTitle || session.exam?.title || "this exam",
+                          href: examAppUrl({ sessionId: session.id }),
+                          run: () => router.push(`/exam/${session.id}`),
+                        })
+                      }
+                      className="w-full sm:w-auto"
+                    >
                       <RotateCcw className="mr-2 h-4 w-4" /> Resume
                     </Button>
                   </CardContent>
@@ -499,7 +525,11 @@ export default function MyExamsPage() {
                       <Button
                         onClick={() => {
                           if (exam.invitationId && exam.status === "active") {
-                            startSessionMutation.mutate(exam.invitationId);
+                            setTakeWhere({
+                              title: exam.title || "this exam",
+                              href: examAppUrl({ examId: exam.id, invitationId: exam.invitationId }),
+                              run: () => startSessionMutation.mutate(exam.invitationId!),
+                            });
                           }
                         }}
                         disabled={
@@ -630,6 +660,24 @@ export default function MyExamsPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={takeWhere !== null} onOpenChange={(open) => !open && setTakeWhere(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Where do you want to take this?</DialogTitle>
+            <DialogDescription>
+              Take {takeWhere?.title} in the Xevra app, or continue in this browser. The timer starts when the exam starts. If the app does not open, continue in the browser.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Button onClick={() => takeWhere?.run()} disabled={startSessionMutation.isPending}>
+              {startSessionMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+              Continue in the browser
+            </Button>
+            {takeWhere ? <OpenInAppButton href={takeWhere.href} /> : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

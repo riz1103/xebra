@@ -11,13 +11,13 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2, AlertCircle, Clock, Play } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
+import { examAppUrl, OpenInAppButton } from "@/components/exams/open-in-app";
 import { PublicExamStart } from "./public-exam-start";
 
 /** Invitation links carry ?invitation=; links without it are shared public-exam links. */
@@ -270,7 +270,7 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
                 Start Exam?
               </DialogTitle>
               <DialogDescription>
-                You are about to start <strong>{invitation.examTitle || "this exam"}</strong>. Once you begin, the timer will start immediately.
+                You are about to start <strong>{invitation.examTitle || "this exam"}</strong>. Continue in this browser, or open it in the Xevra app. The timer starts when the exam starts.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3 py-4">
@@ -305,10 +305,7 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
                 </p>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => router.push("/dashboard/my-exams")}>
-                Cancel
-              </Button>
+            <div className="flex flex-col gap-2">
               <Button onClick={handleStartExam} disabled={createSessionMutation.isPending}>
                 {createSessionMutation.isPending ? (
                   <>
@@ -318,11 +315,15 @@ function ExamInvitationStart({ examId, invitationId }: { examId: string; invitat
                 ) : (
                   <>
                     <Play className="mr-2 h-4 w-4" />
-                    Start Exam
+                    Continue in the browser
                   </>
                 )}
               </Button>
-            </DialogFooter>
+              <OpenInAppButton href={examAppUrl({ examId, invitationId })} />
+              <Button variant="ghost" onClick={() => router.push("/dashboard/my-exams")}>
+                Cancel
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
         <div className="flex min-h-dvh items-center justify-center p-4">

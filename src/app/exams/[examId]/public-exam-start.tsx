@@ -7,6 +7,7 @@ import { AlertCircle, Clock, FileText, Loader2, Play, Target } from "lucide-reac
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
+import { examAppUrl, OpenInAppButton } from "@/components/exams/open-in-app";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -154,16 +155,17 @@ export function PublicExamStart({ examId }: { examId: string }) {
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/20">
           <p className="flex items-center gap-2 text-sm font-medium text-amber-900 dark:text-amber-200">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            The timer starts as soon as you click &quot;Start Exam&quot;.
+            The timer starts when the exam starts. Open the Xevra app, or continue in this browser.
           </p>
         </div>
       </CardContent>
-      <CardFooter className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-        <Button variant="outline" className="h-11 sm:h-9" onClick={() => router.push("/dashboard/my-exams")}>Cancel</Button>
-        <Button className="h-11 sm:h-9" onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
+      <CardFooter className="flex flex-col gap-2">
+        <Button className="h-11" onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
           {startMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-          Start Exam
+          Continue in the browser
         </Button>
+        <OpenInAppButton href={examAppUrl({ examId })} className="h-11" />
+        <Button variant="ghost" className="h-11" onClick={() => router.push("/dashboard/my-exams")}>Cancel</Button>
       </CardFooter>
     </CenteredCard>
   );
