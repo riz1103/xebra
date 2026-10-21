@@ -38,6 +38,12 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Xevra uses photos of your notes to write practice questions."
+        }
+      ],
       "expo-audio",
       "expo-web-browser",
       [

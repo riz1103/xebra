@@ -156,8 +156,65 @@ export interface ExamResult {
   startedAt?: string;
   createdAt?: string;
   reviewableByExaminee?: boolean;
+  /** False when this exam does not issue certificates. Missing means certificates are on. */
+  certificatesEnabled?: boolean;
+  certificateCode?: string | null;
   questionResults?: QuestionResult[];
   answers?: Record<string, AnswerValue>;
+}
+
+export interface StudyTopic {
+  topic: string;
+  percentage: number | null;
+  weak: boolean;
+}
+
+export interface StudyTopicsSummary {
+  threshold: number;
+  resultsConsidered: number;
+  topics: StudyTopic[];
+}
+
+export interface Certificate {
+  code: string;
+  valid: boolean;
+  reason: string | null;
+  examineeName: string | null;
+  examTitle: string | null;
+  percentage: number | null;
+  completedAt: string | null;
+  issuedAt: string | null;
+  issuerName: string | null;
+}
+
+export interface ProctorRequest {
+  id: string;
+  reason: string;
+  additionalInfo?: string;
+  status: "pending" | "approved" | "rejected";
+  reviewNotes?: string;
+  createdAt: string;
+}
+
+export type AiTier = "primary" | "fallback";
+
+export interface AiUsageStatus {
+  tier: AiTier;
+  reason: "monthly_budget" | "daily_user_limit" | "daily_practice_limit" | "monthly_cap" | "plan_quota" | null;
+  allowed?: boolean;
+  user?: {
+    dailyRequestLimit?: number | null;
+  };
+  plan?: {
+    name: string;
+    monthlyRequests: number;
+  };
+}
+
+export interface RecordAiUsagePayload {
+  tier: AiTier;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export type IntegrityEventType = "tab_hidden" | "window_blur" | "fullscreen_exit" | "paste" | "copy";

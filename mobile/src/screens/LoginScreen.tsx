@@ -17,6 +17,7 @@ import {
 } from "react-native-nitro-google-signin";
 import { authErrorMessage, useAuth } from "../auth";
 import { googleWebClientId } from "../config";
+import { LOCALES, useLocale, useT } from "../i18n";
 import { useTheme, type Palette } from "../theme";
 
 GoogleOneTapSignIn.configure({ webClientId: googleWebClientId });
@@ -24,6 +25,8 @@ GoogleOneTapSignIn.configure({ webClientId: googleWebClientId });
 export function LoginScreen() {
   const auth = useAuth();
   const { colors, scheme, toggle } = useTheme();
+  const { locale, setLocale } = useLocale();
+  const t = useT();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [mode, setMode] = useState<"in" | "up">("in");
   const [name, setName] = useState("");
@@ -41,11 +44,11 @@ export function LoginScreen() {
       const response = await GoogleOneTapSignIn.presentExplicitSignIn();
       if (isCancelledResponse(response)) return;
       if (!isSuccessResponse(response) || !response.data?.idToken) {
-        throw new Error("Google sign-in did not return an account.");
+        throw new Error(t("login.googleNoAccount"));
       }
       await auth.signInWithGoogle(response.data.idToken);
     } catch (err) {
-      setError(authErrorMessage(err, "Google sign-in failed. Please try again."));
+      setError(authErrorMessage(err, t("login.googleFailed")));
     } finally {
       setBusy(false);
     }
@@ -57,14 +60,14 @@ export function LoginScreen() {
     setBusy(true);
     try {
       if (mode === "up") {
-        if (name.trim().length < 2) throw new Error("Enter your name.");
+        if (name.trim().length < 2) throw new Error(t("login.nameRequired"));
         await auth.signUp(name, email, password);
-        setNotice("Account created. Open the verification email, then come back.");
+        setNotice(t("login.created"));
       } else {
         await auth.signIn(email, password);
       }
     } catch (err) {
-      setError(authErrorMessage(err, mode === "up" ? "Could not create the account." : "Could not sign in."));
+      setError(authErrorMessage(err, mode === "up" ? t("login.couldNotCreate") : t("login.couldNotSignIn")));
     } finally {
       setBusy(false);
     }
@@ -76,18 +79,21 @@ export function LoginScreen() {
         <View style={styles.wrap}>
         <View style={styles.topRow}>
           <Text style={styles.mark}>Xevra</Text>
-          <Pressable onPress={toggle} hitSlop={8}>
-            <Text style={styles.secondaryText}>{scheme === "dark" ? "Light" : "Dark"}</Text>
-          </Pressable>
+          <View style={styles.topActions}>
+            <Pressable onPress={() => setLocale(locale === "en" ? "fil" : "en")} hitSlop={8}>
+              <Text style={styles.secondaryText}>{LOCALES[locale]}</Text>
+            </Pressable>
+            <Pressable onPress={toggle} hitSlop={8}>
+              <Text style={styles.secondaryText}>{scheme === "dark" ? t("login.light") : t("login.dark")}</Text>
+            </Pressable>
+          </View>
         </View>
-          <Text style={styles.lead}>Take your exams on your phone.</Text>
+          <Text style={styles.lead}>{t("login.lead")}</Text>
 
           {auth.pendingVerificationEmail ? (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Verify your email</Text>
-              <Text style={styles.body}>
-                We sent a link to {auth.pendingVerificationEmail}. After you open it, tap the button below.
-              </Text>
+              <Text style={styles.cardTitle}>{t("login.verifyTitle")}</Text>
+              <Text style={styles.body}>{t("login.verifyBody", { email: auth.pendingVerificationEmail })}</Text>
               {notice ? <Text style={styles.notice}>{notice}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <Pressable
@@ -98,53 +104,53 @@ export function LoginScreen() {
                   setError("");
                   try {
                     const ok = await auth.recheckVerification();
-                    if (!ok) setError("That email is not verified yet.");
+                    if (!ok) setError(t("login.notVerified"));
                   } catch (err) {
-                    setError(authErrorMessage(err, "Could not check verification."));
+                    setError(authErrorMessage(err, t("login.couldNotCheck")));
                   } finally {
                     setBusy(false);
                   }
                 }}
               >
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>I've verified my email</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t("login.verifiedButton")}</Text>}
               </Pressable>
               <Pressable
                 style={styles.secondary}
                 onPress={async () => {
                   try {
                     await auth.resendVerification();
-                    setNotice("Verification email sent again.");
+                    setNotice(t("login.resent"));
                     setError("");
                   } catch (err) {
-                    setError(authErrorMessage(err, "Could not resend the email."));
+                    setError(authErrorMessage(err, t("login.couldNotResend")));
                   }
                 }}
               >
-                <Text style={styles.secondaryText}>Resend email</Text>
+                <Text style={styles.secondaryText}>{t("login.resend")}</Text>
               </Pressable>
             </View>
           ) : (
             <View style={styles.card}>
               <View style={styles.switch}>
                 <Pressable style={[styles.switchBtn, mode === "in" && styles.switchOn]} onPress={() => setMode("in")}>
-                  <Text style={[styles.switchText, mode === "in" && styles.switchTextOn]}>Sign in</Text>
+                  <Text style={[styles.switchText, mode === "in" && styles.switchTextOn]}>{t("login.signIn")}</Text>
                 </Pressable>
                 <Pressable style={[styles.switchBtn, mode === "up" && styles.switchOn]} onPress={() => setMode("up")}>
-                  <Text style={[styles.switchText, mode === "up" && styles.switchTextOn]}>Create account</Text>
+                  <Text style={[styles.switchText, mode === "up" && styles.switchTextOn]}>{t("login.createAccount")}</Text>
                 </Pressable>
               </View>
               {mode === "up" ? (
-                <Field label="Name" value={name} onChangeText={setName} autoCapitalize="words" />
+                <Field label={t("login.name")} value={name} onChangeText={setName} autoCapitalize="words" />
               ) : null}
-              <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-              <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+              <Field label={t("login.email")} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+              <Field label={t("login.password")} value={password} onChangeText={setPassword} secureTextEntry />
               {error ? <Text style={styles.error}>{error}</Text> : null}
               <Pressable style={styles.google} disabled={busy} onPress={continueWithGoogle}>
-                {busy ? <ActivityIndicator color={colors.text} /> : <Text style={styles.googleText}>Continue with Google</Text>}
+                {busy ? <ActivityIndicator color={colors.text} /> : <Text style={styles.googleText}>{t("login.google")}</Text>}
               </Pressable>
-              <Text style={styles.or}>or</Text>
+              <Text style={styles.or}>{t("login.or")}</Text>
               <Pressable style={styles.primary} disabled={busy} onPress={submit}>
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "up" ? "Create account" : "Sign in"}</Text>}
+                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === "up" ? t("login.createAccount") : t("login.signIn")}</Text>}
               </Pressable>
             </View>
           )}
@@ -187,6 +193,7 @@ function makeStyles(colors: Palette) {
   flex: { flex: 1 },
   wrap: { flex: 1, justifyContent: "center", padding: 20 },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topActions: { flexDirection: "row", alignItems: "center", gap: 16 },
   mark: { fontSize: 36, fontWeight: "800", color: colors.primary },
   lead: { marginTop: 4, marginBottom: 20, color: colors.muted, fontSize: 16 },
   card: { backgroundColor: colors.card, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: colors.border },

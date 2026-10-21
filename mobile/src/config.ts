@@ -1,5 +1,8 @@
 const deployedApi = "https://xebra-api.netlify.app";
 
+/** Public site. Certificate QR codes open this origin so anyone can confirm a certificate. */
+export const SITE_ORIGIN = "https://xevra.concepcion-digital-solutions.com";
+
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || deployedApi;
 
 export const googleWebClientId = "634489382731-h6ld2gsjk3ch518gg4vosg2mebdao5rn.apps.googleusercontent.com";

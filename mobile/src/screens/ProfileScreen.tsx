@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../auth";
 import { formatWhen } from "../format";
+import { LOCALES, roleLabel, useLocale, useT } from "../i18n";
 import { useColors, useTheme, type Palette } from "../theme";
 
 function initials(name: string | undefined, email: string | undefined): string {
@@ -14,8 +15,10 @@ function initials(name: string | undefined, email: string | undefined): string {
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { colors, scheme, toggle } = useTheme();
+  const { locale, setLocale } = useLocale();
+  const t = useT();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const name = user?.name || user?.displayName || "Account";
+  const name = user?.name || user?.displayName || t("profile.account");
 
   return (
     <View style={styles.page}>
@@ -24,27 +27,32 @@ export function ProfileScreen() {
           <Text style={styles.avatarText}>{initials(name, user?.email)}</Text>
         </View>
         <Text style={styles.name}>{name}</Text>
-        <Text style={styles.role}>{user?.role || "examinee"}</Text>
+        <Text style={styles.role}>{roleLabel(t, user?.role)}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>{t("profile.email")}</Text>
         <Text style={styles.value}>{user?.email}</Text>
         {user?.createdAt ? (
           <>
-            <Text style={styles.label}>Member since</Text>
+            <Text style={styles.label}>{t("profile.memberSince")}</Text>
             <Text style={styles.value}>{formatWhen(user.createdAt)}</Text>
           </>
         ) : null}
       </View>
 
+      <Pressable style={styles.row} onPress={() => setLocale(locale === "en" ? "fil" : "en")}>
+        <Text style={styles.rowLabel}>{t("profile.language")}</Text>
+        <Text style={styles.rowValue}>{LOCALES[locale]}</Text>
+      </Pressable>
+
       <Pressable style={styles.row} onPress={toggle}>
-        <Text style={styles.rowLabel}>Appearance</Text>
-        <Text style={styles.rowValue}>{scheme === "dark" ? "Dark" : "Light"}</Text>
+        <Text style={styles.rowLabel}>{t("profile.appearance")}</Text>
+        <Text style={styles.rowValue}>{scheme === "dark" ? t("login.dark") : t("login.light")}</Text>
       </Pressable>
 
       <Pressable style={styles.signOut} onPress={() => signOut()}>
-        <Text style={styles.signOutText}>Sign out</Text>
+        <Text style={styles.signOutText}>{t("profile.signOut")}</Text>
       </Pressable>
     </View>
   );

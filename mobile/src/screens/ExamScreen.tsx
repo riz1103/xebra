@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { api, apiErrorMessage } from "../api";
 import { QuestionCard } from "../components/QuestionCard";
 import { formatClock, isInProgress } from "../format";
+import { useT } from "../i18n";
 import { useIntegrityLogger } from "../integrity";
 import { resolveQuestionLayout } from "../question-layout";
 import { useColors, type Palette } from "../theme";
@@ -23,7 +24,7 @@ import type { RootStackParamList } from "../navigation";
 
 type Part = { id: string; name: string; questions: SessionQuestion[] };
 
-function buildParts(session: ExamSession, questions: SessionQuestion[]): Part[] {
+function buildParts(session: ExamSession, questions: SessionQuestion[], fallbackName: string): Part[] {
   const raw = session.questionsByPart;
   if (!raw) return [];
   const byId = new Map(questions.map((q) => [q.id, q]));
@@ -32,7 +33,7 @@ function buildParts(session: ExamSession, questions: SessionQuestion[]): Part[] 
     const list =
       group.questions ??
       (group.questionIds ?? []).map((id) => byId.get(id)).filter((q): q is SessionQuestion => !!q);
-    if (list.length) parts.push({ id: partId, name: group.part?.name || "Part", questions: list });
+    if (list.length) parts.push({ id: partId, name: group.part?.name || fallbackName, questions: list });
   }
   return parts;
 }
@@ -60,6 +61,7 @@ function answered(value: AnswerValue | undefined): boolean {
 export function ExamScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, "Exam">>();
+  const t = useT();
   const { sessionId } = route.params;
 
   const [session, setSession] = useState<ExamSession | null>(null);
@@ -95,15 +97,15 @@ export function ExamScreen() {
       api.getExamSession(sessionId, true),
       api.getQuestionTypes().catch(() => ({ data: [] })),
     ]);
-    if (!sessionRes.data) throw new Error("Exam not found.");
+    if (!sessionRes.data) throw new Error(t("exam.notFound"));
     setSession(sessionRes.data);
     setLayouts(new Map((typeRes.data ?? []).map((type) => [type.id, resolveQuestionLayout(type)])));
     return sessionRes.data;
-  }, [sessionId]);
+  }, [sessionId, t]);
 
   useEffect(() => {
     load()
-      .catch((err) => setError(apiErrorMessage(err, "Could not open this exam.")))
+      .catch((err) => setError(apiErrorMessage(err, t("exam.couldNotOpen"))))
       .finally(() => setLoading(false));
   }, [load]);
 
@@ -116,12 +118,12 @@ export function ExamScreen() {
     setSeconds(remaining);
     setLimited(remaining > 0);
     extraRef.current = session.extraTimeSeconds ?? 0;
-    const parts = buildParts(session, orderedQuestions(session));
+    const parts = buildParts(session, orderedQuestions(session), t("exam.part"));
     if (parts[0]) setPartId(parts[0].id);
   }, [session]);
 
   const questions = useMemo(() => (session ? orderedQuestions(session) : []), [session]);
-  const parts = useMemo(() => (session ? buildParts(session, questions) : []), [session, questions]);
+  const parts = useMemo(() => (session ? buildParts(session, questions, t("exam.part")) : []), [session, questions, t]);
   const currentList = parts.find((part) => part.id === partId)?.questions ?? questions;
   const question = currentList[Math.min(index, Math.max(currentList.length - 1, 0))];
   const inProgress = isInProgress(session?.status);
@@ -175,7 +177,7 @@ export function ExamScreen() {
       else navigation.navigate("Home");
     } catch (err) {
       setSubmitting(false);
-      Alert.alert("Could not submit", apiErrorMessage(err, "Try again in a moment."));
+      Alert.alert(t("exam.couldNotSubmit"), apiErrorMessage(err, t("exam.tryAgain")));
     }
   }, [flushIntegrity, flushText, navigation, sessionId, submitting]);
 
@@ -220,9 +222,9 @@ export function ExamScreen() {
   }, [inProgress, sessionId]);
 
   usePreventRemove(inProgress && !submitting, ({ data }) => {
-    Alert.alert("Leave this exam?", "Answers already saved stay on the exam. You can resume it from Exams.", [
-      { text: "Stay", style: "cancel" },
-      { text: "Leave", style: "destructive", onPress: () => navigation.dispatch(data.action) },
+    Alert.alert(t("exam.leaveTitle"), t("exam.leaveBody"), [
+      { text: t("exam.stay"), style: "cancel" },
+      { text: t("exam.leave"), style: "destructive", onPress: () => navigation.dispatch(data.action) },
     ]);
   });
 
@@ -238,9 +240,9 @@ export function ExamScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={styles.title}>{error || "Exam not found."}</Text>
+          <Text style={styles.title}>{error || t("exam.notFound")}</Text>
           <Pressable style={styles.primary} onPress={() => navigation.navigate("Home")}>
-            <Text style={styles.primaryText}>Back</Text>
+            <Text style={styles.primaryText}>{t("exam.back")}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -251,10 +253,10 @@ export function ExamScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={styles.title}>This attempt is finished</Text>
+          <Text style={styles.title}>{t("exam.finished")}</Text>
           <Text style={styles.muted}>{session.examTitle}</Text>
           <Pressable style={styles.primary} onPress={() => navigation.navigate("Home")}>
-            <Text style={styles.primaryText}>Back to exams</Text>
+            <Text style={styles.primaryText}>{t("exam.backToExams")}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -266,33 +268,33 @@ export function ExamScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.body}>
-          <Text style={styles.title}>Exam instructions</Text>
-          <Text style={styles.muted}>Read these before you start. You can still resume later if you leave.</Text>
+          <Text style={styles.title}>{t("exam.instructions")}</Text>
+          <Text style={styles.muted}>{t("exam.instructionsHint")}</Text>
           {session.exam.instruction ? <Text style={styles.instruction}>{session.exam.instruction}</Text> : null}
           {parts.length > 0 ? (
             <View style={styles.card}>
-              <Text style={styles.sheetTitle}>Exam structure</Text>
+              <Text style={styles.sheetTitle}>{t("exam.structure")}</Text>
               {parts.map((part) => {
                 const group = session.questionsByPart?.[part.id];
                 const minutes = group?.part.timeLimit;
                 return (
                   <Text key={part.id} style={styles.muted}>
                     {part.name}
-                    {group?.part.description ? ` — ${group.part.description}` : ""} ({part.questions.length} questions
-                    {minutes ? `, ${minutes} minutes` : ""})
+                    {group?.part.description ? ` — ${group.part.description}` : ""} ({t("exam.partQuestions", { count: part.questions.length })}
+                    {minutes ? `, ${t("exam.partMinutes", { count: minutes })}` : ""})
                   </Text>
                 );
               })}
             </View>
           ) : null}
           {multiplier > 1 ? (
-            <Text style={styles.muted}>Your time limit includes extra time ({Number(multiplier.toFixed(2))}× the standard time).</Text>
+            <Text style={styles.muted}>{t("exam.extraTime", { multiplier: Number(multiplier.toFixed(2)) })}</Text>
           ) : null}
           <Text style={styles.muted}>
-            Leaving the app or pasting an answer is noted for your proctor. The text you paste is not recorded.
+            {t("exam.integrityNote")}
           </Text>
           <Pressable style={styles.primary} onPress={() => setShowInstructions(false)}>
-            <Text style={styles.primaryText}>Start exam</Text>
+            <Text style={styles.primaryText}>{t("exam.start")}</Text>
           </Pressable>
         </ScrollView>
       </SafeAreaView>
@@ -306,9 +308,9 @@ export function ExamScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.top}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Text style={styles.link}>Close</Text>
+          <Text style={styles.link}>{t("exam.close")}</Text>
         </Pressable>
-        <Text style={styles.examTitle} numberOfLines={1}>{session.examTitle || "Exam"}</Text>
+        <Text style={styles.examTitle} numberOfLines={1}>{session.examTitle || t("home.exam")}</Text>
         <Text style={[styles.clock, urgent && styles.clockUrgent]}>{limited ? formatClock(seconds) : ""}</Text>
       </View>
       {parts.length > 1 ? (
@@ -362,24 +364,24 @@ export function ExamScreen() {
             onPaste={recordPaste}
           />
         ) : (
-          <Text style={styles.muted}>This exam has no questions.</Text>
+          <Text style={styles.muted}>{t("exam.noQuestions")}</Text>
         )}
       </ScrollView>
       <SafeAreaView edges={["bottom"]} style={styles.footer}>
         <Pressable style={styles.navBtn} disabled={index <= 0} onPress={() => setIndex((n) => Math.max(0, n - 1))}>
-          <Text style={[styles.navText, index <= 0 && styles.navOff]}>Previous</Text>
+          <Text style={[styles.navText, index <= 0 && styles.navOff]}>{t("exam.previous")}</Text>
         </Pressable>
         <Pressable onPress={() => setNavOpen(true)}>
           <Text style={styles.count}>{currentList.length ? index + 1 : 0}/{currentList.length}</Text>
-          <Text style={styles.answered}>{doneCount} answered</Text>
+          <Text style={styles.answered}>{t("exam.answered", { count: doneCount })}</Text>
         </Pressable>
         {index < currentList.length - 1 ? (
           <Pressable style={styles.navBtn} onPress={() => setIndex((n) => n + 1)}>
-            <Text style={[styles.navText, styles.navStrong]}>Next</Text>
+            <Text style={[styles.navText, styles.navStrong]}>{t("exam.next")}</Text>
           </Pressable>
         ) : (
           <Pressable style={styles.navBtn} onPress={() => setConfirmOpen(true)}>
-            <Text style={[styles.navText, styles.navStrong]}>Finish</Text>
+            <Text style={[styles.navText, styles.navStrong]}>{t("exam.finish")}</Text>
           </Pressable>
         )}
       </SafeAreaView>
@@ -387,8 +389,8 @@ export function ExamScreen() {
       <Modal visible={navOpen} animationType="slide" transparent onRequestClose={() => setNavOpen(false)}>
         <Pressable style={styles.scrim} onPress={() => setNavOpen(false)}>
           <Pressable style={styles.sheet} onPress={() => {}}>
-            <Text style={styles.sheetTitle}>Questions</Text>
-            <Text style={styles.muted}>{doneCount} of {currentList.length} answered{flagged.size ? ` · ${flagged.size} flagged` : ""}</Text>
+            <Text style={styles.sheetTitle}>{t("exam.questions")}</Text>
+            <Text style={styles.muted}>{t("exam.answeredOf", { done: doneCount, total: currentList.length })}{flagged.size ? ` · ${t("exam.flaggedCount", { count: flagged.size })}` : ""}</Text>
             <View style={styles.grid}>
               {currentList.map((item, i) => {
                 const on = answered(answers[item.id]);
@@ -414,17 +416,17 @@ export function ExamScreen() {
       <Modal visible={confirmOpen} transparent animationType="fade" onRequestClose={() => setConfirmOpen(false)}>
         <View style={styles.scrim}>
           <View style={styles.dialog}>
-            <Text style={styles.sheetTitle}>Submit this exam?</Text>
+            <Text style={styles.sheetTitle}>{t("exam.submitTitle")}</Text>
             <Text style={styles.muted}>
-              {doneCount} of {currentList.length} answered.
-              {doneCount < currentList.length ? ` ${currentList.length - doneCount} still blank.` : ""}
-              {flagged.size ? ` ${flagged.size} flagged.` : ""} You can't change answers after this.
+              {t("exam.answeredOf", { done: doneCount, total: currentList.length })}.
+              {doneCount < currentList.length ? ` ${t("exam.stillBlank", { count: currentList.length - doneCount })}` : ""}
+              {flagged.size ? ` ${t("exam.flaggedCount", { count: flagged.size })}.` : ""} {t("exam.cantChange")}
             </Text>
             <Pressable style={styles.primary} onPress={submit}>
-              <Text style={styles.primaryText}>Submit</Text>
+              <Text style={styles.primaryText}>{t("exam.submit")}</Text>
             </Pressable>
             <Pressable style={styles.secondary} onPress={() => setConfirmOpen(false)}>
-              <Text style={styles.link}>Keep working</Text>
+              <Text style={styles.link}>{t("exam.keepWorking")}</Text>
             </Pressable>
           </View>
         </View>
@@ -433,7 +435,7 @@ export function ExamScreen() {
       {submitting ? (
         <View style={styles.blocking}>
           <ActivityIndicator color="#fff" size="large" />
-          <Text style={styles.blockingText}>Submitting…</Text>
+          <Text style={styles.blockingText}>{t("exam.submitting")}</Text>
         </View>
       ) : null}
     </SafeAreaView>

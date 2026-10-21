@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useRoute, type RouteProp } from "@react-navigation/native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api, apiErrorMessage } from "../api";
+import { useT } from "../i18n";
 import { MathText } from "../math-text";
 import { formatWhen } from "../format";
 import { useColors, type Palette } from "../theme";
@@ -10,6 +12,8 @@ import type { RootStackParamList } from "../navigation";
 
 export function ResultScreen() {
   const route = useRoute<RouteProp<RootStackParamList, "Result">>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const t = useT();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [result, setResult] = useState<ExamResult | null>(null);
@@ -27,7 +31,7 @@ export function ResultScreen() {
           setExam(examRes.data ?? null);
         }
       })
-      .catch((err) => setError(apiErrorMessage(err, "Could not load this result.")));
+      .catch((err) => setError(apiErrorMessage(err, t("result.loadError"))));
   }, [route.params.resultId]);
 
   if (error) {
@@ -53,36 +57,44 @@ export function ResultScreen() {
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{result.examTitle || "Exam result"}</Text>
-      <Text style={styles.when}>Submitted {formatWhen(result.submittedAt || result.createdAt)}</Text>
-      {result.startedAt ? <Text style={styles.when}>Started {formatWhen(result.startedAt)}</Text> : null}
+      <Text style={styles.title}>{result.examTitle || t("result.examResult")}</Text>
+      <Text style={styles.when}>{t("result.submitted", { when: formatWhen(result.submittedAt || result.createdAt) })}</Text>
+      {result.startedAt ? <Text style={styles.when}>{t("result.started", { when: formatWhen(result.startedAt) })}</Text> : null}
       <View style={[styles.scoreCard, tone]}>
         <Text style={styles.percent}>{pending ? "—" : `${Math.round(result.percentage)}%`}</Text>
         <Text style={styles.outcome}>
-          {pending ? "Waiting for a proctor to grade written answers" : result.passed ? "Passed" : "Not passed"}
+          {pending ? t("result.waiting") : result.passed ? t("result.passed") : t("result.notPassed")}
         </Text>
         <Text style={styles.points}>
-          {result.score} / {result.totalPoints} points{pending ? " so far" : ""}
+          {t("result.points", { score: result.score, total: result.totalPoints })}
+          {pending ? t("result.soFar") : ""}
         </Text>
         {pending ? (
           <Text style={styles.note}>
-            Your final score appears after{" "}
-            {result.pendingReviewCount === 1 ? "1 written answer is" : `${result.pendingReviewCount ?? "the written answers"} are`} graded.
+            {result.pendingReviewCount === 1 ? t("result.pendingOne") : t("result.pendingMany", { count: result.pendingReviewCount ?? "" })}
           </Text>
         ) : null}
       </View>
+      {result.passed && !pending && result.certificatesEnabled !== false ? (
+        <View style={styles.card}>
+          <Text style={styles.note}>{t("result.certificateBody")}</Text>
+          <Pressable style={styles.primary} onPress={() => navigation.navigate("Certificate", { resultId: result.id })}>
+            <Text style={styles.primaryText}>{result.certificateCode ? t("result.viewCertificate") : t("result.getCertificate")}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <View style={styles.row}>
-        <Stat label="Correct" value={String(result.correctCount ?? 0)} />
-        <Stat label="Incorrect" value={String(result.incorrectCount ?? 0)} />
-        <Stat label="Questions" value={String(result.totalQuestions ?? 0)} />
+        <Stat label={t("result.correct")} value={String(result.correctCount ?? 0)} />
+        <Stat label={t("result.incorrect")} value={String(result.incorrectCount ?? 0)} />
+        <Stat label={t("result.questions")} value={String(result.totalQuestions ?? 0)} />
       </View>
-      {result.timeSpentMinutes != null ? <Text style={styles.note}>Time spent: {result.timeSpentMinutes} min</Text> : null}
+      {result.timeSpentMinutes != null ? <Text style={styles.note}>{t("result.timeSpent", { minutes: result.timeSpentMinutes })}</Text> : null}
       {result.feedback ? <Text style={styles.note}>{result.feedback}</Text> : null}
 
       {review ? (
         <View style={styles.review}>
-          <Text style={styles.reviewTitle}>Your answers</Text>
-          <Text style={styles.when}>Each question, what you answered, and whether it was correct.</Text>
+          <Text style={styles.reviewTitle}>{t("result.yourAnswers")}</Text>
+          <Text style={styles.when}>{t("result.reviewHint")}</Text>
           {(result.questionResults ?? []).map((item, index) => {
             const question = byId.get(item.questionId);
             return (
@@ -118,10 +130,11 @@ function ReviewCard({
   feedback?: string;
   answer: AnswerValue | undefined;
 }) {
+  const t = useT();
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const tone = pendingReview ? styles.warn : correct ? styles.pass : styles.fail;
-  const label = pendingReview ? "Needs grading" : correct ? "Correct" : "Incorrect";
+  const label = pendingReview ? t("result.needsGrading") : correct ? t("result.correct") : t("result.incorrect");
   const yours = formatAnswer(answer);
   const expected = question?.correctAnswer;
   const correctText = expected == null ? "" : Array.isArray(expected) ? expected.join(", ") : expected;
@@ -131,18 +144,18 @@ function ReviewCard({
       <Text style={[styles.badge, tone]}>
         {index + 1}. {label}
       </Text>
-      {question ? <MathText text={question.questionText} style={styles.stem} /> : <Text style={styles.stem}>Question {index + 1}</Text>}
-      <Text style={styles.meta}>Your answer</Text>
-      <MathText text={yours || "No answer"} style={styles.answer} />
+      {question ? <MathText text={question.questionText} style={styles.stem} /> : <Text style={styles.stem}>{t("result.questionN", { n: index + 1 })}</Text>}
+      <Text style={styles.meta}>{t("result.yourAnswer")}</Text>
+      <MathText text={yours || t("result.noAnswer")} style={styles.answer} />
       {correctText ? (
         <>
-          <Text style={styles.meta}>Correct answer</Text>
+          <Text style={styles.meta}>{t("result.correctAnswer")}</Text>
           <MathText text={correctText} style={styles.answer} />
         </>
       ) : null}
       {question?.explanation ? (
         <>
-          <Text style={styles.meta}>Explanation</Text>
+          <Text style={styles.meta}>{t("result.explanation")}</Text>
           <MathText text={question.explanation} style={styles.answer} />
         </>
       ) : null}
@@ -188,7 +201,9 @@ function makeStyles(colors: Palette) {
     error: { color: colors.danger, padding: 20 },
     review: { marginTop: 22, gap: 10 },
     reviewTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
-    card: { backgroundColor: colors.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.border },
+    card: { backgroundColor: colors.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.border, marginTop: 16 },
+    primary: { marginTop: 12, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+    primaryText: { color: "#fff", fontWeight: "800" },
     badge: { fontWeight: "800" },
     pass: { color: colors.success },
     fail: { color: colors.danger },

@@ -9,10 +9,15 @@ import type {
   ExamResult,
   IntegrityEventInput,
   ExamSession,
+  AiUsageStatus,
+  Certificate,
   GroupJoinPreview,
   GroupJoinResult,
   ListResponse,
+  ProctorRequest,
   QuestionType,
+  RecordAiUsagePayload,
+  StudyTopicsSummary,
   SubmitPayload,
   User,
 } from "./types";
@@ -153,6 +158,43 @@ class ApiClient {
 
   async joinGroupByCode(code: string) {
     const { data } = await this.client.post<ApiResponse<GroupJoinResult>>("/api/examinee-groups/join", { code });
+    return data;
+  }
+
+  async getStudyTopics() {
+    const { data } = await this.client.get<ApiResponse<StudyTopicsSummary>>("/api/exam-results/study-topics");
+    return data;
+  }
+
+  async issueCertificate(resultId: string) {
+    const { data } = await this.client.post<ApiResponse<Certificate>>(`/api/exam-results/${resultId}/certificate`);
+    return data;
+  }
+
+  async verifyCertificate(code: string) {
+    const { data } = await this.client.get<ApiResponse<Certificate>>(`/api/certificates/${encodeURIComponent(code)}`);
+    return data;
+  }
+
+  async getProctorRequests() {
+    const { data } = await this.client.get<ListResponse<ProctorRequest>>("/api/proctor-requests", {
+      params: { page: 1, size: 100 },
+    });
+    return data;
+  }
+
+  async createProctorRequest(payload: { reason: string; additionalInfo?: string }) {
+    const { data } = await this.client.post<ApiResponse<ProctorRequest>>("/api/proctor-requests", payload);
+    return data;
+  }
+
+  async getAiUsage() {
+    const { data } = await this.client.get<ApiResponse<AiUsageStatus>>("/api/ai-usage");
+    return data;
+  }
+
+  async recordAiUsage(payload: RecordAiUsagePayload) {
+    const { data } = await this.client.post<ApiResponse<AiUsageStatus>>("/api/ai-usage", payload);
     return data;
   }
 }

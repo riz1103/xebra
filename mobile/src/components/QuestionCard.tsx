@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { parseBlanks } from "../blanks";
+import { useT } from "../i18n";
 import { MathText } from "../math-text";
 import type { QuestionLayout } from "../question-layout";
 import { useColors, type Palette } from "../theme";
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function QuestionCard(props: Props) {
+  const t = useT();
   const styles = useStyles();
   const colors = useColors();
   const { question } = props;
@@ -43,13 +45,13 @@ export function QuestionCard(props: Props) {
     <View style={styles.card}>
       <View style={styles.metaRow}>
         <Text style={styles.meta}>
-          Question {props.index + 1} of {props.total}
+          {t("q.questionOf", { n: props.index + 1, total: props.total })}
           {props.partName ? ` · ${props.partName}` : ""}
         </Text>
         <View style={styles.metaRight}>
-          <Text style={styles.points}>{question.points} pts</Text>
+          <Text style={styles.points}>{t("q.pts", { count: question.points })}</Text>
           <Pressable onPress={props.onFlag} hitSlop={8}>
-            <Text style={[styles.flag, props.flagged && styles.flagOn]}>{props.flagged ? "Flagged" : "Flag"}</Text>
+            <Text style={[styles.flag, props.flagged && styles.flagOn]}>{props.flagged ? t("q.flagged") : t("q.flag")}</Text>
           </Pressable>
         </View>
       </View>
@@ -57,7 +59,7 @@ export function QuestionCard(props: Props) {
       {props.phrase ? <Phrase phrase={props.phrase} /> : null}
 
       {!isBlank ? <MathText text={question.questionText} style={styles.stem} /> : null}
-      {multiple && !isBlank && !positional ? <Text style={styles.hint}>Select all that apply</Text> : null}
+      {multiple && !isBlank && !positional ? <Text style={styles.hint}>{t("q.selectAll")}</Text> : null}
 
       {question.metadata?.audioUrl ? (
         <AudioClip
@@ -97,7 +99,7 @@ export function QuestionCard(props: Props) {
         <TextInput
           style={[styles.input, props.layout === "essay" && styles.essay]}
           multiline={props.layout === "essay"}
-          placeholder={props.layout === "essay" ? "Write your answer" : "Type your answer"}
+          placeholder={props.layout === "essay" ? t("q.writeAnswer") : t("q.typeAnswer")}
           placeholderTextColor={colors.muted}
           value={typeof props.answer === "string" ? props.answer : ""}
           onChangeText={(text) => {
@@ -154,6 +156,7 @@ function AudioClip({
   playsUsed: number;
   onPlay: () => void;
 }) {
+  const t = useT();
   const styles = useStyles();
   const player = useAudioPlayer(url);
   const blocked = maxPlays > 0 && playsUsed >= maxPlays;
@@ -168,7 +171,7 @@ function AudioClip({
       }}
     >
       <Text style={styles.audioText}>
-        {blocked ? "No plays left" : maxPlays > 0 ? `Play audio (${playsUsed}/${maxPlays})` : "Play audio"}
+        {blocked ? t("q.noPlays") : maxPlays > 0 ? t("q.playCount", { used: playsUsed, max: maxPlays }) : t("q.playAudio")}
       </Text>
     </Pressable>
   );
@@ -214,6 +217,7 @@ function Ordering({
   value: string[] | null;
   onChange: (value: AnswerValue) => void;
 }) {
+  const t = useT();
   const styles = useStyles();
   const order = value && value.length === items.length ? value : items;
   useEffect(() => {
@@ -231,13 +235,13 @@ function Ordering({
   };
   return (
     <View style={styles.choices}>
-      <Text style={styles.hint}>Put these in the right order</Text>
+      <Text style={styles.hint}>{t("q.orderHint")}</Text>
       {order.map((item, i) => (
         <View key={`${i}-${item}`} style={styles.orderRow}>
           <Text style={styles.orderIndex}>{i + 1}</Text>
           <MathText text={item} style={styles.choiceText} />
-          <Pressable onPress={() => move(i, -1)} hitSlop={6}><Text style={styles.move}>Up</Text></Pressable>
-          <Pressable onPress={() => move(i, 1)} hitSlop={6}><Text style={styles.move}>Down</Text></Pressable>
+          <Pressable onPress={() => move(i, -1)} hitSlop={6}><Text style={styles.move}>{t("q.up")}</Text></Pressable>
+          <Pressable onPress={() => move(i, 1)} hitSlop={6}><Text style={styles.move}>{t("q.down")}</Text></Pressable>
         </View>
       ))}
     </View>
@@ -297,6 +301,7 @@ function Hotspot({
   selected: string | null;
   onChange: (id: string | null) => void;
 }) {
+  const t = useT();
   const styles = useStyles();
   const [ratio, setRatio] = useState(1.4);
   const [width, setWidth] = useState(0);
@@ -306,7 +311,7 @@ function Hotspot({
   const chosen = regions.find((region) => region.id === selected);
   return (
     <View>
-      <Text style={styles.hint}>Tap the correct spot on the image</Text>
+      <Text style={styles.hint}>{t("q.hotspot")}</Text>
       <Pressable
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
         onPress={(e) => {
@@ -346,6 +351,7 @@ function Blanks({
   onChange: (value: AnswerValue) => void;
   onPaste?: (length: number) => void;
 }) {
+  const t = useT();
   const styles = useStyles();
   const colors = useColors();
   const current: string[] =
@@ -371,7 +377,7 @@ function Blanks({
       />
       {Array.from({ length: count }, (_, i) => (
         <View key={i} style={styles.blank}>
-          <Text style={styles.hint}>{count > 1 ? `Blank ${i + 1}` : "Your answer"}</Text>
+          <Text style={styles.hint}>{count > 1 ? t("q.blank", { n: i + 1 }) : t("q.yourAnswer")}</Text>
           {options.length > 0 ? (
             <View style={styles.matchOptions}>
               {options.map((option) => {
@@ -387,7 +393,7 @@ function Blanks({
             <TextInput
               style={styles.input}
               value={current[i] ?? ""}
-              placeholder="Type the missing word"
+              placeholder={t("q.missingWord")}
               placeholderTextColor={colors.muted}
               onChangeText={(text) => {
                 const prev = current[i] ?? "";
