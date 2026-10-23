@@ -305,6 +305,7 @@ function ResultsPane() {
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState<ExamResult[]>([]);
   const [error, setError] = useState("");
+  const [retakingId, setRetakingId] = useState("");
 
   const load = useCallback(async () => {
     const res = await api.getExamResults();
@@ -317,6 +318,23 @@ function ResultsPane() {
     load().catch((err) => setError(apiErrorMessage(err, t("home.loadResultsError")))).finally(() => setLoading(false));
   }, [load]);
 
+  const retake = async (result: ExamResult) => {
+    setRetakingId(result.id);
+    setError("");
+    try {
+      const res = await api.createExamSession(
+        result.retakeInvitationId ? { invitationId: result.retakeInvitationId } : { examId: result.examId }
+      );
+      const sessionId = res.data?.id;
+      if (!sessionId) throw new Error(t("result.couldNotRetake"));
+      navigation.navigate("Exam", { sessionId });
+    } catch (err) {
+      setError(apiErrorMessage(err, t("result.couldNotRetake")));
+    } finally {
+      setRetakingId("");
+    }
+  };
+
   if (loading) return <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />;
 
   return (
@@ -326,13 +344,24 @@ function ResultsPane() {
       {results.map((result) => {
         const pending = result.gradingStatus === "pending_review" || result.passed === null;
         return (
-          <Pressable key={result.id} style={styles.card} onPress={() => navigation.navigate("Result", { resultId: result.id })}>
-            <Text style={styles.cardTitle}>{result.examTitle || t("home.exam")}</Text>
-            <Text style={styles.cardMeta}>{formatWhen(result.submittedAt)}</Text>
-            <Text style={[styles.score, pending ? styles.warn : result.passed ? styles.pass : styles.fail]}>
-              {pending ? t("home.waiting") : t("home.scoreLine", { percent: Math.round(result.percentage), outcome: result.passed ? t("home.passed") : t("home.notPassed") })}
-            </Text>
-          </Pressable>
+          <View key={result.id} style={styles.card}>
+            <Pressable onPress={() => navigation.navigate("Result", { resultId: result.id })}>
+              <Text style={styles.cardTitle}>{result.examTitle || t("home.exam")}</Text>
+              <Text style={styles.cardMeta}>{formatWhen(result.submittedAt)}</Text>
+              <Text style={[styles.score, pending ? styles.warn : result.passed ? styles.pass : styles.fail]}>
+                {pending ? t("home.waiting") : t("home.scoreLine", { percent: Math.round(result.percentage), outcome: result.passed ? t("home.passed") : t("home.notPassed") })}
+              </Text>
+            </Pressable>
+            {result.canRetake ? (
+              <Pressable
+                style={[styles.primary, retakingId === result.id && styles.disabled]}
+                disabled={retakingId === result.id}
+                onPress={() => retake(result)}
+              >
+                {retakingId === result.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t("result.retake")}</Text>}
+              </Pressable>
+            ) : null}
+          </View>
         );
       })}
     </ScrollView>

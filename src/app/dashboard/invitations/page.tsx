@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, Controller, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { api } from "@/lib/api";
 import {
@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,6 +34,30 @@ import { formatMultiplier } from "@/components/invitations/time-multiplier-selec
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 import type { ExamInvitation } from "@/types";
+
+function AllowRetakeAfterPassField({ control }: { control: Control<any> }) {
+  return (
+    <Controller
+      control={control}
+      name="allowRetakeAfterPass"
+      render={({ field }) => (
+        <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+          <Checkbox
+            checked={field.value === true}
+            onCheckedChange={(checked) => field.onChange(checked === true)}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-medium">Allow retakes after a pass</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              The examinee can use every remaining attempt even after they pass. Without this, passing ends the invitation.
+            </span>
+          </span>
+        </label>
+      )}
+    />
+  );
+}
 
 type InviteTarget = "exam" | "bundle";
 type InviteRecipient = "individual" | "group";
@@ -77,22 +102,22 @@ export default function InvitationsPage() {
   // --- Forms ---
   const examIndividualForm = useForm<ExamInvitationFormValues>({
     resolver: zodResolver(examInvitationSchema),
-    defaultValues: { examId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" },
+    defaultValues: { examId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, allowRetakeAfterPass: false, scheduledStartTime: "", scheduledEndTime: "" },
   });
 
   const examGroupForm = useForm<GroupInvitationFormValues>({
     resolver: zodResolver(groupInvitationSchema),
-    defaultValues: { examId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" },
+    defaultValues: { examId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, allowRetakeAfterPass: false, scheduledStartTime: "", scheduledEndTime: "" },
   });
 
   const bundleIndividualForm = useForm<BundleInvitationFormValues>({
     resolver: zodResolver(bundleInvitationSchema),
-    defaultValues: { bundleId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" },
+    defaultValues: { bundleId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, allowRetakeAfterPass: false, scheduledStartTime: "", scheduledEndTime: "" },
   });
 
   const bundleGroupForm = useForm({
     resolver: zodResolver(bundleGroupInvitationSchema),
-    defaultValues: { bundleId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" },
+    defaultValues: { bundleId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, allowRetakeAfterPass: false, scheduledStartTime: "", scheduledEndTime: "" },
   });
 
   // --- Mutations ---
@@ -105,6 +130,7 @@ export default function InvitationsPage() {
         examineeEmail: v.examineeEmail,
         expiresAt,
         maxAttempts: v.maxAttempts,
+        allowRetakeAfterPass: v.allowRetakeAfterPass === true,
         scheduledStartTime: toISOString(v.scheduledStartTime),
         scheduledEndTime: toISOString(v.scheduledEndTime),
       };
@@ -123,6 +149,7 @@ export default function InvitationsPage() {
         groupId: v.groupId,
         expiresAt,
         maxAttempts: v.maxAttempts,
+        allowRetakeAfterPass: v.allowRetakeAfterPass === true,
         scheduledStartTime: toISOString(v.scheduledStartTime),
         scheduledEndTime: toISOString(v.scheduledEndTime),
       };
@@ -141,6 +168,7 @@ export default function InvitationsPage() {
         examineeEmail: v.examineeEmail,
         expiresAt,
         maxAttempts: v.maxAttempts,
+        allowRetakeAfterPass: v.allowRetakeAfterPass === true,
         scheduledStartTime: toISOString(v.scheduledStartTime),
         scheduledEndTime: toISOString(v.scheduledEndTime),
       };
@@ -159,6 +187,7 @@ export default function InvitationsPage() {
         groupId: v.groupId,
         expiresAt,
         maxAttempts: v.maxAttempts,
+        allowRetakeAfterPass: v.allowRetakeAfterPass === true,
         scheduledStartTime: toISOString(v.scheduledStartTime),
         scheduledEndTime: toISOString(v.scheduledEndTime),
       };
@@ -181,10 +210,10 @@ export default function InvitationsPage() {
     queryClient.invalidateQueries({ queryKey: ["invitations"] });
     toast.success(message);
     setDialogOpen(false);
-    examIndividualForm.reset({ examId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" });
-    examGroupForm.reset({ examId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" });
-    bundleIndividualForm.reset({ bundleId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" });
-    bundleGroupForm.reset({ bundleId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, scheduledStartTime: "", scheduledEndTime: "" });
+    examIndividualForm.reset({ examId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, allowRetakeAfterPass: false, scheduledStartTime: "", scheduledEndTime: "" });
+    examGroupForm.reset({ examId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, allowRetakeAfterPass: false, scheduledStartTime: "", scheduledEndTime: "" });
+    bundleIndividualForm.reset({ bundleId: "", examineeEmail: "", expiresAt: defaultExpiry, maxAttempts: 1, allowRetakeAfterPass: false, scheduledStartTime: "", scheduledEndTime: "" });
+    bundleGroupForm.reset({ bundleId: "", groupId: "", expiresAt: defaultExpiry, maxAttempts: 1, allowRetakeAfterPass: false, scheduledStartTime: "", scheduledEndTime: "" });
   }
 
   const isPending =
@@ -282,6 +311,9 @@ export default function InvitationsPage() {
                       <Badge variant="outline" className="text-xs">
                         <Package className="mr-1 h-3 w-3" /> Bundle
                       </Badge>
+                    )}
+                    {inv.allowRetakeAfterPass && (
+                      <Badge variant="secondary" className="text-xs">Retake after pass</Badge>
                     )}
                     {inv.accommodations && inv.accommodations.timeMultiplier > 1 && (
                       <Badge variant="secondary" className="text-xs" title={inv.accommodations.note || undefined}>
@@ -428,6 +460,7 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...examIndividualForm.register("maxAttempts")} />
                       </div>
                     </div>
+                    <AllowRetakeAfterPassField control={examIndividualForm.control} />
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>
@@ -498,6 +531,7 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...examGroupForm.register("maxAttempts")} />
                       </div>
                     </div>
+                    <AllowRetakeAfterPassField control={examGroupForm.control} />
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>
@@ -570,6 +604,7 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...bundleIndividualForm.register("maxAttempts")} />
                       </div>
                     </div>
+                    <AllowRetakeAfterPassField control={bundleIndividualForm.control} />
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>
@@ -643,6 +678,7 @@ export default function InvitationsPage() {
                         <Input type="number" min={1} {...bundleGroupForm.register("maxAttempts")} />
                       </div>
                     </div>
+                    <AllowRetakeAfterPassField control={bundleGroupForm.control} />
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label>

@@ -671,6 +671,10 @@ export interface ExamResult {
   sourceViewableByExaminee?: boolean;
   /** From the exam setting; passed results can get a certificate */
   certificatesEnabled?: boolean;
+  /** True when this examinee can start another attempt from this result */
+  canRetake?: boolean;
+  /** Invitation to start, or null for a public exam */
+  retakeInvitationId?: string | null;
   /** Set once a certificate was issued */
   certificateCode?: string;
   /** Passing threshold (e.g. percentage value). Used when recalculating after proctor review. */
@@ -700,6 +704,8 @@ export interface ExamInvitation {
   groupName?: string;
   status: "pending" | "accepted" | "used" | "expired" | "revoked";
   maxAttempts: number;
+  /** When true, a pass does not end the invitation while attempts remain */
+  allowRetakeAfterPass?: boolean;
   currentAttempts?: number;
   /** API may return attemptsUsed instead of currentAttempts */
   attemptsUsed?: number;
@@ -726,6 +732,8 @@ export interface CreateExamInvitationPayload {
   examineeEmail: string;
   expiresAt: string;
   maxAttempts: number;
+  /** When true, a pass does not end the invitation while attempts remain */
+  allowRetakeAfterPass?: boolean;
   /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
   scheduledStartTime?: string;
   /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
@@ -738,6 +746,8 @@ export interface CreateGroupInvitationPayload {
   groupId: string;
   expiresAt: string;
   maxAttempts: number;
+  /** When true, a pass does not end the invitation while attempts remain */
+  allowRetakeAfterPass?: boolean;
   /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
   scheduledStartTime?: string;
   /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
@@ -750,6 +760,8 @@ export interface CreateBundleInvitationPayload {
   examineeEmail: string;
   expiresAt: string;
   maxAttempts: number;
+  /** When true, a pass does not end the invitation while attempts remain */
+  allowRetakeAfterPass?: boolean;
   /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
   scheduledStartTime?: string;
   /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */
@@ -762,6 +774,8 @@ export interface CreateBundleGroupInvitationPayload {
   groupId: string;
   expiresAt: string;
   maxAttempts: number;
+  /** When true, a pass does not end the invitation while attempts remain */
+  allowRetakeAfterPass?: boolean;
   /** Optional. Sets when the exam can be started. Exam cannot be started before this time. */
   scheduledStartTime?: string;
   /** Optional. Sets when the exam must end. If set, this overrides the exam duration. */

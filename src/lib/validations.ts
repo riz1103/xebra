@@ -132,6 +132,7 @@ export const examInvitationSchema = z
   examineeEmail: z.string().email("Please enter a valid email"),
   expiresAt: z.string().min(1, "Expiry date is required"),
   maxAttempts: z.coerce.number().min(1, "Must allow at least 1 attempt"),
+  allowRetakeAfterPass: z.boolean().optional(),
     scheduledStartTime: z.string().optional(),
     scheduledEndTime: z.string().optional(),
   })
@@ -195,6 +196,7 @@ export const groupInvitationSchema = z
   groupId: z.string().min(1, "Group is required"),
   expiresAt: z.string().min(1, "Expiry date is required"),
   maxAttempts: z.coerce.number().min(1, "Must allow at least 1 attempt"),
+  allowRetakeAfterPass: z.boolean().optional(),
     scheduledStartTime: z.string().optional(),
     scheduledEndTime: z.string().optional(),
   })
@@ -258,6 +260,7 @@ export const bundleInvitationSchema = z
   examineeEmail: z.string().email("Please enter a valid email"),
   expiresAt: z.string().min(1, "Expiry date is required"),
   maxAttempts: z.coerce.number().min(1, "Must allow at least 1 attempt"),
+  allowRetakeAfterPass: z.boolean().optional(),
     scheduledStartTime: z.string().optional(),
     scheduledEndTime: z.string().optional(),
   })
@@ -321,6 +324,7 @@ export const bundleGroupInvitationSchema = z
   groupId: z.string().min(1, "Group is required"),
   expiresAt: z.string().min(1, "Expiry date is required"),
   maxAttempts: z.coerce.number().min(1, "Must allow at least 1 attempt"),
+  allowRetakeAfterPass: z.boolean().optional(),
     scheduledStartTime: z.string().optional(),
     scheduledEndTime: z.string().optional(),
   })

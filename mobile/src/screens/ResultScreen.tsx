@@ -19,6 +19,8 @@ export function ResultScreen() {
   const [result, setResult] = useState<ExamResult | null>(null);
   const [exam, setExam] = useState<ExamDetail | null>(null);
   const [error, setError] = useState("");
+  const [retakeError, setRetakeError] = useState("");
+  const [retaking, setRetaking] = useState(false);
 
   useEffect(() => {
     api
@@ -50,6 +52,21 @@ export function ResultScreen() {
   }
 
   const pending = result.gradingStatus === "pending_review" || result.passed === null;
+  const retake = async () => {
+    setRetaking(true);
+    setRetakeError("");
+    try {
+      const res = await api.createExamSession(
+        result.retakeInvitationId ? { invitationId: result.retakeInvitationId } : { examId: result.examId }
+      );
+      const sessionId = res.data?.id;
+      if (!sessionId) throw new Error(t("result.couldNotRetake"));
+      navigation.replace("Exam", { sessionId });
+    } catch (err) {
+      setRetakeError(apiErrorMessage(err, t("result.couldNotRetake")));
+      setRetaking(false);
+    }
+  };
   const tone = pending ? styles.pending : result.passed ? styles.passed : styles.failed;
   const questions = exam?.questions ?? [];
   const byId = new Map(questions.map((question) => [question.id, question]));
@@ -75,6 +92,12 @@ export function ResultScreen() {
           </Text>
         ) : null}
       </View>
+      {result.canRetake ? (
+        <Pressable style={[styles.primary, retaking && styles.disabled]} disabled={retaking} onPress={retake}>
+          {retaking ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t("result.retake")}</Text>}
+        </Pressable>
+      ) : null}
+      {retakeError ? <Text style={styles.retakeError}>{retakeError}</Text> : null}
       {result.passed && !pending && result.certificatesEnabled !== false ? (
         <View style={styles.card}>
           <Text style={styles.note}>{t("result.certificateBody")}</Text>
@@ -204,6 +227,8 @@ function makeStyles(colors: Palette) {
     card: { backgroundColor: colors.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.border, marginTop: 16 },
     primary: { marginTop: 12, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
     primaryText: { color: "#fff", fontWeight: "800" },
+    disabled: { opacity: 0.6 },
+    retakeError: { marginTop: 8, color: colors.danger },
     badge: { fontWeight: "800" },
     pass: { color: colors.success },
     fail: { color: colors.danger },

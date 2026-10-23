@@ -15,6 +15,7 @@ import { StudyReportCard } from "@/components/study/study-report-card";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 import { ResultOutcomeBadge, isAwaitingGrading } from "@/components/results/result-outcome-badge";
+import { RetakeExamButton } from "@/components/results/retake-exam-button";
 
 export default function MyResultDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -106,6 +107,11 @@ export default function MyResultDetailPage({ params }: { params: Promise<{ id: s
               className={`h-3 ${awaitingGrading ? "[&>div]:bg-amber-500" : result.passed ? "[&>div]:bg-emerald-500" : "[&>div]:bg-red-500"}`}
             />
           </div>
+          {result.canRetake && (
+            <div className="mt-6 flex justify-center">
+              <RetakeExamButton examId={result.examId} examTitle={result.examTitle} invitationId={result.retakeInvitationId} />
+            </div>
+          )}
         </CardContent>
       </Card>
 

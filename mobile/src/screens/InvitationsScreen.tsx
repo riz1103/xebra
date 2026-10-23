@@ -19,6 +19,7 @@ export function InvitationsScreen() {
   const [email, setEmail] = useState("");
   const [days, setDays] = useState("7");
   const [attempts, setAttempts] = useState("1");
+  const [allowRetakeAfterPass, setAllowRetakeAfterPass] = useState(false);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [multiplier, setMultiplier] = useState(1);
@@ -64,6 +65,7 @@ export function InvitationsScreen() {
     const timing = {
       expiresAt,
       maxAttempts,
+      allowRetakeAfterPass,
       ...(when(start) ? { scheduledStartTime: when(start) } : {}),
       ...(when(end) ? { scheduledEndTime: when(end) } : {}),
       ...(multiplier > 1 || note.trim()
@@ -118,6 +120,7 @@ export function InvitationsScreen() {
       ) : null}
       <Field label={t("invites.days")} value={days} onChangeText={setDays} keyboardType="number-pad" />
       <Field label={t("invites.attempts")} value={attempts} onChangeText={setAttempts} keyboardType="number-pad" />
+      <Choice label={t("invites.retakeAfterPass")} on={allowRetakeAfterPass} onPress={() => setAllowRetakeAfterPass((value) => !value)} />
       <Field label={t("invites.start")} value={start} onChangeText={setStart} placeholder="2026-10-21 09:00" />
       <Field label={t("invites.end")} value={end} onChangeText={setEnd} placeholder="2026-10-21 10:00" />
       <Text style={styles.muted}>{t("invites.extraTime")}</Text>
@@ -146,7 +149,10 @@ export function InvitationsScreen() {
         <View key={invite.id} style={styles.card}>
           <Text style={styles.title}>{invite.examineeEmail || invite.groupName || invite.examineeName || invite.id}</Text>
           <Text style={styles.muted}>{invite.examTitle || invite.bundleName || ""}</Text>
-          <Text style={styles.muted}>{invite.status}</Text>
+          <Text style={styles.muted}>
+            {invite.status}
+            {invite.allowRetakeAfterPass ? ` · ${t("invites.retakeAfterPass")}` : ""}
+          </Text>
           <Ghost
             label={t("invites.accommodation")}
             onPress={() => {

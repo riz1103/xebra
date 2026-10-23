@@ -37,7 +37,7 @@ Do not follow `mobile/AGENTS.md` for navigation. That file is the Expo template.
 | F-006 | Dashboard overview | `src/app/dashboard/page.tsx` | `mobile/src/screens/OverviewScreen.tsx` | matched | |
 | F-007 | My exams | `src/app/dashboard/my-exams/page.tsx` | `mobile/src/screens/HomeScreen.tsx` | matched | |
 | F-008 | Take an exam | `src/app/exam/[sessionId]/page.tsx` | `mobile/src/screens/ExamScreen.tsx`, `mobile/src/components/QuestionCard.tsx`, `mobile/src/math-text.tsx`, `mobile/src/integrity.ts` | matched | |
-| F-009 | My results | `src/app/dashboard/my-results/page.tsx`, `src/app/dashboard/my-results/[id]/page.tsx`, `src/app/dashboard/results/[resultId]/review/page.tsx` | `mobile/src/screens/HomeScreen.tsx`, `mobile/src/screens/ResultScreen.tsx` | matched | |
+| F-009 | My results, with a Retake button when another attempt is still allowed | `src/app/dashboard/my-results/page.tsx`, `src/app/dashboard/my-results/[id]/page.tsx`, `src/app/dashboard/results/[resultId]/review/page.tsx` | `mobile/src/screens/HomeScreen.tsx`, `mobile/src/screens/ResultScreen.tsx` | matched | |
 | F-010 | Result certificate | `src/app/dashboard/my-results/[id]/certificate/page.tsx` | `mobile/src/screens/CertificateScreen.tsx`, `mobile/src/screens/ResultScreen.tsx`, `mobile/src/qr.tsx` | matched | |
 | F-011 | Practice | `src/app/dashboard/practice/page.tsx` | `mobile/src/screens/PracticeScreen.tsx`, `mobile/src/practice.ts`, `mobile/src/notes.ts` | matched | |
 | F-012 | Join a group | `src/app/dashboard/join/page.tsx` | `mobile/src/screens/HomeScreen.tsx` | matched | |
@@ -47,7 +47,7 @@ Do not follow `mobile/AGENTS.md` for navigation. That file is the Expo template.
 | F-016 | Live session monitoring | `src/app/dashboard/exams/[id]/live/page.tsx` | `mobile/src/screens/LiveMonitorScreen.tsx` | matched | |
 | F-017 | Question bank | `src/app/dashboard/question-bank/page.tsx` | `mobile/src/screens/QuestionBankScreen.tsx`, `mobile/src/question-editor.tsx` | matched | |
 | F-018 | Exam bundles | `src/app/dashboard/bundles/page.tsx` | `mobile/src/screens/BundlesScreen.tsx` | matched | |
-| F-019 | Invitations | `src/app/dashboard/invitations/page.tsx` | `mobile/src/screens/InvitationsScreen.tsx` | matched | |
+| F-019 | Invitations, including allow retakes after a pass | `src/app/dashboard/invitations/page.tsx` | `mobile/src/screens/InvitationsScreen.tsx` | matched | |
 | F-020 | Examinee groups | `src/app/dashboard/groups/page.tsx` | `mobile/src/screens/GroupsScreen.tsx` | matched | |
 | F-021 | Proctor results | `src/app/dashboard/results/page.tsx`, `src/app/dashboard/results/[resultId]/review/page.tsx`, `src/app/dashboard/results/[resultId]/slip/page.tsx` | `mobile/src/screens/ManagedResultsScreen.tsx`, `mobile/src/screens/StaffReviewScreen.tsx`, `mobile/src/screens/ScoreSlipScreen.tsx` | matched | |
 | F-022 | Organizations | `src/app/dashboard/organizations/page.tsx`, `src/app/dashboard/organizations/[id]/page.tsx` | `mobile/src/screens/OrganizationsScreen.tsx`, `mobile/src/screens/OrgDetailScreen.tsx` | matched | |

@@ -15,6 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TimeMultiplierSelect } from "@/components/invitations/time-multiplier-select";
 
 const MAX_ROWS = 500;
@@ -48,6 +49,7 @@ export function BulkInviteDialog({ open, onOpenChange, exams, bundles }: BulkInv
   const [text, setText] = useState("");
   const [expiresAt, setExpiresAt] = useState(defaultExpiry);
   const [maxAttempts, setMaxAttempts] = useState(1);
+  const [allowRetakeAfterPass, setAllowRetakeAfterPass] = useState(false);
   const [scheduledStartTime, setScheduledStartTime] = useState("");
   const [scheduledEndTime, setScheduledEndTime] = useState("");
   const [timeMultiplier, setTimeMultiplier] = useState(1);
@@ -74,6 +76,7 @@ export function BulkInviteDialog({ open, onOpenChange, exams, bundles }: BulkInv
     setTargetId("");
     setExpiresAt(defaultExpiry());
     setMaxAttempts(1);
+    setAllowRetakeAfterPass(false);
     setScheduledStartTime("");
     setScheduledEndTime("");
     setTimeMultiplier(1);
@@ -109,6 +112,7 @@ export function BulkInviteDialog({ open, onOpenChange, exams, bundles }: BulkInv
     const shared = {
       expiresAt: scheduledEndTime ? toIso(scheduledEndTime)! : toIso(expiresAt)!,
       maxAttempts: Math.max(1, Number(maxAttempts) || 1),
+      allowRetakeAfterPass,
       scheduledStartTime: toIso(scheduledStartTime),
       scheduledEndTime: toIso(scheduledEndTime),
       accommodations: timeMultiplier > 1 ? { timeMultiplier } : null,
@@ -272,6 +276,19 @@ export function BulkInviteDialog({ open, onOpenChange, exams, bundles }: BulkInv
                   onChange={(e) => setScheduledEndTime(e.target.value)}
                 />
               </div>
+              <label className="col-span-2 flex items-start gap-3 rounded-md border p-3 text-sm">
+                <Checkbox
+                  checked={allowRetakeAfterPass}
+                  onCheckedChange={(checked) => setAllowRetakeAfterPass(checked === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium">Allow retakes after a pass</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Each person can use every remaining attempt even after they pass.
+                  </span>
+                </span>
+              </label>
               <div className="col-span-2 space-y-2">
                 <Label>Extra time for everyone on this list</Label>
                 <TimeMultiplierSelect value={timeMultiplier} onChange={setTimeMultiplier} />

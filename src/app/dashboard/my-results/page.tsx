@@ -22,6 +22,7 @@ import { BarChart3, Trophy, Target, ArrowLeft, TrendingUp } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { ResultOutcomeBadge, isAwaitingGrading } from "@/components/results/result-outcome-badge";
+import { RetakeExamButton } from "@/components/results/retake-exam-button";
 import { useT } from "@/lib/i18n";
 
 export default function MyResultsPage() {
@@ -192,9 +193,9 @@ export default function MyResultsPage() {
       ) : (
         <div className={cn("space-y-3 transition-opacity", isFetching && "opacity-60")}>
           {results.map((result) => (
-            <Link key={result.id} href={`/dashboard/my-results/${result.id}`} className="block">
-              <Card className="transition-shadow hover:shadow-md cursor-pointer">
-                <CardContent className="flex items-center gap-3 py-4 sm:gap-4 sm:py-5">
+            <Card key={result.id} className="transition-shadow hover:shadow-md">
+              <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-4 sm:py-5">
+              <Link href={`/dashboard/my-results/${result.id}`} className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold sm:text-lg ${
                   isAwaitingGrading(result)
                     ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
@@ -238,9 +239,17 @@ export default function MyResultsPage() {
                 <div className="hidden w-20 shrink-0 sm:block">
                   <Progress value={result.percentage} className="h-2" />
                 </div>
+              </Link>
+              {result.canRetake && (
+                <RetakeExamButton
+                  examId={result.examId}
+                  examTitle={result.examTitle}
+                  invitationId={result.retakeInvitationId}
+                  className="w-full shrink-0 sm:w-auto"
+                />
+              )}
               </CardContent>
             </Card>
-            </Link>
           ))}
         </div>
       )}

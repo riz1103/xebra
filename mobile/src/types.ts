@@ -169,6 +169,8 @@ export interface ExamResult {
   /** False when this exam does not issue certificates. Missing means certificates are on. */
   certificatesEnabled?: boolean;
   certificateCode?: string | null;
+  canRetake?: boolean;
+  retakeInvitationId?: string | null;
   questionResults?: QuestionResult[];
   answers?: Record<string, AnswerValue>;
 }
@@ -343,6 +345,7 @@ export interface ExamInvitation {
   groupName?: string;
   status: string;
   maxAttempts: number;
+  allowRetakeAfterPass?: boolean;
   attemptsUsed?: number;
   expiresAt: string;
 }
