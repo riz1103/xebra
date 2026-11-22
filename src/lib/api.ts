@@ -46,6 +46,8 @@ import type {
   ExamResultStats,
   NotificationPrefs,
   LiveExamMonitor,
+  LiveOverview,
+  LiveMonitorResponse,
   ItemAnalysis,
   GroupJoinPreview,
   GroupJoinResult,
@@ -388,8 +390,26 @@ class ApiClient {
     return data;
   }
 
-  async getLiveSessions(examId: string) {
-    const { data } = await this.client.get<ApiResponse<LiveExamMonitor>>(`/api/exams/${examId}/live`);
+  async getLiveSessions(examId: string, opts?: { etag?: string; holdMs?: number }) {
+    const { data } = await this.client.get<LiveMonitorResponse<LiveExamMonitor>>(`/api/exams/${examId}/live`, {
+      params: {
+        ...(opts?.etag ? { etag: opts.etag } : {}),
+        ...(opts?.holdMs != null ? { holdMs: opts.holdMs } : {}),
+      },
+      // Long-poll may hold up to ~5s plus query time
+      timeout: 20000,
+    });
+    return data;
+  }
+
+  async getLiveOverview(opts?: { etag?: string; holdMs?: number }) {
+    const { data } = await this.client.get<LiveMonitorResponse<LiveOverview>>(`/api/exams/live`, {
+      params: {
+        ...(opts?.etag ? { etag: opts.etag } : {}),
+        ...(opts?.holdMs != null ? { holdMs: opts.holdMs } : {}),
+      },
+      timeout: 20000,
+    });
     return data;
   }
 

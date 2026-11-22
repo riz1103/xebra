@@ -18,6 +18,7 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { InvitationsScreen } from "./src/screens/InvitationsScreen";
 import { LandingScreen } from "./src/screens/LandingScreen";
 import { LiveMonitorScreen } from "./src/screens/LiveMonitorScreen";
+import { LiveOverviewScreen } from "./src/screens/LiveOverviewScreen";
 import { ManagedExamsScreen } from "./src/screens/ManagedExamsScreen";
 import { ManagedResultsScreen } from "./src/screens/ManagedResultsScreen";
 import { OrgDetailScreen } from "./src/screens/OrgDetailScreen";
@@ -129,6 +130,7 @@ function Root() {
             <Stack.Screen name="ManagedExams" component={ManagedExamsScreen} options={{ title: t("exams.title") }} />
             <Stack.Screen name="ExamForm" component={ExamFormScreen} options={{ title: t("form.edit") }} />
             <Stack.Screen name="LiveMonitor" component={LiveMonitorScreen} options={{ title: t("live.title") }} />
+            <Stack.Screen name="LiveOverview" component={LiveOverviewScreen} options={{ title: t("live.overviewTitle") }} />
             <Stack.Screen name="QuestionBank" component={QuestionBankScreen} options={{ title: t("bank.title") }} />
             <Stack.Screen name="Bundles" component={BundlesScreen} options={{ title: t("bundles.title") }} />
             <Stack.Screen name="Invitations" component={InvitationsScreen} options={{ title: t("invites.title") }} />

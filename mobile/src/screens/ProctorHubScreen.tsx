@@ -6,10 +6,11 @@ import { useT } from "../i18n";
 import type { RootStackParamList } from "../navigation";
 import { StaffBody, useStaffStyles } from "../staff-ui";
 
-type HubRoute = "ManagedExams" | "QuestionBank" | "Bundles" | "Invitations" | "Groups" | "ManagedResults" | "Organizations" | "Settings";
+type HubRoute = "ManagedExams" | "LiveOverview" | "QuestionBank" | "Bundles" | "Invitations" | "Groups" | "ManagedResults" | "Organizations" | "Settings";
 
-const LINKS: { key: HubRoute; label: "hub.exams" | "hub.bank" | "hub.bundles" | "hub.invites" | "hub.groups" | "hub.results" | "hub.orgs" | "hub.settings" }[] = [
+const LINKS: { key: HubRoute; label: "hub.exams" | "hub.live" | "hub.bank" | "hub.bundles" | "hub.invites" | "hub.groups" | "hub.results" | "hub.orgs" | "hub.settings" }[] = [
   { key: "ManagedExams", label: "hub.exams" },
+  { key: "LiveOverview", label: "hub.live" },
   { key: "QuestionBank", label: "hub.bank" },
   { key: "Bundles", label: "hub.bundles" },
   { key: "Invitations", label: "hub.invites" },

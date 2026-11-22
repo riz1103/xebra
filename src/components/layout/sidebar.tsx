@@ -22,6 +22,7 @@ import {
   Library,
   Dumbbell,
   Building2,
+  Radio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,6 +39,7 @@ interface NavItem {
 
 const proctorSectionItems: NavItem[] = [
   { href: "/dashboard/exams", label: "nav.exams", icon: FileText },
+  { href: "/dashboard/live", label: "nav.live", icon: Radio },
   { href: "/dashboard/question-bank", label: "nav.questionBank", icon: Library },
   { href: "/dashboard/bundles", label: "nav.bundles", icon: Package },
   { href: "/dashboard/invitations", label: "nav.invitations", icon: Mail },

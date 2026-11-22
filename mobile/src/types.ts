@@ -403,24 +403,71 @@ export interface Webhook {
   lastStatus: number | null;
 }
 
+export type LiveAlertLevel = "ok" | "warning" | "critical";
+
+export interface LiveIntegritySummary {
+  tab_hidden: number;
+  window_blur: number;
+  fullscreen_exit: number;
+  paste: number;
+  copy: number;
+}
+
 export interface LiveSession {
   id: string;
+  examId?: string | null;
+  examTitle?: string | null;
   examineeName: string | null;
   examineeEmail: string | null;
   startedAt: string | null;
   timeRemainingSeconds: number | null;
   answeredCount: number;
+  currentQuestionIndex?: number;
   focusLossCount?: number;
   totalQuestions: number;
   extraTimeSeconds: number;
   integrityEventCount: number;
+  integritySummary?: LiveIntegritySummary;
+  integrityAwayMs?: number;
+  alertScore?: number;
+  alertLevel?: LiveAlertLevel;
+  lastActivityAt?: string | null;
 }
 
 export interface LiveExamMonitor {
   examTitle: string | null;
   inProgress: number;
+  flaggedCount?: number;
+  idleCount?: number;
   autoSubmitted: number;
   sessions: LiveSession[];
+}
+
+export interface LiveExamSummary {
+  examId: string;
+  examTitle: string | null;
+  examStatus: string | null;
+  inProgress: number;
+  flaggedCount: number;
+}
+
+export interface LiveOverview {
+  serverTime: string;
+  inProgress: number;
+  flaggedCount: number;
+  idleCount: number;
+  autoSubmitted: number;
+  exams: LiveExamSummary[];
+  sessions: LiveSession[];
+}
+
+export interface LiveMonitorResponse<T> {
+  success: boolean;
+  unchanged?: boolean;
+  etag?: string;
+  pollAfterMs?: number;
+  message?: string;
+  data: T | null;
 }
 
 export interface AiPlan {

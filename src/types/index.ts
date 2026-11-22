@@ -1100,8 +1100,20 @@ export interface TimeExtension {
   at: string;
 }
 
+export type LiveAlertLevel = "ok" | "warning" | "critical";
+
+export interface LiveIntegritySummary {
+  tab_hidden: number;
+  window_blur: number;
+  fullscreen_exit: number;
+  paste: number;
+  copy: number;
+}
+
 export interface LiveSession {
   id: string;
+  examId?: string | null;
+  examTitle?: string | null;
   examineeId: string;
   examineeName: string | null;
   examineeEmail: string | null;
@@ -1120,6 +1132,11 @@ export interface LiveSession {
   timeExtensions: TimeExtension[];
   integrityEventCount: number;
   focusLossCount: number;
+  integritySummary?: LiveIntegritySummary;
+  integrityAwayMs?: number;
+  integrityLastEventAt?: string | null;
+  alertScore?: number;
+  alertLevel?: LiveAlertLevel;
 }
 
 export interface LiveRecentResult {
@@ -1139,12 +1156,42 @@ export interface LiveExamMonitor {
   examId: string;
   examTitle: string | null;
   examStatus: string | null;
+  liveRevision?: number;
   serverTime: string;
   inProgress: number;
+  flaggedCount?: number;
+  idleCount?: number;
   /** Sessions whose time ran out and were submitted while loading this view */
   autoSubmitted: number;
   sessions: LiveSession[];
   recentResults: LiveRecentResult[];
+}
+
+export interface LiveExamSummary {
+  examId: string;
+  examTitle: string | null;
+  examStatus: string | null;
+  inProgress: number;
+  flaggedCount: number;
+}
+
+export interface LiveOverview {
+  serverTime: string;
+  inProgress: number;
+  flaggedCount: number;
+  idleCount: number;
+  autoSubmitted: number;
+  exams: LiveExamSummary[];
+  sessions: LiveSession[];
+}
+
+export interface LiveMonitorResponse<T> {
+  success: boolean;
+  unchanged?: boolean;
+  etag?: string;
+  pollAfterMs?: number;
+  message?: string;
+  data: T | null;
 }
 
 export type IntegrityEventType = "tab_hidden" | "window_blur" | "fullscreen_exit" | "paste" | "copy";

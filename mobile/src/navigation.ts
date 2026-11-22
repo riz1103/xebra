@@ -15,6 +15,7 @@ export type RootStackParamList = {
   ManagedExams: undefined;
   ExamForm: { examId?: string };
   LiveMonitor: { examId: string };
+  LiveOverview: undefined;
   QuestionBank: undefined;
   Bundles: undefined;
   Invitations: undefined;

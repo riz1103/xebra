@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
@@ -12,12 +12,15 @@ import {
   Plus,
   RefreshCw,
   Send,
-  ShieldAlert,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { cn, formatDuration } from "@/lib/utils";
+import { alertLevelOf, isIdleSession, sessionIdleMs } from "@/lib/live-monitor";
+import { useExamLiveMonitor } from "@/hooks/use-live-monitor";
+import { LiveAlertsStrip } from "@/components/live/live-alerts-strip";
+import { LiveFlagBreakdown } from "@/components/live/live-flag-breakdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,8 +46,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { LiveSession } from "@/types";
 
-const POLL_MS = 10_000;
-const IDLE_WARNING_MS = 3 * 60_000;
 const EXTENSION_CHOICES = [5, 10, 15, 30];
 
 function useNow(intervalMs = 1000) {
@@ -71,15 +72,8 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
   const [submitTarget, setSubmitTarget] = useState<LiveSession | null>(null);
   const [submitReason, setSubmitReason] = useState("");
 
-  const { data, isLoading, isFetching, dataUpdatedAt, refetch, error } = useQuery({
-    queryKey: ["exam-live", id],
-    queryFn: () => api.getLiveSessions(id),
-    refetchInterval: POLL_MS,
-    refetchIntervalInBackground: false,
-  });
-  const live = data?.data;
+  const { data: live, isLoading, isFetching, dataUpdatedAt, refetch, error } = useExamLiveMonitor(id);
 
-  // Server time minus local time when the data arrived, so countdowns ignore local clock skew
   const skewMs = useMemo(
     () => (live?.serverTime ? new Date(live.serverTime).getTime() - dataUpdatedAt : 0),
     [live?.serverTime, dataUpdatedAt]
@@ -87,26 +81,32 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => {
     if (live?.autoSubmitted) {
-      toast.info(`${live.autoSubmitted} session${live.autoSubmitted === 1 ? "" : "s"} ran out of time and ${live.autoSubmitted === 1 ? "was" : "were"} submitted.`);
+      toast.info(
+        `${live.autoSubmitted} session${live.autoSubmitted === 1 ? "" : "s"} ran out of time and ${
+          live.autoSubmitted === 1 ? "was" : "were"
+        } submitted.`
+      );
     }
   }, [live?.autoSubmitted, dataUpdatedAt]);
 
   const extendMutation = useMutation({
-    mutationFn: ({ sessionId, minutes }: { sessionId: string; minutes: number }) => api.extendSessionTime(sessionId, minutes),
+    mutationFn: ({ sessionId, minutes }: { sessionId: string; minutes: number }) =>
+      api.extendSessionTime(sessionId, minutes),
     onSuccess: (res, { minutes }) => {
       toast.success(res.message || `Added ${minutes} minutes`);
-      queryClient.invalidateQueries({ queryKey: ["exam-live", id] });
+      void refetch();
     },
     onError: (err: Error) => toast.error(err.message || "Failed to add time"),
   });
 
   const forceSubmitMutation = useMutation({
-    mutationFn: ({ sessionId, reason }: { sessionId: string; reason?: string }) => api.forceSubmitSession(sessionId, reason),
+    mutationFn: ({ sessionId, reason }: { sessionId: string; reason?: string }) =>
+      api.forceSubmitSession(sessionId, reason),
     onSuccess: (res) => {
       toast.success(res.message || "Session submitted");
       setSubmitTarget(null);
       setSubmitReason("");
-      queryClient.invalidateQueries({ queryKey: ["exam-live", id] });
+      void refetch();
       queryClient.invalidateQueries({ queryKey: ["results"] });
     },
     onError: (err: Error) => toast.error(err.message || "Failed to submit session"),
@@ -134,21 +134,29 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <p className="text-lg font-medium">Live monitor unavailable</p>
-        <p className="text-sm text-muted-foreground mt-1">{(error as Error | null)?.message || "This exam could not be loaded."}</p>
-        <Button asChild className="mt-4"><Link href={`/dashboard/exams/${id}`}>Back to exam</Link></Button>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {(error as Error | null)?.message || "This exam could not be loaded."}
+        </p>
+        <Button asChild className="mt-4">
+          <Link href={`/dashboard/exams/${id}`}>Back to exam</Link>
+        </Button>
       </div>
     );
   }
 
-  const idleCount = live.sessions.filter(
-    (s) => s.lastActivityAt && now + skewMs - new Date(s.lastActivityAt).getTime() > IDLE_WARNING_MS
-  ).length;
+  const idleCount =
+    live.idleCount ??
+    live.sessions.filter((s) => isIdleSession(s, now, skewMs)).length;
+  const flaggedCount =
+    live.flaggedCount ?? live.sessions.filter((s) => alertLevelOf(s, now, skewMs) !== "ok").length;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-start gap-3 sm:items-center">
         <Button variant="ghost" size="icon" asChild className="shrink-0" aria-label="Back to exam">
-          <Link href={`/dashboard/exams/${id}`}><ArrowLeft className="h-4 w-4" /></Link>
+          <Link href={`/dashboard/exams/${id}`}>
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
@@ -158,8 +166,11 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
             </span>
             Live monitor
           </h1>
-          <p className="text-muted-foreground break-words">{live.examTitle || "Exam"}</p>
+          <p className="break-words text-muted-foreground">{live.examTitle || "Exam"}</p>
         </div>
+        <Button variant="outline" size="sm" asChild>
+          <Link href="/dashboard/live">All exams</Link>
+        </Button>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />
           Updated {relativeTime(now - dataUpdatedAt)}
@@ -168,19 +179,35 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
 
       {live.examStatus !== "active" && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800 dark:bg-amber-950/30">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
           This exam is {live.examStatus || "not active"}, so examinees can&apos;t start new sessions.
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      <LiveAlertsStrip sessions={live.sessions} nowMs={now} skewMs={skewMs} />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground sm:text-sm">
               <Users className="hidden h-4 w-4 sm:block" /> In progress
             </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-xl font-bold sm:text-2xl">{live.inProgress}</div></CardContent>
+          <CardContent>
+            <div className="text-xl font-bold sm:text-2xl">{live.inProgress}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground sm:text-sm">
+              <AlertTriangle className="hidden h-4 w-4 sm:block" /> Red flags
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={cn("text-xl font-bold sm:text-2xl", flaggedCount > 0 && "text-red-600")}>
+              {flaggedCount}
+            </div>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
@@ -189,7 +216,9 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={cn("text-xl font-bold sm:text-2xl", idleCount > 0 && "text-amber-600")}>{idleCount}</div>
+            <div className={cn("text-xl font-bold sm:text-2xl", idleCount > 0 && "text-amber-600")}>
+              {idleCount}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -198,51 +227,71 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
               <Send className="hidden h-4 w-4 sm:block" /> Submitted (3h)
             </CardTitle>
           </CardHeader>
-          <CardContent><div className="text-xl font-bold sm:text-2xl">{live.recentResults.length}</div></CardContent>
+          <CardContent>
+            <div className="text-xl font-bold sm:text-2xl">{live.recentResults.length}</div>
+          </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Examinees taking the exam</CardTitle>
-          <CardDescription>Refreshes every 10 seconds. Sessions whose time runs out are submitted automatically.</CardDescription>
+          <CardDescription>
+            Updates as soon as examinees answer or trigger integrity flags (long-poll). Flagged sessions appear first.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {live.sessions.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">Nobody is taking this exam right now.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Nobody is taking this exam right now.
+            </p>
           ) : (
             <ul className="space-y-3">
               {live.sessions.map((session) => {
                 const remaining = remainingSeconds(session);
-                const idleMs = session.lastActivityAt ? now + skewMs - new Date(session.lastActivityAt).getTime() : null;
-                const idle = idleMs != null && idleMs > IDLE_WARNING_MS;
-                const progress = session.totalQuestions > 0 ? (session.answeredCount / session.totalQuestions) * 100 : 0;
+                const idleMs = sessionIdleMs(session, now, skewMs);
+                const idle = isIdleSession(session, now, skewMs);
+                const level = alertLevelOf(session, now, skewMs);
+                const progress =
+                  session.totalQuestions > 0
+                    ? (session.answeredCount / session.totalQuestions) * 100
+                    : 0;
                 const busy =
                   (extendMutation.isPending && extendMutation.variables?.sessionId === session.id) ||
                   (forceSubmitMutation.isPending && forceSubmitMutation.variables?.sessionId === session.id);
                 return (
-                  <li key={session.id} className="rounded-lg border p-3 sm:p-4">
+                  <li
+                    key={session.id}
+                    className={cn(
+                      "rounded-lg border p-3 sm:p-4",
+                      level === "critical" && "border-red-400/70 bg-red-50/50 dark:bg-red-950/20",
+                      level === "warning" && "border-amber-400/60 bg-amber-50/40 dark:bg-amber-950/15"
+                    )}
+                  >
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                       <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate font-medium">{session.examineeName || session.examineeEmail || "Examinee"}</p>
+                          <p className="truncate font-medium">
+                            {session.examineeName || session.examineeEmail || "Examinee"}
+                          </p>
+                          {level !== "ok" && (
+                            <Badge variant={level === "critical" ? "destructive" : "warning"} className="text-[10px]">
+                              {level === "critical" ? "Critical" : "Flagged"}
+                            </Badge>
+                          )}
                           {(session.timeMultiplier ?? 1) > 1 && (
                             <Badge variant="secondary" className="text-[10px]" title="Extra-time accommodation">
                               {Number(session.timeMultiplier.toFixed(2))}× time
                             </Badge>
                           )}
                           {session.extraTimeSeconds > 0 && (
-                            <Badge variant="secondary" className="text-[10px]">+{Math.round(session.extraTimeSeconds / 60)} min</Badge>
-                          )}
-                          {idle && <Badge variant="warning" className="text-[10px]">Idle</Badge>}
-                          {(session.focusLossCount ?? 0) > 0 && (
-                            <Badge variant="outline" className="gap-1 text-[10px] border-amber-400 text-amber-700 dark:text-amber-400">
-                              <ShieldAlert className="h-3 w-3" /> Left window ×{session.focusLossCount}
+                            <Badge variant="secondary" className="text-[10px]">
+                              +{Math.round(session.extraTimeSeconds / 60)} min
                             </Badge>
                           )}
-                          {session.integrityEventCount > 0 && (session.focusLossCount ?? 0) === 0 && (
-                            <Badge variant="outline" className="gap-1 text-[10px] border-amber-400 text-amber-700 dark:text-amber-400">
-                              <ShieldAlert className="h-3 w-3" /> {session.integrityEventCount} flag{session.integrityEventCount === 1 ? "" : "s"}
+                          {idle && (
+                            <Badge variant="warning" className="text-[10px]">
+                              Idle
                             </Badge>
                           )}
                         </div>
@@ -259,6 +308,7 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
                           On question {Math.min(session.currentQuestionIndex + 1, session.totalQuestions || 1)}
                           {idleMs != null && <> &middot; last activity {relativeTime(idleMs)}</>}
                         </p>
+                        <LiveFlagBreakdown session={session} />
                       </div>
                       <div className="flex items-center gap-3 sm:shrink-0">
                         <div
@@ -274,9 +324,11 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" disabled={busy || remaining == null}>
-                              {extendMutation.isPending && extendMutation.variables?.sessionId === session.id
-                                ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                : <Plus className="mr-1 h-3 w-3" />}
+                              {extendMutation.isPending && extendMutation.variables?.sessionId === session.id ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : (
+                                <Plus className="mr-1 h-3 w-3" />
+                              )}
                               Time
                             </Button>
                           </DropdownMenuTrigger>
@@ -335,7 +387,9 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
                     {r.gradingStatus === "pending_review" ? (
                       <Badge variant="warning">Awaiting grading</Badge>
                     ) : (
-                      <Badge variant={r.passed ? "success" : "destructive"}>{r.passed ? "Passed" : "Failed"}</Badge>
+                      <Badge variant={r.passed ? "success" : "destructive"}>
+                        {r.passed ? "Passed" : "Failed"}
+                      </Badge>
                     )}
                     <Button variant="ghost" size="sm" asChild>
                       <Link href={`/dashboard/results/${r.id}/review`}>Review</Link>
@@ -348,14 +402,23 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
         </CardContent>
       </Card>
 
-      <AlertDialog open={!!submitTarget} onOpenChange={(open) => { if (!open) { setSubmitTarget(null); setSubmitReason(""); } }}>
+      <AlertDialog
+        open={!!submitTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSubmitTarget(null);
+            setSubmitReason("");
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Submit this exam now?</AlertDialogTitle>
             <AlertDialogDescription>
-              {submitTarget?.examineeName || submitTarget?.examineeEmail || "The examinee"}&apos;s exam will end immediately and be
-              scored with the {submitTarget?.answeredCount ?? 0} answer{submitTarget?.answeredCount === 1 ? "" : "s"} saved so far.
-              This counts as one of their attempts and can&apos;t be undone.
+              {submitTarget?.examineeName || submitTarget?.examineeEmail || "The examinee"}&apos;s exam will end
+              immediately and be scored with the {submitTarget?.answeredCount ?? 0} answer
+              {submitTarget?.answeredCount === 1 ? "" : "s"} saved so far. This counts as one of their attempts and
+              can&apos;t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Textarea
@@ -373,7 +436,10 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
               onClick={(e) => {
                 e.preventDefault();
                 if (submitTarget) {
-                  forceSubmitMutation.mutate({ sessionId: submitTarget.id, reason: submitReason.trim() || undefined });
+                  forceSubmitMutation.mutate({
+                    sessionId: submitTarget.id,
+                    reason: submitReason.trim() || undefined,
+                  });
                 }
               }}
             >
