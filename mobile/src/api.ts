@@ -233,7 +233,13 @@ class ApiClient {
     return data;
   }
 
-  async getExams(params?: { page?: number; size?: number; status?: string }) {
+  async getExams(params?: {
+    page?: number;
+    size?: number;
+    status?: string;
+    sortBy?: "createdAt" | "title" | "updatedAt";
+    sortOrder?: "asc" | "desc";
+  }) {
     const { data } = await this.client.get<ListResponse<Exam>>("/api/exams", { params });
     return data;
   }

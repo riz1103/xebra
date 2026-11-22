@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,22 +34,64 @@ import { DuplicateExamButton } from "@/components/exams/duplicate-exam-button";
 import type { Exam, ExamOrigin } from "@/types";
 import { useT } from "@/lib/i18n";
 
+type ExamSortKey = "newest" | "oldest" | "title_asc" | "title_desc" | "updated";
+
+const EXAM_SORTS: Record<
+  ExamSortKey,
+  { label: string; sortBy: "createdAt" | "title" | "updatedAt"; sortOrder: "asc" | "desc" }
+> = {
+  newest: { label: "Newest first", sortBy: "createdAt", sortOrder: "desc" },
+  oldest: { label: "Oldest first", sortBy: "createdAt", sortOrder: "asc" },
+  title_asc: { label: "Title (A–Z)", sortBy: "title", sortOrder: "asc" },
+  title_desc: { label: "Title (Z–A)", sortBy: "title", sortOrder: "desc" },
+  updated: { label: "Recently updated", sortBy: "updatedAt", sortOrder: "desc" },
+};
+
+function examFieldMillis(exam: Exam, field: "createdAt" | "updatedAt"): number {
+  const value = exam[field] as unknown;
+  if (!value) return 0;
+  if (typeof value === "object" && value !== null && "_seconds" in value) {
+    return Number((value as { _seconds: number })._seconds) * 1000;
+  }
+  const ms = new Date(value as string).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+function sortExams(list: Exam[], sort: ExamSortKey): Exam[] {
+  const { sortBy, sortOrder } = EXAM_SORTS[sort];
+  const direction = sortOrder === "asc" ? 1 : -1;
+  return [...list].sort((a, b) => {
+    if (sortBy === "title") {
+      const diff = (a.title || "").localeCompare(b.title || "", undefined, { sensitivity: "base" });
+      if (diff !== 0) return diff * direction;
+    } else {
+      const diff = examFieldMillis(a, sortBy) - examFieldMillis(b, sortBy);
+      if (diff !== 0) return diff * direction;
+    }
+    return examFieldMillis(b, "createdAt") - examFieldMillis(a, "createdAt");
+  });
+}
+
 export default function ExamsPage() {
   const t = useT();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [originFilter, setOriginFilter] = useState<ExamOrigin | "all">("all");
+  const [sort, setSort] = useState<ExamSortKey>("newest");
   const [page, setPage] = useState(1);
   const [deleteExam, setDeleteExam] = useState<Exam | null>(null);
   const queryClient = useQueryClient();
+  const sortParams = EXAM_SORTS[sort];
 
   const { data, isLoading } = useQuery({
-    queryKey: ["exams", page, statusFilter],
+    queryKey: ["exams", page, statusFilter, sort],
     queryFn: () =>
       api.getExams({
         page,
         size: DEFAULT_PAGE_SIZE,
         status: statusFilter === "all" ? undefined : statusFilter,
+        sortBy: sortParams.sortBy,
+        sortOrder: sortParams.sortOrder,
       }),
   });
 
@@ -58,7 +100,12 @@ export default function ExamsPage() {
     queryFn: () => api.getSharedExams(),
     retry: false,
   });
-  const sharedExams = (sharedData?.data ?? []).filter((exam) => exam.title.toLowerCase().includes(search.toLowerCase()));
+  const sharedExams = useMemo(() => {
+    const filtered = (sharedData?.data ?? []).filter((exam) =>
+      exam.title.toLowerCase().includes(search.toLowerCase())
+    );
+    return sortExams(filtered, sort);
+  }, [sharedData?.data, search, sort]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteExam(id),
@@ -128,6 +175,22 @@ export default function ExamsPage() {
             <SelectItem value="all">All Sources</SelectItem>
             {(Object.keys(EXAM_ORIGIN_LABELS) as ExamOrigin[]).map((o) => (
               <SelectItem key={o} value={o}>{EXAM_ORIGIN_LABELS[o]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={sort}
+          onValueChange={(v) => {
+            setSort(v as ExamSortKey);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="col-span-2 sm:w-44">
+            <SelectValue placeholder="Sort" />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(EXAM_SORTS) as ExamSortKey[]).map((key) => (
+              <SelectItem key={key} value={key}>{EXAM_SORTS[key].label}</SelectItem>
             ))}
           </SelectContent>
         </Select>

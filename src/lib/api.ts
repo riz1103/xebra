@@ -277,6 +277,8 @@ class ApiClient {
     status?: string;
     isPublic?: boolean;
     createdBy?: string;
+    sortBy?: "createdAt" | "title" | "updatedAt";
+    sortOrder?: "asc" | "desc";
     page?: number;
     size?: number;
   }) {
