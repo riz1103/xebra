@@ -49,6 +49,8 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
   const [parts, setParts] = useState<ExamPart[]>([]);
   const [passingConditionType, setPassingConditionType] = useState<"whole_exam" | "per_part">("whole_exam");
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  /** Bumps after form.reset so Radix Selects remount with the loaded labels. */
+  const [selectResetKey, setSelectResetKey] = useState(0);
 
   const { data: examData, isLoading: examLoading, isFetching: examFetching } = useQuery({
     queryKey: ["exam", id],
@@ -113,13 +115,16 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
 
   useEffect(() => {
     if (exam) {
+      const order = exam.questionOrder === "random" ? "random" : "fixed";
+      const timeType =
+        exam.timeType === "per_question" || exam.timeType === "per_part" ? exam.timeType : "per_exam";
       form.reset({
         title: exam.title,
         description: exam.description || "",
         instruction: exam.instruction || null,
         parts: exam.parts || null,
-        questionOrder: exam.questionOrder === "random" ? "random" : "fixed",
-        timeType: exam.timeType,
+        questionOrder: order,
+        timeType,
         timeLimit: exam.timeLimit,
         numberOfItems: exam.numberOfItems,
         passingCondition: exam.passingCondition || { type: "percentage", value: exam.passingScore || 70 },
@@ -131,9 +136,11 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         certificatesEnabled: exam.certificatesEnabled !== false,
         focusLossMode: exam.focusLossMode ?? "count",
       });
-      if (exam.parts) {
-        setParts(exam.parts);
-      }
+      setParts(exam.parts ?? []);
+      setPassingConditionType(
+        exam.parts?.some((part) => part.passingCondition) ? "per_part" : "whole_exam"
+      );
+      setSelectResetKey((key) => key + 1);
     }
   }, [exam, form]);
 
@@ -400,28 +407,36 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
     );
   }
 
+  const submitExam = form.handleSubmit(
+    (v) => updateMutation.mutate(v),
+    (errors) => {
+      const firstError = Object.values(errors)[0]?.message;
+      toast.error(firstError ?? "Please fix the errors below before saving.");
+    }
+  );
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div className="flex items-start gap-2 sm:items-center sm:gap-4">
         <Button variant="ghost" size="icon" asChild className="shrink-0" aria-label="Back to exam">
           <Link href={`/dashboard/exams/${id}`}><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
-        <div className="min-w-0 break-words">
+        <div className="min-w-0 flex-1 break-words">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Edit Exam</h1>
           <p className="text-muted-foreground">Update &quot;{exam.title}&quot;</p>
         </div>
+        <Button
+          type="button"
+          className="hidden shrink-0 sm:inline-flex"
+          disabled={updateMutation.isPending}
+          onClick={() => void submitExam()}
+        >
+          {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Save className="mr-2 h-4 w-4" /> Save Changes
+        </Button>
       </div>
 
-      <form
-        onSubmit={form.handleSubmit(
-          (v) => updateMutation.mutate(v),
-          (errors) => {
-            const firstError = Object.values(errors)[0]?.message;
-            toast.error(firstError ?? "Please fix the errors below before saving.");
-          }
-        )}
-        className="space-y-6"
-      >
+      <form onSubmit={submitExam} className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Basic Information</CardTitle>
@@ -451,8 +466,16 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Question Order</Label>
-                <Select value={form.watch("questionOrder")} onValueChange={(v) => form.setValue("questionOrder", v as "random" | "fixed")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  key={`questionOrder-${selectResetKey}`}
+                  value={form.watch("questionOrder") || "fixed"}
+                  onValueChange={(v) =>
+                    form.setValue("questionOrder", v as "random" | "fixed", { shouldDirty: true, shouldValidate: true })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select order" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="fixed">Fixed</SelectItem>
                     <SelectItem value="random">Random</SelectItem>
@@ -461,8 +484,19 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
               </div>
               <div className="space-y-2">
                 <Label>Time Type</Label>
-                <Select value={form.watch("timeType")} onValueChange={(v) => form.setValue("timeType", v as "per_exam" | "per_question" | "per_part")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  key={`timeType-${selectResetKey}`}
+                  value={form.watch("timeType") || "per_exam"}
+                  onValueChange={(v) =>
+                    form.setValue("timeType", v as "per_exam" | "per_question" | "per_part", {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select time type" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="per_exam">Per Exam</SelectItem>
                     <SelectItem value="per_question">Per Question</SelectItem>
@@ -736,96 +770,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Passing Condition</CardTitle>
-            <CardDescription>Define what it takes to pass this exam.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Passing Condition Scope</Label>
-              <Select
-                value={passingConditionType}
-                onValueChange={(v) => setPassingConditionType(v as "whole_exam" | "per_part")}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="whole_exam">Whole Exam</SelectItem>
-                  <SelectItem value="per_part">Per Part</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {passingConditionType === "whole_exam"
-                  ? "Set a single passing condition for the entire exam"
-                  : "Set individual passing conditions for each part"}
-              </p>
-            </div>
-            {passingConditionType === "whole_exam" && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Type</Label>
-                  <Select value={form.watch("passingCondition.type")} onValueChange={(v) => form.setValue("passingCondition.type", v as "percentage" | "points" | "items")}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">Percentage (%)</SelectItem>
-                      <SelectItem value="points">Points</SelectItem>
-                      <SelectItem value="items">Items</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Value</Label>
-                  <Input type="number" min={0} {...form.register("passingCondition.value")} />
-                </div>
-              </div>
-            )}
-            {passingConditionType === "per_part" && parts.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Add parts to set per-part passing conditions. Each part can have its own passing requirement.
-              </p>
-            )}
-            <div className="flex items-center gap-3">
-              <Switch checked={form.watch("isPublic")} onCheckedChange={(v) => form.setValue("isPublic", v)} />
-              <Label>Public Exam</Label>
-            </div>
-            <div className="flex items-center gap-3">
-              <Switch
-                checked={form.watch("reviewableByExaminee") ?? false}
-                onCheckedChange={(v) => form.setValue("reviewableByExaminee", v)}
-              />
-              <div>
-                <Label>Allow examinees to review their answers</Label>
-                <p className="text-xs text-muted-foreground">
-                  When on, examinees can open &quot;View my answers&quot; after submitting to see questions, correct answers, and explanations.
-                </p>
-              </div>
-            </div>
-            <SourceViewableSwitch
-              checked={form.watch("sourceViewableByExaminee") ?? false}
-              onCheckedChange={(v) => form.setValue("sourceViewableByExaminee", v)}
-              reviewable={form.watch("reviewableByExaminee") ?? false}
-            />
-            <AnswerRevealSelect
-              value={form.watch("answerRevealTiming") ?? "always"}
-              onValueChange={(v) => form.setValue("answerRevealTiming", v)}
-              reviewable={form.watch("reviewableByExaminee") ?? false}
-            />
-            <ShuffleOptionsSwitch
-              checked={form.watch("shuffleOptions") ?? false}
-              onCheckedChange={(v) => form.setValue("shuffleOptions", v)}
-            />
-            <FocusLossSelect
-              value={form.watch("focusLossMode") ?? "count"}
-              onValueChange={(v) => form.setValue("focusLossMode", v)}
-            />
-            <CertificatesSwitch
-              checked={form.watch("certificatesEnabled") ?? true}
-              onCheckedChange={(v) => form.setValue("certificatesEnabled", v)}
-            />
-          </CardContent>
-        </Card>
-
-        <div className="sticky bottom-0 z-20 -mx-4 grid grid-cols-2 gap-3 border-t bg-background/95 px-4 py-3 pb-safe backdrop-blur sm:static sm:mx-0 sm:flex sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+        <div className="sticky bottom-0 z-20 -mx-4 grid grid-cols-2 gap-3 border-t bg-background/95 px-4 py-3 pb-safe backdrop-blur sm:mx-0 sm:flex sm:justify-end sm:px-0">
           <Button type="button" variant="outline" asChild>
             <Link href={`/dashboard/exams/${id}`}>Cancel</Link>
           </Button>
