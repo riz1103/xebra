@@ -43,7 +43,7 @@ Do not follow `mobile/AGENTS.md` for navigation. That file is the Expo template.
 | F-012 | Join a group | `src/app/dashboard/join/page.tsx` | `mobile/src/screens/HomeScreen.tsx` | matched | |
 | F-013 | Become a proctor | `src/app/dashboard/proctor-request/page.tsx` | `mobile/src/screens/ProctorRequestScreen.tsx` | matched | |
 | F-014 | Exams list | `src/app/dashboard/exams/page.tsx` | `mobile/src/screens/ManagedExamsScreen.tsx`, `mobile/src/screens/ProctorHubScreen.tsx` | matched | |
-| F-015 | Create and edit an exam | `src/app/dashboard/exams/create/page.tsx`, `src/app/dashboard/exams/[id]/edit/page.tsx`, `src/app/dashboard/exams/[id]/page.tsx` | `mobile/src/screens/ExamFormScreen.tsx`, `mobile/src/question-editor.tsx` | matched | |
+| F-015 | Create and edit an exam | `src/app/dashboard/exams/create/page.tsx`, `src/app/dashboard/exams/[id]/edit/page.tsx`, `src/app/dashboard/exams/[id]/page.tsx` | `mobile/src/screens/ExamFormScreen.tsx`, `mobile/src/question-editor.tsx` | partial | **Gap:** website “Generate exam with AI” (topic + lecture PDFs/photos/slides → blueprint → questions) is web-only. **Android:** form supports manual create/edit and a simpler practice-style generate, not material upload or the multi-step AI dialog. |
 | F-016 | Live session monitoring | `src/app/dashboard/exams/[id]/live/page.tsx` | `mobile/src/screens/LiveMonitorScreen.tsx` | matched | |
 | F-017 | Question bank | `src/app/dashboard/question-bank/page.tsx` | `mobile/src/screens/QuestionBankScreen.tsx`, `mobile/src/question-editor.tsx` | matched | |
 | F-018 | Exam bundles | `src/app/dashboard/bundles/page.tsx` | `mobile/src/screens/BundlesScreen.tsx` | matched | |

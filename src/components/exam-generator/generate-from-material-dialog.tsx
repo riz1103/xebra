@@ -145,13 +145,17 @@ export function GenerateFromMaterialDialog({
   };
 
   const addFiles = async (files: File[]) => {
+    setError(null);
     setPendingFiles((n) => n + files.length);
     for (const file of files) {
       try {
         const source = await extractSource(file);
         setSources((prev) => [...prev, source]);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : `Couldn't read ${file.name}`);
+        console.error("Couldn't read uploaded material:", err);
+        const message = err instanceof Error ? err.message : `Couldn't read ${file.name}`;
+        toast.error(message);
+        setError({ message, detail: "" });
       } finally {
         setPendingFiles((n) => n - 1);
       }

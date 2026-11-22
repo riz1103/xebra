@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "predev": "npm run sync:pdfjs",
+    "prebuild": "npm run sync:pdfjs",
+    "sync:pdfjs": "node -e \"const fs=require('fs');const path=require('path');const src=path.join('node_modules','pdfjs-dist','build');const dest='public';for (const f of ['pdf.min.mjs','pdf.worker.min.mjs']) fs.copyFileSync(path.join(src,f), path.join(dest,f));\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

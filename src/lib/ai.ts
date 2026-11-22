@@ -17,27 +17,43 @@ export const AI_MODELS: Record<AiTier, string> = {
   fallback: process.env.NEXT_PUBLIC_GEMINI_FALLBACK_MODEL || "gemini-flash-lite-latest",
 };
 const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY;
-const APPCHECK_DEBUG_TOKEN =
+/** Explicit debug token (UUID) or "true" to mint one. Production builds ignore this. */
+const APPCHECK_DEBUG_TOKEN_ENV =
   process.env.NODE_ENV !== "production" ? process.env.NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN : undefined;
 
 let appCheckInitialized = false;
 
-/** App Check must be initialized before the first AI request so Firebase can attest the client. */
+/**
+ * App Check must run before the first AI request. Firebase AI Logic enforces it, so localhost
+ * needs the debug provider (register the printed token in Firebase Console → App Check → Manage
+ * debug tokens). Production uses reCAPTCHA Enterprise.
+ */
 function ensureAppCheck() {
   if (appCheckInitialized || typeof window === "undefined") return;
-  if (!RECAPTCHA_SITE_KEY && !APPCHECK_DEBUG_TOKEN) return;
 
-  if (APPCHECK_DEBUG_TOKEN) {
-    // "true" makes the SDK generate a token and print it to the console for registration.
+  const isLocalhost =
+    window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  // On localhost with nothing configured, mint a debug token so the console shows what to register.
+  const debugToken =
+    APPCHECK_DEBUG_TOKEN_ENV ||
+    (isLocalhost && !RECAPTCHA_SITE_KEY ? "true" : undefined);
+
+  if (!RECAPTCHA_SITE_KEY && !debugToken) return;
+
+  if (debugToken) {
+    // "true" → SDK generates a token and logs: AppCheck debug token: "<uuid>"
     (self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN?: string | boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN =
-      APPCHECK_DEBUG_TOKEN === "true" ? true : APPCHECK_DEBUG_TOKEN;
+      debugToken === "true" ? true : debugToken;
   }
 
   initializeAppCheck(app, {
-    // In debug mode the SDK exchanges the debug token and never asks the provider for a token.
+    // With a debug token set, the SDK uses it and does not call the provider.
     provider: RECAPTCHA_SITE_KEY
       ? new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY)
-      : new CustomProvider({ getToken: () => Promise.reject(new Error("No App Check provider configured")) }),
+      : new CustomProvider({
+          getToken: () =>
+            Promise.reject(new Error("App Check debug token missing — check the browser console for the UUID to register.")),
+        }),
     isTokenAutoRefreshEnabled: true,
   });
   appCheckInitialized = true;
@@ -205,6 +221,9 @@ export function describeAiError(err: unknown): string {
     return "Firebase AI Logic isn't enabled for this project. Enable it in the Firebase console (AI Logic → Get started) and try again.";
   }
   if (/app check token|appcheck.*(invalid|missing|required)|(invalid|missing).*app check/i.test(message)) {
+    if (typeof window !== "undefined" && /localhost|127\.0\.0\.1/.test(window.location.hostname)) {
+      return "App Check blocked this AI request. In the browser console, copy the “AppCheck debug token”, register it in Firebase Console → App Check → your web app → Manage debug tokens, then refresh and try again.";
+    }
     return "The AI request was rejected by App Check. Check the reCAPTCHA Enterprise site key configuration.";
   }
   if (isQuotaError(err)) {

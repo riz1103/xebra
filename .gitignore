@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# pdf.js browser builds (copied from pdfjs-dist by `npm run sync:pdfjs`)
+/public/pdf.min.mjs
+/public/pdf.worker.min.mjs

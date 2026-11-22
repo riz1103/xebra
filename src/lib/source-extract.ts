@@ -102,10 +102,26 @@ export async function prepareImage(blob: Blob, fallbackMimeType = "image/jpeg"):
 
 // ============ PDF ============
 
+/**
+ * pdfjs-dist v5's ESM build breaks under Next/webpack (`Object.defineProperty called on non-object`).
+ * Load the same-origin copies from /public instead (kept in sync via `npm run sync:pdfjs`).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadPdfJs(): Promise<any> {
+  if (typeof window === "undefined") {
+    throw new Error("PDF reading is only available in the browser.");
+  }
+  const base = window.location.origin;
+  const pdfjsLib = await import(
+    /* webpackIgnore: true */ `${base}/pdf.min.mjs`
+  );
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `${base}/pdf.worker.min.mjs`;
+  return pdfjsLib;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function loadPdf(file: File): Promise<any> {
-  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  const pdfjsLib = await loadPdfJs();
   const arrayBuffer = await file.arrayBuffer();
   return pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 }
