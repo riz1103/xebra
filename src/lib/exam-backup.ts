@@ -8,6 +8,8 @@ export interface ExamBackup {
   unsynced: string[];
   currentIndex: number;
   currentPart: string | null;
+  /** Cumulative seconds spent with each question open (for offline resume) */
+  questionTimeSpentSeconds?: Record<string, number>;
   savedAt: number;
 }
 
@@ -34,6 +36,10 @@ export function readExamBackup(sessionId: string): ExamBackup | null {
       unsynced: Array.isArray(parsed.unsynced) ? parsed.unsynced : [],
       currentIndex: typeof parsed.currentIndex === "number" ? parsed.currentIndex : 0,
       currentPart: typeof parsed.currentPart === "string" ? parsed.currentPart : null,
+      questionTimeSpentSeconds:
+        parsed.questionTimeSpentSeconds && typeof parsed.questionTimeSpentSeconds === "object"
+          ? parsed.questionTimeSpentSeconds
+          : undefined,
       savedAt: typeof parsed.savedAt === "number" ? parsed.savedAt : 0,
     };
   } catch {

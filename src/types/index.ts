@@ -555,6 +555,8 @@ export interface ExamSession {
   examineeEmail?: string; // Email of the examinee
   currentQuestionIndex: number;
   answers: Record<string, string | string[] | null>;
+  /** Cumulative seconds spent with each question open (revisits add to the total) */
+  questionTimeSpentSeconds?: Record<string, number>;
   timeRemainingSeconds: number;
   /** Extra time granted by a proctor during the session */
   extraTimeSeconds?: number;
@@ -601,6 +603,8 @@ export interface CreateExamSessionPayload {
 export interface UpdateExamSessionPayload {
   currentQuestionIndex?: number;
   answers?: Record<string, string | string[] | null>;
+  /** Cumulative seconds spent with each question open; server merges with Math.max */
+  questionTimeSpentSeconds?: Record<string, number>;
 }
 
 export interface AnswerQuestionPayload {
@@ -613,6 +617,8 @@ export interface QuestionResult {
   isCorrect: boolean;
   score: number;
   points: number;
+  /** Cumulative seconds the examinee spent with this question open during the session */
+  timeSpentSeconds?: number;
   /** Answered essay that still needs a proctor grade (scored 0 until graded) */
   pendingReview?: boolean;
   /** Score was set by a proctor; correct when at least half the points were earned */
@@ -662,6 +668,8 @@ export interface ExamResult {
   totalQuestions: number;
   /** Per-question results; used for proctor review and override */
   questionResults?: QuestionResult[];
+  /** Cumulative seconds spent with each question open (same data as questionResults[].timeSpentSeconds) */
+  questionTimeSpentSeconds?: Record<string, number>;
   partResults?: {
     // New: Per-part results
     [partId: string]: {

@@ -95,6 +95,8 @@ export interface ExamSession {
   endedReason?: string;
   currentQuestionIndex: number;
   answers: Record<string, AnswerValue>;
+  /** Cumulative seconds spent with each question open (revisits add to the total) */
+  questionTimeSpentSeconds?: Record<string, number>;
   timeRemainingSeconds: number;
   extraTimeSeconds?: number;
   selectedQuestionIds?: string[];
@@ -128,6 +130,8 @@ export interface QuestionResult {
   isCorrect: boolean;
   score: number;
   points: number;
+  /** Cumulative seconds spent with this question open during the session */
+  timeSpentSeconds?: number;
   pendingReview?: boolean;
   feedback?: string;
 }
@@ -178,6 +182,7 @@ export interface ExamResult {
   canRetake?: boolean;
   retakeInvitationId?: string | null;
   questionResults?: QuestionResult[];
+  questionTimeSpentSeconds?: Record<string, number>;
   answers?: Record<string, AnswerValue>;
 }
 

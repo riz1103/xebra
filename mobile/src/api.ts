@@ -118,7 +118,14 @@ class ApiClient {
     return data;
   }
 
-  async updateExamSession(id: string, payload: { currentQuestionIndex?: number; answers?: Record<string, AnswerValue> }) {
+  async updateExamSession(
+    id: string,
+    payload: {
+      currentQuestionIndex?: number;
+      answers?: Record<string, AnswerValue>;
+      questionTimeSpentSeconds?: Record<string, number>;
+    }
+  ) {
     const { data } = await this.client.put<ApiResponse<ExamSession>>(`/api/exam-sessions/${id}`, payload);
     return data;
   }

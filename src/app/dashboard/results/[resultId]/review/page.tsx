@@ -37,7 +37,7 @@ import {
   Clock,
   PenLine,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDuration } from "@/lib/utils";
 
 export default function ResultReviewPage({ params }: { params: Promise<{ resultId: string }> }) {
   const { resultId } = use(params);
@@ -462,6 +462,17 @@ export default function ResultReviewPage({ params }: { params: Promise<{ resultI
                     <Badge variant="secondary" className="text-xs">
                       {currentQuestion.points} pts
                     </Badge>
+                    {(qResult?.timeSpentSeconds ?? result?.questionTimeSpentSeconds?.[currentQuestion.id] ?? 0) > 0 && (
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatDuration(
+                          qResult?.timeSpentSeconds ??
+                            result?.questionTimeSpentSeconds?.[currentQuestion.id] ??
+                            0
+                        )}{" "}
+                        on question
+                      </Badge>
+                    )}
                     {qResult?.pendingReview ? (
                       <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-400 text-xs">
                         <Clock className="h-3 w-3 mr-1" /> Needs grading

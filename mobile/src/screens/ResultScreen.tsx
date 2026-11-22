@@ -5,7 +5,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import { MathText } from "../math-text";
-import { formatWhen } from "../format";
+import { formatDuration, formatWhen } from "../format";
 import { useColors, type Palette } from "../theme";
 import type { AnswerValue, ExamDetail, ExamResult, ReviewQuestion } from "../types";
 import type { RootStackParamList } from "../navigation";
@@ -120,6 +120,8 @@ export function ResultScreen() {
           <Text style={styles.when}>{t("result.reviewHint")}</Text>
           {(result.questionResults ?? []).map((item, index) => {
             const question = byId.get(item.questionId);
+            const timeSpent =
+              item.timeSpentSeconds ?? result.questionTimeSpentSeconds?.[item.questionId] ?? 0;
             return (
               <ReviewCard
                 key={item.questionId}
@@ -129,6 +131,7 @@ export function ResultScreen() {
                 pendingReview={item.pendingReview === true}
                 feedback={item.feedback}
                 answer={result.answers?.[item.questionId]}
+                timeSpentSeconds={timeSpent > 0 ? timeSpent : undefined}
               />
             );
           })}
@@ -145,6 +148,7 @@ function ReviewCard({
   pendingReview,
   feedback,
   answer,
+  timeSpentSeconds,
 }: {
   index: number;
   question?: ReviewQuestion;
@@ -152,6 +156,7 @@ function ReviewCard({
   pendingReview: boolean;
   feedback?: string;
   answer: AnswerValue | undefined;
+  timeSpentSeconds?: number;
 }) {
   const t = useT();
   const colors = useColors();
@@ -168,6 +173,9 @@ function ReviewCard({
         {index + 1}. {label}
       </Text>
       {question ? <MathText text={question.questionText} style={styles.stem} /> : <Text style={styles.stem}>{t("result.questionN", { n: index + 1 })}</Text>}
+      {timeSpentSeconds != null ? (
+        <Text style={styles.meta}>{t("result.questionTime", { time: formatDuration(timeSpentSeconds) })}</Text>
+      ) : null}
       <Text style={styles.meta}>{t("result.yourAnswer")}</Text>
       <MathText text={yours || t("result.noAnswer")} style={styles.answer} />
       {correctText ? (

@@ -108,12 +108,49 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const positionRestoredRef = useRef(false);
   /** Proctor-granted extra time last seen from the server; null until the session loads */
   const extraTimeRef = useRef<number | null>(null);
+  /** Cumulative seconds spent with each question open (revisits add to the total) */
+  const questionTimeSpentRef = useRef<Record<string, number>>({});
+  const questionOpenedAtRef = useRef<number | null>(null);
+  const activeTimedQuestionIdRef = useRef<string | null>(null);
+  const questionTimesLoadedRef = useRef(false);
   const { prefs: displayPrefs, setPrefs: setDisplayPrefs } = useExamDisplayPrefs();
   const questionCardRef = useRef<HTMLDivElement>(null);
   /** Set when a keyboard shortcut changes the question, so focus follows to the new question */
   const focusQuestionRef = useRef(false);
   const [timeAnnouncement, setTimeAnnouncement] = useState("");
   const announcedThresholdsRef = useRef<Set<string>>(new Set());
+
+  const mergeQuestionTimes = useCallback((base: Record<string, number>, incoming?: Record<string, number> | null) => {
+    if (!incoming) return base;
+    const next = { ...base };
+    for (const [questionId, value] of Object.entries(incoming)) {
+      const seconds = Math.round(Number(value));
+      if (!questionId || !Number.isFinite(seconds) || seconds < 0) continue;
+      next[questionId] = Math.max(next[questionId] || 0, seconds);
+    }
+    return next;
+  }, []);
+
+  /** Fold the current open interval into the cumulative map and clear the open clock. */
+  const commitOpenQuestionTime = useCallback(() => {
+    const questionId = activeTimedQuestionIdRef.current;
+    const openedAt = questionOpenedAtRef.current;
+    if (!questionId || openedAt == null) return;
+    const elapsed = Math.max(0, Math.floor((Date.now() - openedAt) / 1000));
+    if (elapsed > 0) {
+      questionTimeSpentRef.current[questionId] = (questionTimeSpentRef.current[questionId] || 0) + elapsed;
+    }
+    questionOpenedAtRef.current = null;
+  }, []);
+
+  /** Commit any open interval, optionally restart timing, and return the totals to send to the server. */
+  const snapshotQuestionTimes = useCallback((restart: boolean) => {
+    commitOpenQuestionTime();
+    if (restart && activeTimedQuestionIdRef.current) {
+      questionOpenedAtRef.current = Date.now();
+    }
+    return { ...questionTimeSpentRef.current };
+  }, [commitOpenQuestionTime]);
 
   const markUnsynced = useCallback((questionId: string) => {
     unsyncedRef.current.add(questionId);
@@ -271,6 +308,19 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         setCurrentIndex(backup ? backup.currentIndex : session.currentQuestionIndex || 0);
         if (restorePart) setCurrentPart(restorePart);
       }
+
+      if (!questionTimesLoadedRef.current) {
+        questionTimesLoadedRef.current = true;
+        questionTimeSpentRef.current = mergeQuestionTimes(
+          mergeQuestionTimes({}, session.questionTimeSpentSeconds),
+          backup?.questionTimeSpentSeconds
+        );
+      } else {
+        questionTimeSpentRef.current = mergeQuestionTimes(
+          questionTimeSpentRef.current,
+          session.questionTimeSpentSeconds
+        );
+      }
       
       // Initialize selected indices from session answers
       if (session.questions) {
@@ -308,7 +358,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
         });
       }
     }
-  }, [session, sessionId, hasParts, questionsByPart, partTimeLimits]);
+  }, [session, sessionId, hasParts, questionsByPart, partTimeLimits, mergeQuestionTimes]);
 
   // Timer countdown
   useEffect(() => {
@@ -378,20 +428,6 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     };
   }, [session?.status, currentPart, hasParts, partTimeRemaining, timeRemaining]);
 
-  // Auto-save every 30 seconds (server computes remaining time; do not send it)
-  useEffect(() => {
-    const autoSave = setInterval(() => {
-      if (session?.status === "in_progress" || session?.status === "in-progress") {
-        saveMutation.mutate({
-          currentQuestionIndex: currentIndex,
-          answers,
-        });
-      }
-    }, 30000);
-
-    return () => clearInterval(autoSave);
-  }, [currentIndex, answers, session?.status]);
-
   const answerMutation = useMutation({
     mutationFn: ({ questionId, answer }: { questionId: string; answer: string | string[] | null }) =>
       api.answerQuestion(sessionId, questionId, { answer }),
@@ -431,14 +467,40 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   useEffect(() => () => flushTextAnswer(), [flushTextAnswer]);
 
   const saveMutation = useMutation({
-    mutationFn: (payload: { currentQuestionIndex: number; answers: Record<string, string | string[] | null> }) =>
-      api.updateExamSession(sessionId, payload),
+    mutationFn: (payload: {
+      currentQuestionIndex: number;
+      answers: Record<string, string | string[] | null>;
+      questionTimeSpentSeconds?: Record<string, number>;
+    }) => api.updateExamSession(sessionId, payload),
     onSuccess: (response, variables) => {
       markConfirmed(variables.answers);
       const updated = response?.data;
-      if (updated) setTimeRemaining(updated.timeRemainingSeconds ?? 0);
+      if (updated) {
+        setTimeRemaining(updated.timeRemainingSeconds ?? 0);
+        if (updated.questionTimeSpentSeconds) {
+          questionTimeSpentRef.current = mergeQuestionTimes(
+            questionTimeSpentRef.current,
+            updated.questionTimeSpentSeconds
+          );
+        }
+      }
     },
   });
+
+  // Auto-save every 30 seconds (server computes remaining time; do not send it)
+  useEffect(() => {
+    const autoSave = setInterval(() => {
+      if (session?.status === "in_progress" || session?.status === "in-progress") {
+        saveMutation.mutate({
+          currentQuestionIndex: currentIndex,
+          answers,
+          questionTimeSpentSeconds: snapshotQuestionTimes(true),
+        });
+      }
+    }, 30000);
+
+    return () => clearInterval(autoSave);
+  }, [currentIndex, answers, session?.status, snapshotQuestionTimes]);
 
   const submitMutation = useMutation({
     mutationFn: () => api.submitExamSession(sessionId),
@@ -538,20 +600,25 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   };
 
   const { mutateAsync: saveSessionAsync } = saveMutation;
-  /** Sends every answer the server hasn't confirmed. Resolves false if they couldn't be saved. */
+  /** Sends every answer the server hasn't confirmed (plus latest question open times). Resolves false if they couldn't be saved. */
   const resyncAnswers = useCallback(async (): Promise<boolean> => {
     flushTextAnswer();
-    if (unsyncedRef.current.size === 0) return true;
+    const times = snapshotQuestionTimes(true);
     const pending = Object.fromEntries(
       [...unsyncedRef.current].map((id) => [id, answersRef.current[id] ?? null])
     );
+    if (unsyncedRef.current.size === 0 && Object.keys(times).length === 0) return true;
     try {
-      await saveSessionAsync({ currentQuestionIndex: currentIndexRef.current, answers: pending });
+      await saveSessionAsync({
+        currentQuestionIndex: currentIndexRef.current,
+        answers: pending,
+        questionTimeSpentSeconds: times,
+      });
       return true;
     } catch {
       return false;
     }
-  }, [flushTextAnswer, saveSessionAsync]);
+  }, [flushTextAnswer, saveSessionAsync, snapshotQuestionTimes]);
 
   const currentQuestionIdRef = useRef<string | undefined>(undefined);
   currentQuestionIdRef.current = currentQuestion?.id;
@@ -589,6 +656,7 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   const handleSubmit = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    commitOpenQuestionTime();
     const synced = await resyncAnswers();
     if (!synced && typeof navigator !== "undefined" && !navigator.onLine) {
       setPendingSubmit(sessionId, true);
@@ -600,9 +668,51 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     setSubmitQueued(false);
     await flushIntegrity();
     submitMutation.mutate();
-  }, [resyncAnswers, submitMutation, flushIntegrity, sessionId, t]);
+  }, [commitOpenQuestionTime, resyncAnswers, submitMutation, flushIntegrity, sessionId, t]);
 
   const inProgress = session?.status === "in_progress" || session?.status === "in-progress";
+  const timingActive =
+    inProgress &&
+    !showInstructions &&
+    !focusPaused &&
+    !focusWarningOpen &&
+    !endedForFocusLoss &&
+    !!currentQuestion?.id;
+
+  // Accumulate time while a question is open; revisits (e.g. after flagging) add to the same total
+  useEffect(() => {
+    if (!timingActive || !currentQuestion?.id) {
+      commitOpenQuestionTime();
+      activeTimedQuestionIdRef.current = null;
+      return;
+    }
+
+    if (typeof document !== "undefined" && document.hidden) {
+      commitOpenQuestionTime();
+      return;
+    }
+
+    if (activeTimedQuestionIdRef.current !== currentQuestion.id) {
+      commitOpenQuestionTime();
+      activeTimedQuestionIdRef.current = currentQuestion.id;
+      questionOpenedAtRef.current = Date.now();
+    } else if (questionOpenedAtRef.current == null) {
+      questionOpenedAtRef.current = Date.now();
+    }
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        commitOpenQuestionTime();
+      } else if (activeTimedQuestionIdRef.current) {
+        questionOpenedAtRef.current = Date.now();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      commitOpenQuestionTime();
+    };
+  }, [timingActive, currentQuestion?.id, commitOpenQuestionTime]);
 
   /** Applies extra time a proctor granted since the last check. Returns false once the session has ended. */
   const applyServerTime = useCallback((latest: ExamSession) => {
@@ -664,8 +774,9 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
       unsynced: [...unsyncedRef.current],
       currentIndex,
       currentPart,
+      questionTimeSpentSeconds: snapshotQuestionTimes(true),
     });
-  }, [inProgress, sessionId, answers, currentIndex, currentPart, unsyncedCount]);
+  }, [inProgress, sessionId, answers, currentIndex, currentPart, unsyncedCount, snapshotQuestionTimes]);
 
   useEffect(() => {
     if (session?.status === "completed") clearExamBackup(sessionId);

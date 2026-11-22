@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Modal,
   Pressable,
   ScrollView,
@@ -93,8 +94,34 @@ export function ExamScreen() {
   const extraRef = useRef(0);
   const textTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingText = useRef<{ questionId: string; answer: AnswerValue } | null>(null);
+  const questionTimeSpentRef = useRef<Record<string, number>>({});
+  const questionOpenedAtRef = useRef<number | null>(null);
+  const activeTimedQuestionIdRef = useRef<string | null>(null);
+  const questionTimesLoadedRef = useRef(false);
   answersRef.current = answers;
   indexRef.current = index;
+
+  const commitOpenQuestionTime = useCallback(() => {
+    const questionId = activeTimedQuestionIdRef.current;
+    const openedAt = questionOpenedAtRef.current;
+    if (!questionId || openedAt == null) return;
+    const elapsed = Math.max(0, Math.floor((Date.now() - openedAt) / 1000));
+    if (elapsed > 0) {
+      questionTimeSpentRef.current[questionId] = (questionTimeSpentRef.current[questionId] || 0) + elapsed;
+    }
+    questionOpenedAtRef.current = null;
+  }, []);
+
+  const snapshotQuestionTimes = useCallback(
+    (restart: boolean) => {
+      commitOpenQuestionTime();
+      if (restart && activeTimedQuestionIdRef.current) {
+        questionOpenedAtRef.current = Date.now();
+      }
+      return { ...questionTimeSpentRef.current };
+    },
+    [commitOpenQuestionTime]
+  );
 
   const load = useCallback(async () => {
     const [sessionRes, typeRes] = await Promise.all([
@@ -122,6 +149,10 @@ export function ExamScreen() {
     setSeconds(remaining);
     setLimited(remaining > 0);
     extraRef.current = session.extraTimeSeconds ?? 0;
+    if (!questionTimesLoadedRef.current) {
+      questionTimesLoadedRef.current = true;
+      questionTimeSpentRef.current = { ...(session.questionTimeSpentSeconds || {}) };
+    }
     const parts = buildParts(session, orderedQuestions(session), t("exam.part"));
     if (parts[0]) setPartId(parts[0].id);
   }, [session]);
@@ -200,6 +231,7 @@ export function ExamScreen() {
       await api.updateExamSession(sessionId, {
         currentQuestionIndex: indexRef.current,
         answers: answersRef.current,
+        questionTimeSpentSeconds: snapshotQuestionTimes(false),
       });
       const res = await api.submitExamSession(sessionId);
       const resultId = res.data?.result?.id;
@@ -209,7 +241,7 @@ export function ExamScreen() {
       setSubmitting(false);
       Alert.alert(t("exam.couldNotSubmit"), apiErrorMessage(err, t("exam.tryAgain")));
     }
-  }, [flushIntegrity, flushText, navigation, sessionId, submitting]);
+  }, [flushIntegrity, flushText, navigation, sessionId, snapshotQuestionTimes, submitting, t]);
 
   useEffect(() => {
     if (!taking || !limited) return;
@@ -226,15 +258,55 @@ export function ExamScreen() {
     return () => clearInterval(id);
   }, [taking, limited, submit]);
 
+  const timingActive = taking && !focusPaused && !focusWarningOpen && !!question?.id;
+
+  useEffect(() => {
+    if (!timingActive || !question?.id) {
+      commitOpenQuestionTime();
+      activeTimedQuestionIdRef.current = null;
+      return;
+    }
+    if (activeTimedQuestionIdRef.current !== question.id) {
+      commitOpenQuestionTime();
+      activeTimedQuestionIdRef.current = question.id;
+      questionOpenedAtRef.current = Date.now();
+    } else if (questionOpenedAtRef.current == null) {
+      questionOpenedAtRef.current = Date.now();
+    }
+
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") {
+        commitOpenQuestionTime();
+      } else if (activeTimedQuestionIdRef.current) {
+        questionOpenedAtRef.current = Date.now();
+      }
+    });
+    return () => {
+      sub.remove();
+      commitOpenQuestionTime();
+    };
+  }, [timingActive, question?.id, commitOpenQuestionTime]);
+
   useEffect(() => {
     if (!inProgress) return;
     const id = setInterval(() => {
       api
-        .updateExamSession(sessionId, { currentQuestionIndex: indexRef.current, answers: answersRef.current })
+        .updateExamSession(sessionId, {
+          currentQuestionIndex: indexRef.current,
+          answers: answersRef.current,
+          questionTimeSpentSeconds: snapshotQuestionTimes(true),
+        })
         .then((res) => {
           const latest = res.data;
           if (!latest) return;
           if (typeof latest.focusLossCount === "number") setFocusLossCount(latest.focusLossCount);
+          if (latest.questionTimeSpentSeconds) {
+            const merged = { ...questionTimeSpentRef.current };
+            for (const [qid, seconds] of Object.entries(latest.questionTimeSpentSeconds)) {
+              merged[qid] = Math.max(merged[qid] || 0, Math.round(Number(seconds)) || 0);
+            }
+            questionTimeSpentRef.current = merged;
+          }
           if (!isInProgress(latest.status)) {
             if (latest.endedReason === "focus_loss") setEndedForFocusLoss(true);
             setSession(latest);
@@ -251,7 +323,7 @@ export function ExamScreen() {
         .catch(() => {});
     }, 30000);
     return () => clearInterval(id);
-  }, [inProgress, sessionId]);
+  }, [inProgress, sessionId, snapshotQuestionTimes]);
 
   usePreventRemove(inProgress && !submitting, ({ data }) => {
     Alert.alert(t("exam.leaveTitle"), t("exam.leaveBody"), [

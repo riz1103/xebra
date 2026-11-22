@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import type { RootStackParamList } from "../navigation";
 import { Field, Primary, StaffBody, useStaffStyles } from "../staff-ui";
+import { formatDuration } from "../format";
 import type { AnswerValue, ExamQuestion, QuestionResult } from "../types";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StaffReview">;
@@ -81,6 +82,11 @@ export function StaffReviewScreen({ route }: Props) {
           <Text style={styles.muted}>
             {t("review.answer")}: {row.answer || t("review.noAnswer")}
           </Text>
+          {(row.result?.timeSpentSeconds ?? 0) > 0 ? (
+            <Text style={styles.muted}>
+              {t("result.questionTime", { time: formatDuration(row.result!.timeSpentSeconds!) })}
+            </Text>
+          ) : null}
           <Field label={t("review.score")} value={row.score} onChangeText={(score) => patch(row.question.id, { score })} keyboardType="number-pad" />
           <Field label={t("review.feedback")} value={row.feedback} onChangeText={(feedback) => patch(row.question.id, { feedback })} />
           <Text style={styles.muted}>/ {row.question.points}</Text>
