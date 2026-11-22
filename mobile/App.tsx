@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "./src/auth";
 import { LocaleProvider, useT } from "./src/i18n";
 import { parseAppLink, type AppLink } from "./src/links";
 import { AdminRequestsScreen } from "./src/screens/AdminRequestsScreen";
+import { ResourcesScreen } from "./src/screens/ResourcesScreen";
 import { BundlesScreen } from "./src/screens/BundlesScreen";
 import { CertificateScreen } from "./src/screens/CertificateScreen";
 import { ExamEntryScreen } from "./src/screens/ExamEntryScreen";
@@ -143,6 +144,7 @@ function Root() {
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings.title") }} />
             <Stack.Screen name="QuestionTypes" component={QuestionTypesScreen} options={{ title: t("types.title") }} />
             <Stack.Screen name="AdminRequests" component={AdminRequestsScreen} options={{ title: t("requests.title") }} />
+            <Stack.Screen name="Resources" component={ResourcesScreen} options={{ title: t("resources.title") }} />
           </>
         ) : (
           <>

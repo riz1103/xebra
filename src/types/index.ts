@@ -13,7 +13,7 @@ export interface User {
   picture?: string;
   photoURL?: string;
   emailVerified?: boolean;
-  role: "admin" | "proctor" | "examinee" | "user";
+  role: "admin" | "owner" | "proctor" | "examinee" | "user";
   lastLogin?: string | FirestoreTimestamp;
   createdAt: string | FirestoreTimestamp;
   updatedAt: string | FirestoreTimestamp;
@@ -897,8 +897,14 @@ export interface AiUsageStatus {
     totalCostUsd: number;
     primaryRequests: number;
     fallbackRequests: number;
+    primaryInputTokens?: number;
+    primaryOutputTokens?: number;
+    fallbackInputTokens?: number;
+    fallbackOutputTokens?: number;
     primaryBudgetUsd: number;
     monthlyCapUsd: number;
+    remainingPrimaryBudgetUsd?: number;
+    remainingCapUsd?: number;
   };
   user: {
     day: string;
@@ -914,6 +920,8 @@ export interface AiUsageStatus {
     expiresAt?: string | null;
     /** Purchased requests left after the plan quota is used. */
     extraRequests?: number;
+    /** Platform admins/owners bypass subscription quotas. */
+    unlimited?: boolean;
   };
 }
 
@@ -922,7 +930,8 @@ export type AiPlanId = "free" | "pro" | "school";
 export interface AiPlan {
   id: AiPlanId;
   name: string;
-  monthlyRequests: number;
+  /** Null when the account has unlimited AI (platform admin). */
+  monthlyRequests: number | null;
   /** QR Ph price in centavos. Null until the server has a price for this plan. */
   priceCentavos?: number | null;
   currency?: "PHP" | null;
@@ -933,6 +942,95 @@ export interface AiPack {
   requests: number;
   priceCentavos: number;
   currency: "PHP";
+}
+
+export interface AiUsageTierSummary {
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  budgetUsd: number | null;
+  remainingBudgetUsd: number | null;
+}
+
+export interface AiUsageConsumer {
+  userId: string;
+  email: string | null;
+  name: string | null;
+  role: string | null;
+  isAdmin: boolean;
+  /** False for platform admins/owners — usage is billed but not plan-quota. */
+  countsTowardPlanQuota: boolean;
+  requests: number;
+  primaryRequests: number;
+  fallbackRequests: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  planRequests: number | null;
+}
+
+export interface AiUsageConsumerTotals {
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  users: number;
+}
+
+export interface AiUsageOverview {
+  period: string;
+  day: string;
+  timeZone: string;
+  bill: {
+    estimatedUsd: number;
+    primaryUsd: number;
+    fallbackUsd: number;
+    remainingCapUsd: number;
+    remainingPrimaryBudgetUsd: number | null;
+    currency: "USD";
+    note: string;
+  };
+  limits: {
+    primaryMonthlyBudgetUsd: number;
+    monthlyCapUsd: number;
+    primaryDailyRequestsPerUser: number;
+    examineeDailyRequests: number;
+  };
+  pricing: {
+    primary: { inputPerMillion: number; outputPerMillion: number };
+    fallback: { inputPerMillion: number; outputPerMillion: number };
+  };
+  tiers: {
+    primary: AiUsageTierSummary;
+    fallback: AiUsageTierSummary;
+  };
+  totals: {
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costUsd: number;
+    estimatedRemainingTokens: number | null;
+  };
+  plans: AiPlan[];
+  packs: AiPack[];
+  consumers: AiUsageConsumer[];
+  userConsumers: AiUsageConsumer[];
+  adminConsumers: AiUsageConsumer[];
+  userTotals: AiUsageConsumerTotals;
+  adminTotals: AiUsageConsumerTotals;
+  /** @deprecated Prefer userConsumers; kept for older clients */
+  topUsers?: {
+    userId: string;
+    email: string | null;
+    name: string | null;
+    requests: number;
+    costUsd: number;
+  }[];
 }
 
 export interface PaymongoCheckout {

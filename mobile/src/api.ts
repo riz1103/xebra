@@ -30,6 +30,7 @@ import type {
   IntegrityEventsResult,
   ExamSession,
   AiUsageStatus,
+  AiUsageOverview,
   Certificate,
   GroupJoinPreview,
   GroupJoinResult,
@@ -217,6 +218,11 @@ class ApiClient {
 
   async getAiUsage() {
     const { data } = await this.client.get<ApiResponse<AiUsageStatus>>("/api/ai-usage");
+    return data;
+  }
+
+  async getAiUsageOverview() {
+    const { data } = await this.client.get<ApiResponse<AiUsageOverview>>("/api/ai-usage/overview");
     return data;
   }
 

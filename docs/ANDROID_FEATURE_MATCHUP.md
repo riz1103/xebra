@@ -21,7 +21,7 @@ Do not follow `mobile/AGENTS.md` for navigation. That file is the Expo template.
 
 | Status | Count |
 |--------|------:|
-| matched | 32 |
+| matched | 33 |
 | partial | 1 |
 | missing | 0 |
 
@@ -52,7 +52,7 @@ Do not follow `mobile/AGENTS.md` for navigation. That file is the Expo template.
 | F-020 | Examinee groups | `src/app/dashboard/groups/page.tsx` | `mobile/src/screens/GroupsScreen.tsx` | matched | |
 | F-021 | Proctor results | `src/app/dashboard/results/page.tsx`, `src/app/dashboard/results/[resultId]/review/page.tsx`, `src/app/dashboard/results/[resultId]/slip/page.tsx` | `mobile/src/screens/ManagedResultsScreen.tsx`, `mobile/src/screens/StaffReviewScreen.tsx`, `mobile/src/screens/ScoreSlipScreen.tsx` | matched | |
 | F-022 | Organizations | `src/app/dashboard/organizations/page.tsx`, `src/app/dashboard/organizations/[id]/page.tsx` | `mobile/src/screens/OrganizationsScreen.tsx`, `mobile/src/screens/OrgDetailScreen.tsx` | matched | |
-| F-023 | Settings | `src/app/dashboard/settings/page.tsx` | `mobile/src/screens/SettingsScreen.tsx`, `mobile/src/push.ts`, `mobile/src/screens/ProfileScreen.tsx` | matched | |
+| F-023 | Settings | `src/app/dashboard/settings/page.tsx` | `mobile/src/screens/SettingsScreen.tsx`, `mobile/src/push.ts`, `mobile/src/screens/ProfileScreen.tsx` | matched | Admins bypass AI subscription quotas (`plan.unlimited`); plan/upgrade UI hidden; assign-plan kept. |
 | F-024 | Question types | `src/app/dashboard/questions/page.tsx` | `mobile/src/screens/QuestionTypesScreen.tsx` | matched | |
 | F-025 | Proctor requests | `src/app/dashboard/proctor-requests/page.tsx` | `mobile/src/screens/AdminRequestsScreen.tsx` | matched | |
 | F-026 | English and Filipino | `src/lib/i18n.ts` | `mobile/src/i18n.tsx`, `mobile/src/staff-messages.ts` | matched | |
@@ -61,3 +61,4 @@ Do not follow `mobile/AGENTS.md` for navigation. That file is the Expo template.
 | F-029 | Exam integrity events | `src/lib/integrity-logger.ts` | `mobile/src/integrity.ts` | matched | |
 | F-030 | App icon | `public/icons/icon-512.png` | `mobile/assets/` | matched | |
 | F-031 | Focus-loss protection (count / warn / strict) | `src/components/exams/focus-loss-select.tsx`, `src/app/exam/[sessionId]/page.tsx`, `src/components/results/integrity-panel.tsx`, `src/app/dashboard/exams/[id]/live/page.tsx` | `mobile/src/screens/ExamFormScreen.tsx`, `mobile/src/screens/ExamScreen.tsx`, `mobile/src/integrity.ts`, `mobile/src/screens/LiveMonitorScreen.tsx` | matched | |
+| F-033 | Admin resources (AI usage, tokens, budgets, estimated bill; per-user search/sort; separate admin consumption) | `src/app/dashboard/resources/page.tsx` | `mobile/src/screens/ResourcesScreen.tsx`, `mobile/src/screens/ProctorHubScreen.tsx` | matched | |

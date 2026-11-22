@@ -28,4 +28,5 @@ export type RootStackParamList = {
   Settings: undefined;
   QuestionTypes: undefined;
   AdminRequests: undefined;
+  Resources: undefined;
 };

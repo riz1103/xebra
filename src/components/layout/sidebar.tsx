@@ -23,6 +23,7 @@ import {
   Dumbbell,
   Building2,
   Radio,
+  Gauge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -55,6 +56,7 @@ const myExamsSectionItems: NavItem[] = [
 ];
 
 const adminNavItems: NavItem[] = [
+  { href: "/dashboard/resources", label: "nav.resources", icon: Gauge },
   { href: "/dashboard/questions", label: "nav.questionTypes", icon: HelpCircle },
   { href: "/dashboard/proctor-requests", label: "nav.proctorRequests", icon: UserCheck },
 ];

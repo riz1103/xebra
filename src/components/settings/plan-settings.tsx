@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -47,8 +46,9 @@ function checkoutTitle(checkout: PaymongoCheckout) {
 /** The user's plan, this month's AI requests against its quota, QR Ph upgrades, and admin assignment. */
 export function PlanSettings() {
   const { user } = useAuthStore();
-  const isAdmin = user?.role === "admin";
-  const canPay = user?.role === "proctor" || user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "owner";
+  // Admins have unlimited AI and do not buy/renew a plan for themselves.
+  const canPay = user?.role === "proctor";
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [planId, setPlanId] = useState<AiPlanId>("pro");
@@ -59,6 +59,7 @@ export function PlanSettings() {
     queryKey: ["ai-usage"],
     queryFn: () => api.getAiUsage(),
     retry: false,
+    enabled: !isAdmin,
   });
   const { data: plansData } = useQuery({
     queryKey: ["ai-plans"],
@@ -116,8 +117,57 @@ export function PlanSettings() {
     onError: (err) => toast.error(apiErrorMessage(err, "Could not start QR Ph checkout")),
   });
 
-  const used = plan ? Math.min(100, (plan.requestsThisMonth / Math.max(1, plan.monthlyRequests)) * 100) : 0;
+  const used = plan?.monthlyRequests
+    ? Math.min(100, (plan.requestsThisMonth / Math.max(1, plan.monthlyRequests)) * 100)
+    : 0;
   const currentRank = PLAN_RANK[plan?.id ?? "free"] ?? 0;
+
+  if (isAdmin) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Gauge className="h-4 w-4" /> Assign plans
+          </CardTitle>
+          <CardDescription>
+            Your admin account has unlimited AI requests. Assign Free, Pro, or School to other users.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (email.trim()) setPlanMutation.mutate();
+            }}
+          >
+            <Label htmlFor="plan-email">User email</Label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="plan-email"
+                type="email"
+                placeholder="user@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <Select value={planId} onValueChange={(v) => setPlanId(v as AiPlanId)}>
+                <SelectTrigger className="sm:w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(plans.length ? plans : [{ id: "free", name: "Free" }, { id: "pro", name: "Pro" }, { id: "school", name: "School" }]).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="submit" disabled={!email.trim() || setPlanMutation.isPending}>
+                {setPlanMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Assign
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -163,7 +213,7 @@ export function PlanSettings() {
                 >
                   <p className="font-semibold">{p.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {p.monthlyRequests.toLocaleString()} AI requests {p.id === "free" ? "/ month" : "/ 30 days"}
+                    {(p.monthlyRequests ?? 0).toLocaleString()} AI requests {p.id === "free" ? "/ month" : "/ 30 days"}
                   </p>
                   {p.priceCentavos ? (
                     <p className="mt-1 text-xs font-medium">{formatPhp(p.priceCentavos)} / 30 days</p>
@@ -216,42 +266,6 @@ export function PlanSettings() {
             ? "A QR Ph payment covers 30 days. Pay again before it ends to keep the plan. Nothing is charged automatically. Extra requests stay on the account until they are used."
             : "To change your plan, contact your Xebra administrator."}
         </p>
-
-        {isAdmin && (
-          <>
-            <Separator />
-            <form
-              className="space-y-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (email.trim()) setPlanMutation.mutate();
-              }}
-            >
-              <Label htmlFor="plan-email">Admin: assign a plan</Label>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Input
-                  id="plan-email"
-                  type="email"
-                  placeholder="user@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <Select value={planId} onValueChange={(v) => setPlanId(v as AiPlanId)}>
-                  <SelectTrigger className="sm:w-36"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(plans.length ? plans : [{ id: "free", name: "Free" }, { id: "pro", name: "Pro" }, { id: "school", name: "School" }]).map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button type="submit" disabled={!email.trim() || setPlanMutation.isPending}>
-                  {setPlanMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Assign
-                </Button>
-              </div>
-            </form>
-          </>
-        )}
       </CardContent>
 
       <Dialog open={!!checkout} onOpenChange={(open) => { if (!open) setCheckout(null); }}>

@@ -34,6 +34,9 @@ export function ProctorHubScreen() {
       ))}
       {user?.role === "admin" ? (
         <View style={{ gap: 12 }}>
+          <Pressable style={styles.card} onPress={() => navigation.navigate("Resources")}>
+            <Text style={styles.title}>{t("hub.resources")}</Text>
+          </Pressable>
           <Pressable style={styles.card} onPress={() => navigation.navigate("QuestionTypes")}>
             <Text style={styles.title}>{t("hub.types")}</Text>
           </Pressable>

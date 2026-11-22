@@ -13,7 +13,10 @@ export function SettingsScreen() {
   const t = useT();
   const { colors, styles } = useStaffStyles();
   const { user } = useAuth();
-  const staff = user?.role === "proctor" || user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "owner";
+  const staff = user?.role === "proctor" || isAdmin;
+  // Admins have unlimited AI; only proctors buy/renew plans for themselves.
+  const canPay = user?.role === "proctor";
   const [prefs, setPrefs] = useState<NotificationPrefs>(user?.notificationPrefs || DEFAULT_PREFS);
   const [plans, setPlans] = useState<AiPlan[]>([]);
   const [packs, setPacks] = useState<AiPack[]>([]);
@@ -30,11 +33,17 @@ export function SettingsScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [me, planRes, usage] = await Promise.all([api.getMe(), api.getPlans(), api.getAiUsage()]);
+      const me = await api.getMe();
       if (me.data?.notificationPrefs) setPrefs({ ...DEFAULT_PREFS, ...me.data.notificationPrefs });
-      setPlans(planRes.data || []);
-      setPacks(planRes.packs || []);
-      setPlanName(usage.data?.plan?.name || "");
+      if (!isAdmin) {
+        const [planRes, usage] = await Promise.all([api.getPlans(), api.getAiUsage()]);
+        setPlans(planRes.data || []);
+        setPacks(planRes.packs || []);
+        setPlanName(usage.data?.plan?.name || "");
+      } else {
+        const planRes = await api.getPlans();
+        setPlans(planRes.data || []);
+      }
       if (staff) {
         const [hookRes, statusRes] = await Promise.all([api.getWebhooks(), api.getIntegrationStatus()]);
         setHooks(hookRes.data || []);
@@ -43,7 +52,7 @@ export function SettingsScreen() {
     } catch (err) {
       setError(apiErrorMessage(err, t("overview.loadError")));
     }
-  }, [staff, t]);
+  }, [isAdmin, staff, t]);
 
   useEffect(() => {
     load().catch(() => undefined);
@@ -94,46 +103,10 @@ export function SettingsScreen() {
         <Pref label={t("settings.dailySummary")} value={prefs.dailySummary} color={colors.primary} onChange={(value) => toggle("dailySummary", value)} />
       ) : null}
 
-      <Text style={styles.title}>{t("settings.plan")}</Text>
-      <Text style={styles.body}>{planName || "—"}</Text>
-      {staff && integrations?.paymongo
-        ? plans
-            .filter((plan) => plan.id !== "free" && plan.priceCentavos)
-            .map((plan) => (
-              <Ghost
-                key={plan.id}
-                label={`${plan.name} · ${t("settings.upgrade")}`}
-                onPress={() => {
-                  api
-                    .startPaymongoCheckout({ plan: plan.id as "pro" | "school" })
-                    .then((res) => setCheckout(res.data))
-                    .catch((err) => setError(apiErrorMessage(err, t("overview.loadError"))));
-                }}
-              />
-            ))
-        : null}
-      {staff && integrations?.paymongo ? (
-        <View style={{ gap: 8 }}>
-          <Text style={styles.muted}>{t("settings.packs")}</Text>
-          {packs.map((pack) => (
-            <Ghost
-              key={pack.id}
-              label={`${pack.requests}`}
-              onPress={() => {
-                api
-                  .startPaymongoCheckout({ pack: pack.id })
-                  .then((res) => setCheckout(res.data))
-                  .catch((err) => setError(apiErrorMessage(err, t("overview.loadError"))));
-              }}
-            />
-          ))}
-        </View>
-      ) : null}
-      {checkout?.qrImageUrl ? <Image source={{ uri: checkout.qrImageUrl }} style={{ width: 220, height: 220 }} /> : null}
-      {checkout?.testUrl ? <Ghost label={checkout.testUrl} onPress={() => Linking.openURL(checkout.testUrl as string)} /> : null}
-      {user?.role === "admin" ? (
+      {isAdmin ? (
         <View style={styles.card}>
           <Text style={styles.title}>{t("settings.assign")}</Text>
+          <Text style={styles.muted}>Admin accounts have unlimited AI requests.</Text>
           <Field label={t("invites.email")} value={assignEmail} onChangeText={setAssignEmail} keyboardType="email-address" />
           <View style={styles.row}>
             {(["free", "pro", "school"] as const).map((id) => (
@@ -150,7 +123,47 @@ export function SettingsScreen() {
             }}
           />
         </View>
-      ) : null}
+      ) : (
+        <>
+          <Text style={styles.title}>{t("settings.plan")}</Text>
+          <Text style={styles.body}>{planName || "—"}</Text>
+          {canPay && integrations?.paymongo
+            ? plans
+                .filter((plan) => plan.id !== "free" && plan.priceCentavos)
+                .map((plan) => (
+                  <Ghost
+                    key={plan.id}
+                    label={`${plan.name} · ${t("settings.upgrade")}`}
+                    onPress={() => {
+                      api
+                        .startPaymongoCheckout({ plan: plan.id as "pro" | "school" })
+                        .then((res) => setCheckout(res.data))
+                        .catch((err) => setError(apiErrorMessage(err, t("overview.loadError"))));
+                    }}
+                  />
+                ))
+            : null}
+          {canPay && integrations?.paymongo ? (
+            <View style={{ gap: 8 }}>
+              <Text style={styles.muted}>{t("settings.packs")}</Text>
+              {packs.map((pack) => (
+                <Ghost
+                  key={pack.id}
+                  label={`${pack.requests}`}
+                  onPress={() => {
+                    api
+                      .startPaymongoCheckout({ pack: pack.id })
+                      .then((res) => setCheckout(res.data))
+                      .catch((err) => setError(apiErrorMessage(err, t("overview.loadError"))));
+                  }}
+                />
+              ))}
+            </View>
+          ) : null}
+          {checkout?.qrImageUrl ? <Image source={{ uri: checkout.qrImageUrl }} style={{ width: 220, height: 220 }} /> : null}
+          {checkout?.testUrl ? <Ghost label={checkout.testUrl} onPress={() => Linking.openURL(checkout.testUrl as string)} /> : null}
+        </>
+      )}
 
       {staff ? (
         <View style={{ gap: 8 }}>

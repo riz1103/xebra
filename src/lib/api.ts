@@ -42,6 +42,7 @@ import type {
   ProctorRequest,
   CreateProctorRequestPayload,
   AiUsageStatus,
+  AiUsageOverview,
   RecordAiUsagePayload,
   ExamResultStats,
   NotificationPrefs,
@@ -739,6 +740,11 @@ class ApiClient {
   // ============ AI Usage ============
   async getAiUsage() {
     const { data } = await this.client.get<ApiResponse<AiUsageStatus>>("/api/ai-usage");
+    return data;
+  }
+
+  async getAiUsageOverview() {
+    const { data } = await this.client.get<ApiResponse<AiUsageOverview>>("/api/ai-usage/overview");
     return data;
   }
 
