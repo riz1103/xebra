@@ -357,6 +357,12 @@ export type ExamOrigin = "manual" | "ai" | "mixed";
 /** "always" = after any submitted attempt; "after_last_attempt" = once the examinee passed or has no retakes left */
 export type AnswerRevealTiming = "always" | "after_last_attempt";
 
+/**
+ * How leaving the exam window/app is handled during an attempt.
+ * count = record + pause; warn = also show a warning; strict = auto-end the exam.
+ */
+export type FocusLossMode = "count" | "warn" | "strict";
+
 export interface Exam {
   id: string;
   title: string;
@@ -379,6 +385,8 @@ export interface Exam {
   answerRevealTiming?: AnswerRevealTiming;
   /** Each examinee sees answer choices in a different order */
   shuffleOptions?: boolean;
+  /** How leaving the tab/app during the attempt is handled (default "count") */
+  focusLossMode?: FocusLossMode;
   /** Examinees who pass can get a verifiable certificate (default true) */
   certificatesEnabled?: boolean;
   /** Proctors the creator shared the exam with (co-owners) */
@@ -413,6 +421,7 @@ export interface CreateExamPayload {
   sourceViewableByExaminee?: boolean;
   answerRevealTiming?: AnswerRevealTiming;
   shuffleOptions?: boolean;
+  focusLossMode?: FocusLossMode;
   certificatesEnabled?: boolean;
   origin?: ExamOrigin;
   questions?: CreateExamQuestionPayload[];
@@ -434,6 +443,7 @@ export interface UpdateExamPayload {
   sourceViewableByExaminee?: boolean;
   answerRevealTiming?: AnswerRevealTiming;
   shuffleOptions?: boolean;
+  focusLossMode?: FocusLossMode;
   certificatesEnabled?: boolean;
   status?: "draft" | "active" | "archived";
 }
@@ -533,6 +543,14 @@ export interface ExamSession {
   status: "in_progress" | "in-progress" | "completed" | "abandoned" | "timed_out" | "timed-out";
   selectedQuestionIds?: string[]; // IDs of questions selected for this session
   examTitle?: string; // Title of the exam
+  examDescription?: string | null;
+  /** Snapshotted from the exam when the session started */
+  focusLossMode?: FocusLossMode;
+  /** Times the examinee left the tab/app (tab_hidden + window_blur) */
+  focusLossCount?: number;
+  /** Set when the session was auto-ended for leaving the exam window */
+  endedReason?: "focus_loss" | string;
+  reviewableByExaminee?: boolean;
   examineeName?: string; // Name of the examinee
   examineeEmail?: string; // Email of the examinee
   currentQuestionIndex: number;
@@ -1101,6 +1119,7 @@ export interface LiveSession {
   timeMultiplier: number;
   timeExtensions: TimeExtension[];
   integrityEventCount: number;
+  focusLossCount: number;
 }
 
 export interface LiveRecentResult {
@@ -1154,10 +1173,24 @@ export interface ResultIntegrity {
   /** False for sessions started before integrity logging existed */
   tracked: boolean;
   total: number;
+  /** Times the examinee left the tab/app (tab_hidden + window_blur) */
+  focusLossCount: number;
+  /** Mode that was in effect for the session */
+  focusLossMode?: FocusLossMode;
+  /** True when the attempt was auto-ended for leaving the exam window */
+  endedForFocusLoss?: boolean;
   summary: Record<IntegrityEventType, number>;
   awayMs: number;
   events: IntegrityEvent[];
   truncated: boolean;
+}
+
+export interface IntegrityEventsResult {
+  recorded: number;
+  focusLossCount?: number;
+  /** True when strict mode ended the session because of a focus loss */
+  ended?: boolean;
+  endedReason?: "focus_loss";
 }
 
 export type ItemAnalysisFlag =

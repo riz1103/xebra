@@ -81,6 +81,7 @@ import { QuestionSource } from "@/components/exam-generator/question-source";
 import { SourceViewableSwitch } from "@/components/exams/source-viewable-switch";
 import { CertificatesSwitch, ShuffleOptionsSwitch } from "@/components/exams/shuffle-options-switch";
 import { AnswerRevealSelect } from "@/components/exams/answer-reveal-select";
+import { FocusLossSelect } from "@/components/exams/focus-loss-select";
 import { buildExamInstruction } from "@/lib/exam-blueprint";
 import Link from "next/link";
 import { parseBlanks } from "@/lib/question-blanks";
@@ -589,6 +590,7 @@ export default function CreateExamPage() {
       answerRevealTiming: "always",
       shuffleOptions: true,
       certificatesEnabled: true,
+      focusLossMode: "count",
     },
   });
 
@@ -2053,6 +2055,10 @@ export default function CreateExamPage() {
             <ShuffleOptionsSwitch
               checked={form.watch("shuffleOptions") ?? false}
               onCheckedChange={(v) => form.setValue("shuffleOptions", v)}
+            />
+            <FocusLossSelect
+              value={form.watch("focusLossMode") ?? "count"}
+              onValueChange={(v) => form.setValue("focusLossMode", v)}
             />
             <CertificatesSwitch
               checked={form.watch("certificatesEnabled") ?? true}

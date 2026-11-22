@@ -50,6 +50,7 @@ import type {
   GroupJoinPreview,
   GroupJoinResult,
   IntegrityEventInput,
+  IntegrityEventsResult,
   ResultIntegrity,
   BankQuestion,
   BankQuestionPayload,
@@ -318,7 +319,7 @@ class ApiClient {
   }
 
   async recordIntegrityEvents(sessionId: string, events: IntegrityEventInput[]) {
-    const { data } = await this.client.post<ApiResponse<{ recorded: number }>>(
+    const { data } = await this.client.post<ApiResponse<IntegrityEventsResult>>(
       `/api/exam-sessions/${sessionId}/integrity-events`,
       { events }
     );

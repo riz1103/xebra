@@ -51,7 +51,9 @@ export function LiveMonitorScreen({ route }: Props) {
           <Text style={styles.muted}>
             {t("live.answered", { done: session.answeredCount, total: session.totalQuestions })}
           </Text>
-          {session.integrityEventCount ? (
+          {(session.focusLossCount ?? 0) > 0 ? (
+            <Text style={styles.muted}>{t("live.focusLoss", { count: session.focusLossCount ?? 0 })}</Text>
+          ) : session.integrityEventCount ? (
             <Text style={styles.muted}>{t("live.flags", { count: session.integrityEventCount })}</Text>
           ) : null}
           <View style={styles.row}>

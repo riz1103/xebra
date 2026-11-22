@@ -19,7 +19,7 @@ import { useT } from "../i18n";
 import { useIntegrityLogger } from "../integrity";
 import { resolveQuestionLayout } from "../question-layout";
 import { useColors, type Palette } from "../theme";
-import type { AnswerValue, ExamSession, PhraseBlock, SessionQuestion } from "../types";
+import type { AnswerValue, ExamSession, FocusLossMode, IntegrityEventsResult, PhraseBlock, SessionQuestion } from "../types";
 import type { RootStackParamList } from "../navigation";
 
 type Part = { id: string; name: string; questions: SessionQuestion[] };
@@ -77,6 +77,10 @@ export function ExamScreen() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
+  const [focusPaused, setFocusPaused] = useState(false);
+  const [focusWarningOpen, setFocusWarningOpen] = useState(false);
+  const [focusLossCount, setFocusLossCount] = useState(0);
+  const [endedForFocusLoss, setEndedForFocusLoss] = useState(false);
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [layouts, setLayouts] = useState<Map<string, ReturnType<typeof resolveQuestionLayout>>>(new Map());
@@ -127,9 +131,35 @@ export function ExamScreen() {
   const currentList = parts.find((part) => part.id === partId)?.questions ?? questions;
   const question = currentList[Math.min(index, Math.max(currentList.length - 1, 0))];
   const inProgress = isInProgress(session?.status);
-  const taking = inProgress && !(showInstructions && session?.exam);
+  const taking = inProgress && !showInstructions && !endedForFocusLoss;
+  const focusLossMode: FocusLossMode = session?.focusLossMode ?? session?.exam?.focusLossMode ?? "count";
   questionIdRef.current = question?.id;
-  const { flush: flushIntegrity, recordPaste } = useIntegrityLogger(sessionId, taking, questionIdRef);
+
+  const handleFocusReturned = useCallback(
+    (result: IntegrityEventsResult | null) => {
+      if (result?.focusLossCount != null) setFocusLossCount(result.focusLossCount);
+      if (result?.ended || result?.endedReason === "focus_loss") {
+        setEndedForFocusLoss(true);
+        setFocusPaused(false);
+        setFocusWarningOpen(false);
+        setSession((prev) => (prev ? { ...prev, status: "completed", endedReason: "focus_loss" } : prev));
+        return;
+      }
+      if (focusLossMode === "warn") {
+        setFocusWarningOpen(true);
+        setFocusPaused(true);
+      } else {
+        setFocusPaused(false);
+      }
+    },
+    [focusLossMode]
+  );
+
+  const { flush: flushIntegrity, recordPaste } = useIntegrityLogger(sessionId, taking, questionIdRef, {
+    mode: focusLossMode,
+    onFocusLost: () => setFocusPaused(true),
+    onFocusReturned: handleFocusReturned,
+  });
 
   const flushText = useCallback(async () => {
     const pending = pendingText.current;
@@ -204,7 +234,9 @@ export function ExamScreen() {
         .then((res) => {
           const latest = res.data;
           if (!latest) return;
+          if (typeof latest.focusLossCount === "number") setFocusLossCount(latest.focusLossCount);
           if (!isInProgress(latest.status)) {
+            if (latest.endedReason === "focus_loss") setEndedForFocusLoss(true);
             setSession(latest);
             return;
           }
@@ -249,6 +281,20 @@ export function ExamScreen() {
     );
   }
 
+  if (endedForFocusLoss || (session.endedReason === "focus_loss" && !inProgress)) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <Text style={styles.title}>{t("exam.focusEndedTitle")}</Text>
+          <Text style={styles.muted}>{t("exam.focusEndedBody")}</Text>
+          <Pressable style={styles.primary} onPress={() => navigation.navigate("Home")}>
+            <Text style={styles.primaryText}>{t("exam.backToExams")}</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!inProgress) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -263,14 +309,20 @@ export function ExamScreen() {
     );
   }
 
-  if (showInstructions && session.exam) {
+  if (showInstructions) {
     const multiplier = session.timeMultiplier ?? 1;
+    const integrityKey =
+      focusLossMode === "strict"
+        ? "exam.integrityNoteStrict"
+        : focusLossMode === "warn"
+          ? "exam.integrityNoteWarn"
+          : "exam.integrityNote";
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.body}>
           <Text style={styles.title}>{t("exam.instructions")}</Text>
           <Text style={styles.muted}>{t("exam.instructionsHint")}</Text>
-          {session.exam.instruction ? <Text style={styles.instruction}>{session.exam.instruction}</Text> : null}
+          {session.exam?.instruction ? <Text style={styles.instruction}>{session.exam.instruction}</Text> : null}
           {parts.length > 0 ? (
             <View style={styles.card}>
               <Text style={styles.sheetTitle}>{t("exam.structure")}</Text>
@@ -290,10 +342,14 @@ export function ExamScreen() {
           {multiplier > 1 ? (
             <Text style={styles.muted}>{t("exam.extraTime", { multiplier: Number(multiplier.toFixed(2)) })}</Text>
           ) : null}
-          <Text style={styles.muted}>
-            {t("exam.integrityNote")}
-          </Text>
-          <Pressable style={styles.primary} onPress={() => setShowInstructions(false)}>
+          <Text style={styles.muted}>{t(integrityKey)}</Text>
+          <Pressable
+            style={styles.primary}
+            onPress={() => {
+              setShowInstructions(false);
+              setFocusLossCount(session.focusLossCount ?? 0);
+            }}
+          >
             <Text style={styles.primaryText}>{t("exam.start")}</Text>
           </Pressable>
         </ScrollView>
@@ -306,6 +362,32 @@ export function ExamScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <Modal visible={focusPaused || focusWarningOpen} animationType="fade" transparent>
+        <View style={styles.focusOverlay}>
+          <View style={styles.focusCard}>
+            <Text style={styles.title}>
+              {focusWarningOpen ? t("exam.focusWarnTitle") : t("exam.focusPausedTitle")}
+            </Text>
+            <Text style={styles.muted}>
+              {focusWarningOpen ? t("exam.focusWarnBody") : t("exam.focusPausedBody")}
+            </Text>
+            {focusLossCount > 0 ? (
+              <Text style={styles.muted}>{t("exam.focusCount", { count: focusLossCount })}</Text>
+            ) : null}
+            {focusWarningOpen ? (
+              <Pressable
+                style={styles.primary}
+                onPress={() => {
+                  setFocusWarningOpen(false);
+                  setFocusPaused(false);
+                }}
+              >
+                <Text style={styles.primaryText}>{t("exam.focusContinue")}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
       <View style={styles.top}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
           <Text style={styles.link}>{t("exam.close")}</Text>
@@ -485,5 +567,20 @@ function makeStyles(colors: Palette) {
   secondary: { marginTop: 8, paddingVertical: 12, alignItems: "center" },
   blocking: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(28,23,48,0.55)", alignItems: "center", justifyContent: "center", gap: 12 },
   blockingText: { color: "#fff", fontWeight: "700" },
+  focusOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(28,23,48,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  focusCard: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: 20,
+    gap: 10,
+  },
 });
 }

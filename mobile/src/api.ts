@@ -25,6 +25,7 @@ import type {
   Phrase,
   Webhook,
   IntegrityEventInput,
+  IntegrityEventsResult,
   ExamSession,
   AiUsageStatus,
   Certificate,
@@ -159,7 +160,7 @@ class ApiClient {
   }
 
   async recordIntegrityEvents(sessionId: string, events: IntegrityEventInput[]) {
-    const { data } = await this.client.post<ApiResponse<{ recorded: number }>>(
+    const { data } = await this.client.post<ApiResponse<IntegrityEventsResult>>(
       `/api/exam-sessions/${sessionId}/integrity-events`,
       { events }
     );

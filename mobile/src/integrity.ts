@@ -1,15 +1,31 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { api } from "./api";
-import type { IntegrityEventInput, IntegrityEventType } from "./types";
+import type { FocusLossMode, IntegrityEventInput, IntegrityEventType, IntegrityEventsResult } from "./types";
+
 const FLUSH_AT = 20;
 const MAX_BUFFER = 200;
 const BATCH_SIZE = 50;
-
 const FLUSH_INTERVAL_MS = 15_000;
-export function useIntegrityLogger(sessionId: string, active: boolean, questionIdRef: RefObject<string | undefined>) {
+
+export type FocusLossHandlers = {
+  mode?: FocusLossMode;
+  onFocusLost?: () => void;
+  onFocusReturned?: (result: IntegrityEventsResult | null) => void;
+};
+
+export function useIntegrityLogger(
+  sessionId: string,
+  active: boolean,
+  questionIdRef: RefObject<string | undefined>,
+  handlers: FocusLossHandlers = {}
+) {
   const bufferRef = useRef<IntegrityEventInput[]>([]);
   const flushingRef = useRef(false);
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
+  const awayRef = useRef(false);
+  const strictLeaveSentRef = useRef(false);
 
   const push = useCallback(
     (type: IntegrityEventType, extra: Partial<IntegrityEventInput> = {}) => {
@@ -22,15 +38,17 @@ export function useIntegrityLogger(sessionId: string, active: boolean, questionI
     [questionIdRef]
   );
 
-  const flush = useCallback(async () => {
-    if (flushingRef.current || bufferRef.current.length === 0) return;
+  const flush = useCallback(async (): Promise<IntegrityEventsResult | null> => {
+    if (flushingRef.current || bufferRef.current.length === 0) return null;
     flushingRef.current = true;
     const batch = bufferRef.current.splice(0, BATCH_SIZE);
     try {
-      await api.recordIntegrityEvents(sessionId, batch);
+      const res = await api.recordIntegrityEvents(sessionId, batch);
+      return res.data ?? null;
     } catch {
       bufferRef.current.unshift(...batch);
       if (bufferRef.current.length > MAX_BUFFER) bufferRef.current.length = MAX_BUFFER;
+      return null;
     } finally {
       flushingRef.current = false;
     }
@@ -43,21 +61,43 @@ export function useIntegrityLogger(sessionId: string, active: boolean, questionI
     const initial = AppState.currentState;
     let state: AppStateStatus = initial === "background" || initial === "inactive" ? initial : "active";
 
+    const markLost = () => {
+      if (awayRef.current) return;
+      awayRef.current = true;
+      handlersRef.current.onFocusLost?.();
+      if (handlersRef.current.mode === "strict" && !strictLeaveSentRef.current) {
+        strictLeaveSentRef.current = true;
+        push("tab_hidden", { at: new Date().toISOString() });
+        void flush().then((result) => {
+          if (result?.ended) handlersRef.current.onFocusReturned?.(result);
+        });
+      }
+    };
+
     const onChange = (next: AppStateStatus) => {
       if (next === "background") {
         hiddenAt = Date.now();
         blurAt = null;
+        markLost();
       } else if (next === "inactive" && state === "active") {
         blurAt = Date.now();
+        markLost();
       } else if (next === "active") {
+        awayRef.current = false;
         if (hiddenAt != null) {
-          push("tab_hidden", { at: new Date(hiddenAt).toISOString(), durationMs: Date.now() - hiddenAt });
+          const started = hiddenAt;
           hiddenAt = null;
-          void flush();
+          if (!strictLeaveSentRef.current) {
+            push("tab_hidden", { at: new Date(started).toISOString(), durationMs: Date.now() - started });
+          }
+          void flush().then((result) => handlersRef.current.onFocusReturned?.(result));
         } else if (blurAt != null) {
-          push("window_blur", { at: new Date(blurAt).toISOString(), durationMs: Date.now() - blurAt });
+          const started = blurAt;
           blurAt = null;
-          void flush();
+          if (!strictLeaveSentRef.current) {
+            push("window_blur", { at: new Date(started).toISOString(), durationMs: Date.now() - started });
+          }
+          void flush().then((result) => handlersRef.current.onFocusReturned?.(result));
         }
       }
       state = next;

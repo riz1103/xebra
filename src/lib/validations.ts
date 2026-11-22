@@ -93,6 +93,7 @@ export const examSchema = z.object({
   shuffleOptions: z.boolean().optional(),
   certificatesEnabled: z.boolean().optional(),
   answerRevealTiming: z.enum(["always", "after_last_attempt"]).optional(),
+  focusLossMode: z.enum(["count", "warn", "strict"]).optional(),
 }).refine((data) => {
   // If timeType is 'per_part', parts must exist and each part must have a timeLimit
   if (data.timeType === "per_part") {

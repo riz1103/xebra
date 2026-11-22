@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { SourceViewableSwitch } from "@/components/exams/source-viewable-switch";
 import { CertificatesSwitch, ShuffleOptionsSwitch } from "@/components/exams/shuffle-options-switch";
 import { AnswerRevealSelect } from "@/components/exams/answer-reveal-select";
+import { FocusLossSelect } from "@/components/exams/focus-loss-select";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageLoader } from "@/components/ui/loading";
@@ -106,6 +107,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
       answerRevealTiming: "always",
       shuffleOptions: false,
       certificatesEnabled: true,
+      focusLossMode: "count",
     },
   });
 
@@ -127,6 +129,7 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
         answerRevealTiming: exam.answerRevealTiming ?? "always",
         shuffleOptions: exam.shuffleOptions ?? false,
         certificatesEnabled: exam.certificatesEnabled !== false,
+        focusLossMode: exam.focusLossMode ?? "count",
       });
       if (exam.parts) {
         setParts(exam.parts);
@@ -568,6 +571,10 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
               checked={form.watch("shuffleOptions") ?? false}
               onCheckedChange={(v) => form.setValue("shuffleOptions", v)}
             />
+            <FocusLossSelect
+              value={form.watch("focusLossMode") ?? "count"}
+              onValueChange={(v) => form.setValue("focusLossMode", v)}
+            />
             <CertificatesSwitch
               checked={form.watch("certificatesEnabled") ?? true}
               onCheckedChange={(v) => form.setValue("certificatesEnabled", v)}
@@ -806,6 +813,10 @@ export default function EditExamPage({ params }: { params: Promise<{ id: string 
             <ShuffleOptionsSwitch
               checked={form.watch("shuffleOptions") ?? false}
               onCheckedChange={(v) => form.setValue("shuffleOptions", v)}
+            />
+            <FocusLossSelect
+              value={form.watch("focusLossMode") ?? "count"}
+              onValueChange={(v) => form.setValue("focusLossMode", v)}
             />
             <CertificatesSwitch
               checked={form.watch("certificatesEnabled") ?? true}

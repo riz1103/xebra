@@ -83,11 +83,16 @@ export interface ExamPartGroup {
   questionIds?: string[];
 }
 
+export type FocusLossMode = "count" | "warn" | "strict";
+
 export interface ExamSession {
   id: string;
   examId: string;
   status: string;
   examTitle?: string;
+  focusLossMode?: FocusLossMode;
+  focusLossCount?: number;
+  endedReason?: string;
   currentQuestionIndex: number;
   answers: Record<string, AnswerValue>;
   timeRemainingSeconds: number;
@@ -100,6 +105,7 @@ export interface ExamSession {
   exam?: {
     title?: string;
     instruction?: string | null;
+    focusLossMode?: FocusLossMode;
   };
   timeMultiplier?: number;
 }
@@ -241,6 +247,13 @@ export interface IntegrityEventInput {
   length?: number;
 }
 
+export interface IntegrityEventsResult {
+  recorded: number;
+  focusLossCount?: number;
+  ended?: boolean;
+  endedReason?: "focus_loss";
+}
+
 export interface GroupJoinPreview {
   id: string;
   name: string;
@@ -279,6 +292,7 @@ export interface Exam {
   reviewableByExaminee?: boolean;
   certificatesEnabled?: boolean;
   shuffleOptions?: boolean;
+  focusLossMode?: FocusLossMode;
   status: "draft" | "active" | "archived";
   questionCount?: number;
   questions?: ExamQuestion[];
@@ -396,6 +410,7 @@ export interface LiveSession {
   startedAt: string | null;
   timeRemainingSeconds: number | null;
   answeredCount: number;
+  focusLossCount?: number;
   totalQuestions: number;
   extraTimeSeconds: number;
   integrityEventCount: number;

@@ -64,10 +64,21 @@ export function IntegrityPanel({ resultId, questionNumber }: { resultId: string;
           {clean
             ? "No tab switches, full-screen exits, or paste/copy events were recorded."
             : "Recorded during the attempt for your judgment. They don't affect the score, and pasted text is not stored."}
+          {integrity.endedForFocusLoss
+            ? " This attempt was ended automatically because the examinee left the exam window (strict mode)."
+            : ""}
         </CardDescription>
       </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <span className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm">
+            <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+            Left exam window{" "}
+            <span className="font-semibold tabular-nums">×{integrity.focusLossCount ?? 0}</span>
+          </span>
+        </div>
       {!clean && (
-        <CardContent className="space-y-3">
+        <>
           <div className="flex flex-wrap gap-2">
             {TYPES.filter((t) => integrity.summary[t] > 0).map((t) => {
               const Icon = TYPE_INFO[t].icon;
@@ -112,8 +123,9 @@ export function IntegrityPanel({ resultId, questionNumber }: { resultId: string;
               )}
             </div>
           )}
-        </CardContent>
+        </>
       )}
+      </CardContent>
     </Card>
   );
 }

@@ -5,7 +5,7 @@ import { use, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { ExamQuestion, ExamSession, SessionQuestion, PhraseBlock } from "@/types";
+import type { ExamQuestion, ExamSession, FocusLossMode, IntegrityEventsResult, SessionQuestion, PhraseBlock } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -82,6 +82,12 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
   const [partTimeRemaining, setPartTimeRemaining] = useState<Record<string, number>>({});
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
+  /** Questions hidden while the examinee is away from the exam window */
+  const [focusPaused, setFocusPaused] = useState(false);
+  /** Warn-mode dialog after returning from a focus loss */
+  const [focusWarningOpen, setFocusWarningOpen] = useState(false);
+  const [focusLossCount, setFocusLossCount] = useState(0);
+  const [endedForFocusLoss, setEndedForFocusLoss] = useState(false);
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [navigatorOpen, setNavigatorOpen] = useState(false);
   /** null until the examinee toggles it; then their choice sticks across questions */
@@ -549,10 +555,36 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   const currentQuestionIdRef = useRef<string | undefined>(undefined);
   currentQuestionIdRef.current = currentQuestion?.id;
+  const focusLossMode: FocusLossMode =
+    session?.focusLossMode ?? session?.exam?.focusLossMode ?? "count";
+
+  const handleFocusReturned = useCallback((result: IntegrityEventsResult | null) => {
+    if (result?.focusLossCount != null) setFocusLossCount(result.focusLossCount);
+    if (result?.ended || result?.endedReason === "focus_loss") {
+      setEndedForFocusLoss(true);
+      setFocusPaused(false);
+      setFocusWarningOpen(false);
+      clearExamBackup(sessionId);
+      queryClient.invalidateQueries({ queryKey: ["exam-session", sessionId] });
+      return;
+    }
+    if (focusLossMode === "warn") {
+      setFocusWarningOpen(true);
+      setFocusPaused(true);
+    } else {
+      setFocusPaused(false);
+    }
+  }, [focusLossMode, queryClient, sessionId]);
+
   const flushIntegrity = useIntegrityLogger(
     sessionId,
     !showInstructions && (session?.status === "in_progress" || session?.status === "in-progress"),
-    currentQuestionIdRef
+    currentQuestionIdRef,
+    {
+      mode: focusLossMode,
+      onFocusLost: () => setFocusPaused(true),
+      onFocusReturned: handleFocusReturned,
+    }
   );
 
   const handleSubmit = useCallback(async () => {
@@ -574,7 +606,11 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   /** Applies extra time a proctor granted since the last check. Returns false once the session has ended. */
   const applyServerTime = useCallback((latest: ExamSession) => {
+    if (typeof latest.focusLossCount === "number") setFocusLossCount(latest.focusLossCount);
     if (latest.status !== "in_progress" && latest.status !== "in-progress") {
+      if (latest.endedReason === "focus_loss") {
+        setEndedForFocusLoss(true);
+      }
       queryClient.invalidateQueries({ queryKey: ["exam-session", sessionId] });
       return false;
     }
@@ -879,8 +915,35 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
     );
   }
 
-  // Instructions Dialog
-  if (showInstructions && session.exam) {
+  if (endedForFocusLoss) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="py-8 text-center space-y-3">
+            <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto" />
+            <h2 className="text-lg font-semibold">Exam ended</h2>
+            <p className="text-sm text-muted-foreground">
+              This exam ended automatically because you left the exam window. Switching tabs, minimizing, or clicking
+              outside the exam is not allowed in strict mode.
+            </p>
+            <Button className="mt-2" onClick={() => router.push("/dashboard/my-results")}>
+              View Results
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Instructions gate (session.exam is attached by the API; fall back so integrity logging can start)
+  if (showInstructions) {
+    const instructionText = session.exam?.instruction;
+    const integrityNote =
+      focusLossMode === "strict"
+        ? "Leaving this exam window (switching tabs, minimizing, or clicking outside) is not allowed and will automatically end your exam. Pasting and copying are also noted for your proctor; the text itself is not recorded."
+        : focusLossMode === "warn"
+          ? "Leaving this exam window pauses the exam and shows a warning. Searching for answers elsewhere is not allowed. Tab switches, minimize, paste, and copy are recorded for your proctor; the text itself is not recorded."
+          : "Leaving this exam window pauses the exam and is recorded for your proctor (tab switches, minimize, click outside, paste, and copy). What you paste or copy is not recorded.";
     return (
       <Dialog open={showInstructions} onOpenChange={() => {}}>
         <DialogContent className="max-w-2xl">
@@ -894,17 +957,17 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {session.exam.instruction && (
+            {instructionText && (
               <div>
                 <h3 className="font-semibold mb-2">Instructions:</h3>
-                <p className="text-sm whitespace-pre-wrap">{session.exam.instruction}</p>
+                <p className="text-sm whitespace-pre-wrap">{instructionText}</p>
               </div>
             )}
             {hasParts && questionsByPart && (
               <div>
                 <h3 className="font-semibold mb-2">Exam Structure:</h3>
                 <ul className="list-disc list-inside space-y-1 text-sm">
-                  {Object.values(questionsByPart).map((partData, idx) => (
+                  {Object.values(questionsByPart).map((partData) => (
                     <li key={partData.part.id}>
                       <span className="font-medium">{partData.part.name}</span>
                       {partData.part.description && ` - ${partData.part.description}`}
@@ -924,13 +987,18 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
               Use the display menu next to Submit to make text larger, turn on high contrast, or go full screen. Keyboard: N
               and P move between questions, 1–9 choose an option, F flags a question.
             </p>
-            <p className="text-xs text-muted-foreground">
-              For exam integrity, switching tabs or windows, leaving full screen, and pasting or copying are noted for your
-              proctor. What you paste or copy is not recorded.
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-foreground">
+              {integrityNote}
             </p>
           </div>
           <DialogFooter>
-            <Button onClick={() => setShowInstructions(false)} className="h-11 w-full sm:h-9">
+            <Button
+              onClick={() => {
+                setShowInstructions(false);
+                setFocusLossCount(session.focusLossCount ?? 0);
+              }}
+              className="h-11 w-full sm:h-9"
+            >
               Start Exam
             </Button>
           </DialogFooter>
@@ -941,12 +1009,48 @@ export default function ExamPage({ params }: { params: Promise<{ sessionId: stri
 
   return (
     <div className="min-h-dvh bg-background">
+      {(focusPaused || focusWarningOpen) && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-6 backdrop-blur-sm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="focus-pause-title"
+        >
+          <div className="max-w-md space-y-4 text-center">
+            <AlertTriangle className="mx-auto h-10 w-10 text-amber-500" />
+            <h2 id="focus-pause-title" className="text-lg font-semibold">
+              {focusWarningOpen ? "Leaving the exam is not allowed" : "Exam paused"}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {focusWarningOpen
+                ? "You left the exam window. Searching for answers online or in other apps is not allowed during this exam. This leave was recorded for your proctor."
+                : "Return to this window to continue. Leaving the exam is recorded for your proctor, and the timer keeps running."}
+            </p>
+            {focusLossCount > 0 && (
+              <p className="text-sm font-medium tabular-nums">
+                Times left: {focusLossCount}
+              </p>
+            )}
+            {focusWarningOpen && (
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  setFocusWarningOpen(false);
+                  setFocusPaused(false);
+                }}
+              >
+                I understand — continue exam
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       {/* Top Bar */}
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-2 px-3 sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <Image src="/xevra-logo.png" alt="Xevra" width={32} height={32} className="rounded-lg shrink-0" />
-            <h1 className="text-sm font-semibold hidden truncate sm:inline">{session.exam?.title || "Exam"}</h1>
+            <h1 className="text-sm font-semibold hidden truncate sm:inline">{session.exam?.title || session.examTitle || "Exam"}</h1>
           </div>
           <div
             role="timer"

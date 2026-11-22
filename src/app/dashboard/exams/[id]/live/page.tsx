@@ -235,7 +235,12 @@ export default function LiveMonitorPage({ params }: { params: Promise<{ id: stri
                             <Badge variant="secondary" className="text-[10px]">+{Math.round(session.extraTimeSeconds / 60)} min</Badge>
                           )}
                           {idle && <Badge variant="warning" className="text-[10px]">Idle</Badge>}
-                          {session.integrityEventCount > 0 && (
+                          {(session.focusLossCount ?? 0) > 0 && (
+                            <Badge variant="outline" className="gap-1 text-[10px] border-amber-400 text-amber-700 dark:text-amber-400">
+                              <ShieldAlert className="h-3 w-3" /> Left window ×{session.focusLossCount}
+                            </Badge>
+                          )}
+                          {session.integrityEventCount > 0 && (session.focusLossCount ?? 0) === 0 && (
                             <Badge variant="outline" className="gap-1 text-[10px] border-amber-400 text-amber-700 dark:text-amber-400">
                               <ShieldAlert className="h-3 w-3" /> {session.integrityEventCount} flag{session.integrityEventCount === 1 ? "" : "s"}
                             </Badge>

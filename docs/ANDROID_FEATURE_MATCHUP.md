@@ -21,8 +21,8 @@ Do not follow `mobile/AGENTS.md` for navigation. That file is the Expo template.
 
 | Status | Count |
 |--------|------:|
-| matched | 30 |
-| partial | 0 |
+| matched | 31 |
+| partial | 1 |
 | missing | 0 |
 
 ## Matchup
@@ -36,7 +36,7 @@ Do not follow `mobile/AGENTS.md` for navigation. That file is the Expo template.
 | F-005 | Shared exam link | `src/app/exams/[examId]/page.tsx`, `src/app/dashboard/my-exams/page.tsx` | `mobile/src/screens/ExamEntryScreen.tsx`, `mobile/src/links.ts`, `mobile/App.tsx` | matched | |
 | F-006 | Dashboard overview | `src/app/dashboard/page.tsx` | `mobile/src/screens/OverviewScreen.tsx` | matched | |
 | F-007 | My exams | `src/app/dashboard/my-exams/page.tsx` | `mobile/src/screens/HomeScreen.tsx` | matched | |
-| F-008 | Take an exam | `src/app/exam/[sessionId]/page.tsx` | `mobile/src/screens/ExamScreen.tsx`, `mobile/src/components/QuestionCard.tsx`, `mobile/src/math-text.tsx`, `mobile/src/integrity.ts` | matched | |
+| F-008 | Take an exam | `src/app/exam/[sessionId]/page.tsx` | `mobile/src/screens/ExamScreen.tsx`, `mobile/src/components/QuestionCard.tsx`, `mobile/src/math-text.tsx`, `mobile/src/integrity.ts` | matched | Includes focus-loss pause / warn / strict end (see F-031). |
 | F-009 | My results, with a Retake button when another attempt is still allowed | `src/app/dashboard/my-results/page.tsx`, `src/app/dashboard/my-results/[id]/page.tsx`, `src/app/dashboard/results/[resultId]/review/page.tsx` | `mobile/src/screens/HomeScreen.tsx`, `mobile/src/screens/ResultScreen.tsx` | matched | |
 | F-010 | Result certificate | `src/app/dashboard/my-results/[id]/certificate/page.tsx` | `mobile/src/screens/CertificateScreen.tsx`, `mobile/src/screens/ResultScreen.tsx`, `mobile/src/qr.tsx` | matched | |
 | F-011 | Practice | `src/app/dashboard/practice/page.tsx` | `mobile/src/screens/PracticeScreen.tsx`, `mobile/src/practice.ts`, `mobile/src/notes.ts` | matched | |
@@ -59,3 +59,4 @@ Do not follow `mobile/AGENTS.md` for navigation. That file is the Expo template.
 | F-028 | Math in question text | `src/components/math/math-text.tsx` | `mobile/src/math-text.tsx`, `mobile/src/math-notation.ts` | matched | |
 | F-029 | Exam integrity events | `src/lib/integrity-logger.ts` | `mobile/src/integrity.ts` | matched | |
 | F-030 | App icon | `public/icons/icon-512.png` | `mobile/assets/` | matched | |
+| F-031 | Focus-loss protection (count / warn / strict) | `src/components/exams/focus-loss-select.tsx`, `src/app/exam/[sessionId]/page.tsx`, `src/components/results/integrity-panel.tsx`, `src/app/dashboard/exams/[id]/live/page.tsx` | `mobile/src/screens/ExamFormScreen.tsx`, `mobile/src/screens/ExamScreen.tsx`, `mobile/src/integrity.ts`, `mobile/src/screens/LiveMonitorScreen.tsx` | matched | |

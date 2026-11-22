@@ -9,7 +9,7 @@ import { generatePracticeQuiz } from "../practice";
 import { QuestionEditor } from "../question-editor";
 import { blank, draftFromQuestion, fieldsFromDraft, newKey, type Draft } from "../question-draft";
 import { Choice, Field, Ghost, Primary, StaffBody, useStaffStyles } from "../staff-ui";
-import type { ExamQuestion, QuestionType } from "../types";
+import type { ExamQuestion, FocusLossMode, QuestionType } from "../types";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ExamForm">;
 
@@ -40,6 +40,7 @@ export function ExamFormScreen({ route, navigation }: Props) {
   const [review, setReview] = useState(true);
   const [certificates, setCertificates] = useState(true);
   const [shuffle, setShuffle] = useState(false);
+  const [focusLossMode, setFocusLossMode] = useState<FocusLossMode>("count");
   const [active, setActive] = useState(false);
   const [questions, setQuestions] = useState<Draft[]>([]);
   const [removed, setRemoved] = useState<string[]>([]);
@@ -73,6 +74,7 @@ export function ExamFormScreen({ route, navigation }: Props) {
         reviewableByExaminee?: boolean;
         certificatesEnabled?: boolean;
         shuffleOptions?: boolean;
+        focusLossMode?: FocusLossMode;
         status?: string;
         questions?: ExamQuestion[];
         parts?: { id: string; name: string; timeLimit?: number | null }[] | null;
@@ -87,6 +89,7 @@ export function ExamFormScreen({ route, navigation }: Props) {
       setReview(exam.reviewableByExaminee !== false);
       setCertificates(exam.certificatesEnabled !== false);
       setShuffle(!!exam.shuffleOptions);
+      setFocusLossMode(exam.focusLossMode === "warn" || exam.focusLossMode === "strict" ? exam.focusLossMode : "count");
       setActive(exam.status === "active");
       setParts((exam.parts || []).map((part) => ({ id: part.id, name: part.name, minutes: part.timeLimit ? String(part.timeLimit) : "" })));
       setPhrases(
@@ -184,6 +187,7 @@ export function ExamFormScreen({ route, navigation }: Props) {
         reviewableByExaminee: review,
         certificatesEnabled: certificates,
         shuffleOptions: shuffle,
+        focusLossMode,
         origin: "manual",
         parts: timedParts.length
           ? timedParts.map((part) => ({
@@ -246,6 +250,12 @@ export function ExamFormScreen({ route, navigation }: Props) {
       <Toggle label={t("form.review")} value={review} onValueChange={setReview} color={colors.primary} />
       <Toggle label={t("form.certificates")} value={certificates} onValueChange={setCertificates} color={colors.primary} />
       <Toggle label={t("form.shuffle")} value={shuffle} onValueChange={setShuffle} color={colors.primary} />
+      <Text style={styles.muted}>{t("form.focusLoss")}</Text>
+      <View style={styles.row}>
+        <Choice label={t("form.focusCount")} on={focusLossMode === "count"} onPress={() => setFocusLossMode("count")} />
+        <Choice label={t("form.focusWarn")} on={focusLossMode === "warn"} onPress={() => setFocusLossMode("warn")} />
+        <Choice label={t("form.focusStrict")} on={focusLossMode === "strict"} onPress={() => setFocusLossMode("strict")} />
+      </View>
       <Toggle label={t("form.publish")} value={active} onValueChange={setActive} color={colors.primary} />
 
       <Text style={styles.title}>{t("form.parts")}</Text>
